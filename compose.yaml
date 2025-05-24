@@ -9,9 +9,7 @@ services:
       - ~/.config/nvim:/home/ubuntu/.config/nvim:ro
       - ~/.ssh:/home/ubuntu/.ssh:ro
       - ~/.gitconfig:/home/ubuntu/.gitconfig:ro
-      - ${SSH_AUTH_SOCK}:/ssh-agent
     environment:
-      - SSH_AUTH_SOCK=/ssh-agent
       - DISPLAY=$DISPLAY
     working_dir: /workspace/vlasolver
     tty: true

@@ -1,0 +1,3 @@
+/workspaces/vlasolver/build/CMakeFiles/ex_real_A.dir
+/workspaces/vlasolver/build/CMakeFiles/edit_cache.dir
+/workspaces/vlasolver/build/CMakeFiles/rebuild_cache.dir

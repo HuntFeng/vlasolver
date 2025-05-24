@@ -1,0 +1,1 @@
+/usr/bin/c++ -DKOKKOS_DEPENDENCE -march=native -mtune=native CMakeFiles/ex_real_A.dir/ex_real_A.cpp.o -o ex_real_A  /usr/local/lib/libkokkoskernels.a /usr/local/lib/libkokkoscontainers.a /usr/local/lib/libkokkoscore.a /usr/lib/gcc/x86_64-linux-gnu/13/libgomp.so /usr/lib/x86_64-linux-gnu/libpthread.a -ldl /usr/local/lib/libkokkossimd.a 

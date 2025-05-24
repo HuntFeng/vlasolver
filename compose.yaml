@@ -1,0 +1,18 @@
+services:
+  container:
+    build: .
+    container_name: vlasolver
+    platform: linux/amd64
+    volumes:
+      - .:/workspace/vlasolver
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ~/.config/nvim:/home/ubuntu/.config/nvim:ro
+      - ~/.ssh:/home/ubuntu/.ssh:ro
+      - ~/.gitconfig:/home/ubuntu/.gitconfig:ro
+      - ${SSH_AUTH_SOCK}:/ssh-agent
+    environment:
+      - SSH_AUTH_SOCK=/ssh-agent
+      - DISPLAY=$DISPLAY
+    working_dir: /workspace/vlasolver
+    tty: true
+    stdin_open: true

@@ -1,35 +1,15 @@
 FROM ubuntu
 
 RUN apt update && apt install -y sudo
+
+# use non-root user, set sudo password to none
 RUN echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 USER ubuntu
 WORKDIR /home/ubuntu
 
-# add a non-root normal user appuser 
-# set no password for sudo
-# give permission to .config folder
-# ARG USERNAME=appuser
-# ARG USER_UID=1000
-# ARG USER_GID=$USER_UID
-# # Create the user
-# RUN groupadd --gid $USER_GID $USERNAME \
-#     && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
-#     && apt update \
-#     && apt install -y sudo \
-#     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-#     && chmod 0440 /etc/sudoers.d/$USERNAME
-#     # && mkdir /home/$USERNAME/.config
-#     # && chown $USERNAME:$USERNAME /home/$USERNAME/.config
-# USER $USERNAME
-
-# RUN <<EOF
-# useradd -m appuser && echo "appuser:password" | chpasswd && adduser appuser sudo
-# echo "appuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-# mkdir /home/appuser/.config
-# chown appuser:appuser /home/appuser/.config
-# EOF
-# USER appuser
-# WORKDIR /home/appuser
+# make .config writable
+RUN mkdir /home/ubuntu/.config
+    && chown ubuntu:ubuntu /home/ubuntu/.config
 
 # essential things
 RUN <<EOF 

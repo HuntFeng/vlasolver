@@ -4,16 +4,16 @@
 
 - Docker is required for creating isolated and stable environment.
 
-1. Build the docker image using the command
+1. Build the docker image then run it as daemon using the command
 
 ```bash
-devpod up . --provider docker
+docker compose up --build -d
 ```
 
 2. Start and/or attach to the existing container daemon
 
 ```bash
-ssh vlasolver.devpod
+docker start -ai vlasolver
 ```
 
 ## Setup Neovim (Optional)
@@ -28,6 +28,22 @@ Plugins will be installed if you have neovim configs under `~/.config/nvim` on y
 
 2. Connect Copilot (Optional)
    In Neovim, type command `:Copilot`, then copy one-time passcode to GitHyb's device login page, https://github.com/login/device. Then it's good to go.
+
+3. Set `DISPLAY` environment variable on Mac for X11 and clipboard (Optional)
+
+- To use xclip for the global clipboard, XQuartz is needed.
+- After installing XQuartz, use the XQuartz built-in terminal to check `DISPLAY` variable using echo.
+
+```bash
+echo $DISPLAY
+# usually :0
+```
+
+- In the container, set DISPLAY variable
+
+```bash
+export DISPLAY=host.docker.internal:0
+```
 
 ## Build Project
 

@@ -2,9 +2,6 @@
 #include <gridformat/gridformat.hpp>
 #include <impl/Kokkos_Profiling.hpp>
 
-// TODO: use SOR for the poisson solver
-// TODO: eventually we would like to use FFT method
-// people.eecs.berkeley.edu/~demmel/cs267/lecture24/lecture24.html#link_3
 int main(int argc, char* argv[]) {
     Kokkos::ScopeGuard guard(argc, argv);
 
@@ -18,8 +15,8 @@ int main(int argc, char* argv[]) {
 
     // potential field
     Kokkos::View<double**> phi("phi", nx, ny);
-    Kokkos::View<double**> phi_new("phi_new", nx, ny);
-    Kokkos::View<double**> b("b", nx, ny);
+    Kokkos::View<double**> rho("rho", nx, ny);
+    Kokkos::View<double**> eps("eps", nx, ny);
 
     // Initialize phi
     Kokkos::parallel_for(
@@ -31,20 +28,27 @@ int main(int argc, char* argv[]) {
                 phi(i, j) = 0.0;
             }
         });
-    Kokkos::deep_copy(phi_new, phi);
-    Kokkos::deep_copy(b, 0.0);
+    Kokkos::deep_copy(rho, 0.0);
+    Kokkos::deep_copy(eps, 1.0);
 
-    writer.set_cell_field("phi", [&](const auto cell) { return phi_new(cell.location[0], cell.location[1]); });
+    writer.set_cell_field("phi", [&](const auto cell) { return phi(cell.location[0], cell.location[1]); });
     writer.write(0);
 
     // Jacobi iteration
     for (int iter = 1; iter < 100; ++iter) {
+        // update red grid points using black grid points in old values
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({1, 1}, {nx - 1, ny - 1}), KOKKOS_LAMBDA(int i, int j) {
-                phi_new(i, j) = 0.25 * (phi(i - 1, j) + phi(i + 1, j) + phi(i, j - 1) + phi(i, j + 1) + b(i, j));
+                if ((i + j) % 2 == 0)
+                    phi(i, j) = 0.25 * (phi(i - 1, j) + phi(i + 1, j) + phi(i, j - 1) + phi(i, j + 1) + rho(i, j));
             });
-        Kokkos::deep_copy(phi, phi_new);
-        writer.set_cell_field("phi", [&](const auto cell) { return phi_new(cell.location[0], cell.location[1]); });
+        // update black grid point using already updated red grid points
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({1, 1}, {nx - 1, ny - 1}), KOKKOS_LAMBDA(int i, int j) {
+                if ((i + j) % 2 == 1)
+                    phi(i, j) = 0.25 * (phi(i - 1, j) + phi(i + 1, j) + phi(i, j - 1) + phi(i, j + 1) + rho(i, j));
+            });
+        writer.set_cell_field("phi", [&](const auto cell) { return phi(cell.location[0], cell.location[1]); });
         writer.write(iter);
     }
 

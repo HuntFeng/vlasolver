@@ -11,22 +11,22 @@ double surface(double x, double y) {
 }
 
 std::array<double, 2> normal(int i, int j, double dx, double dy) {
-    // double eta = surface(i * dx, j * dy);
-    // double eta_l = surface((i - 1) * dx, j * dy);
-    // double eta_r = surface((i + 1) * dx, j * dy);
-    // double eta_b = surface(i * dx, (j - 1) * dy);
-    // double eta_t = surface(i * dx, (j + 1) * dy);
-    // double eta_grad_x = (eta_r - eta_l) / (2 * dx);
-    // double eta_grad_y = (eta_t - eta_b) / (2 * dy);
-    // double eta_grad_norm = sqrt(pow(eta_grad_x, 2) + pow(eta_grad_y, 2));
-    // double nx = eta_grad_x / eta_grad_norm;
-    // double ny = eta_grad_y / eta_grad_norm;
-    double x = i * dx, y = j * dy;
-    double eta_grad_x = 2 * x - 1;
-    double eta_grad_y = 2 * y - 1;
+    double eta = surface(i * dx, j * dy);
+    double eta_l = surface((i - 1) * dx, j * dy);
+    double eta_r = surface((i + 1) * dx, j * dy);
+    double eta_b = surface(i * dx, (j - 1) * dy);
+    double eta_t = surface(i * dx, (j + 1) * dy);
+    double eta_grad_x = (eta_r - eta_l) / (2 * dx);
+    double eta_grad_y = (eta_t - eta_b) / (2 * dy);
     double eta_grad_norm = sqrt(pow(eta_grad_x, 2) + pow(eta_grad_y, 2));
     double nx = eta_grad_x / eta_grad_norm;
     double ny = eta_grad_y / eta_grad_norm;
+    // double x = i * dx, y = j * dy;
+    // double eta_grad_x = 2 * x - 1;
+    // double eta_grad_y = 2 * y - 1;
+    // double eta_grad_norm = sqrt(pow(eta_grad_x, 2) + pow(eta_grad_y, 2));
+    // double nx = eta_grad_x / eta_grad_norm;
+    // double ny = eta_grad_y / eta_grad_norm;
     return {nx, ny};
 }
 
@@ -80,20 +80,20 @@ int main(int argc, char* argv[]) {
             }
 
             if (eta * eta_l <= 0.0) {
-                a(i, j) = (eta > 0.0) ? -exp(-x * x - y * y) : 0.0;
-                b(i, j) = (eta > 0.0) ? 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y) : 0.0;
+                a(i, j) = -exp(-x * x - y * y);
+                b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
             }
             if (eta * eta_r <= 0.0) {
-                a(i, j) = (eta > 0.0) ? -exp(-x * x - y * y) : 0.0;
-                b(i, j) = (eta > 0.0) ? 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y) : 0.0;
+                a(i, j) = -exp(-x * x - y * y);
+                b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
             }
             if (eta * eta_b <= 0.0) {
-                a(i, j) = (eta > 0.0) ? -exp(-x * x - y * y) : 0.0;
-                b(i, j) = (eta > 0.0) ? 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y) : 0.0;
+                a(i, j) = -exp(-x * x - y * y);
+                b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
             }
             if (eta * eta_t <= 0.0) {
-                a(i, j) = (eta > 0.0) ? -exp(-x * x - y * y) : 0.0;
-                b(i, j) = (eta > 0.0) ? 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y) : 0.0;
+                a(i, j) = -exp(-x * x - y * y);
+                b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
             }
         });
 

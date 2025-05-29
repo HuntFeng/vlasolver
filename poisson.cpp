@@ -165,7 +165,7 @@ class PoissonSolver {
             double a_gamma = (a(i, j) * abs(eta_b) + a(i, j - 1) * abs(eta)) / (abs(eta) + abs(eta_b));
             double b_gamma = (b(i, j) * ny * abs(eta_b) + b(i, j - 1) * ny_b * abs(eta)) / (abs(eta) + abs(eta_b));
             if (eta <= 0.0)
-                F_b = eps_b * a_gamma / (dy * dy) - eps_b * b_gamma * theta / (eps_p * dy);
+                F_b = eps_b * a_gamma / (dy * dy) + eps_b * b_gamma * theta / (eps_p * dy);
             else
                 F_b = -eps_b * a_gamma / (dy * dy) + eps_b * b_gamma * theta / (eps_m * dy);
         }

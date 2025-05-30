@@ -9,3 +9,6 @@ find_package(gridformat REQUIRED)
 add_executable(poisson poisson.cpp)
 target_link_libraries(poisson OpenMP::OpenMP_CXX Kokkos::kokkoskernels
                       Kokkos::kokkos gridformat::gridformat)
+# add_executable(poisson_1d poisson_1d.cpp) target_link_libraries(poisson_1d
+# OpenMP::OpenMP_CXX Kokkos::kokkoskernels Kokkos::kokkos
+# gridformat::gridformat)

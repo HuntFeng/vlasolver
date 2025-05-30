@@ -11,6 +11,8 @@ class PoissonSolver {
   private:
     Grid& grid;
     std::vector<Cell> cells;
+    Kokkos::View<double**> phi_old;
+    double tol;
 
   public:
     Kokkos::View<double**> phi;
@@ -19,7 +21,7 @@ class PoissonSolver {
     Kokkos::View<double**> a;
     Kokkos::View<double**> b;
 
-    PoissonSolver(Grid& grid) : grid(grid) {
+    PoissonSolver(Grid& grid, double tol = 1e-6) : grid(grid), tol(tol) {
         auto cell_range = grid.cells();
         cells = std::vector<Cell>(cell_range.begin(), cell_range.end());
         auto [nx, ny] = grid.extents();
@@ -28,10 +30,11 @@ class PoissonSolver {
         eps = Kokkos::View<double**>("eps", nx, ny);
         a = Kokkos::View<double**>("a", nx, ny);
         b = Kokkos::View<double**>("b", nx, ny);
+        phi_old = Kokkos::View<double**>("phi_old", nx, ny);
     }
 
     double surface(double x, double y) const {
-        // example 2
+        // example 3
         // return (x - 0.5) * (x - 0.5) + (y - 0.5) * (y - 0.5) - 0.25 * 0.25;
         // example 5
         // return x * x + y * y - 0.5 * 0.5;
@@ -63,14 +66,15 @@ class PoissonSolver {
                 auto cell = cells[k];
                 auto [i, j] = cell.location;
                 auto [dx, dy] = grid.spacing();
+                auto [nx, ny] = grid.extents();
                 auto [x, y] = grid.center(cell);
-                phi(i, j) = 0.0;
                 double eta = surface(x, y);
                 double eta_l = surface(x - dx, y);
                 double eta_r = surface(x + dx, y);
                 double eta_b = surface(x, y - dy);
                 double eta_t = surface(x, y + dy);
-                // example 2
+                // example 3
+                // phi(i, j) = 0.0;
                 // if (eta <= 0.0) {
                 //     eps(i, j) = 2.0;
                 //     rho(i, j) = 8 * (x * x + y * y - 1) * exp(-x * x - y * y);
@@ -98,6 +102,11 @@ class PoissonSolver {
                 // example 5
                 // eps(i, j) = 1.0;
                 // rho(i, j) = 0.0;
+                // if (i == 0 || i == nx - 1 || j == 0 || j == ny - 1) {
+                //     phi(i, j) = 1 + Kokkos::log(2 * Kokkos::sqrt(x * x + y * y));
+                // } else {
+                //     phi(i, j) = 0.0;
+                // }
                 // a(i, j) = 0.0;
                 // if (eta * eta_l <= 0.0) {
                 //     b(i, j) = 2;
@@ -112,9 +121,10 @@ class PoissonSolver {
                 //     b(i, j) = 2;
                 // }
 
-                // example 5
+                // example 7
                 eps(i, j) = 1.0;
                 rho(i, j) = 0.0;
+                phi(i, j) = 0.0;
                 if (eta * eta_l <= 0.0) {
                     a(i, j) = y * y - x * x;
                     b(i, j) = 4 * (y * y - x * x);
@@ -237,49 +247,77 @@ class PoissonSolver {
     }
 
     void sor_update() {
-        GridFormat::VTKHDFTimeSeriesWriter writer{grid, "data_example7"};
+        auto [nx, ny] = grid.extents();
+        // update red grid points using black grid points in old values
+        Kokkos::parallel_for(
+            cells.size(), KOKKOS_CLASS_LAMBDA(int k) {
+                Cell cell = cells[k];
+                auto [i, j] = cell.location;
+                if (i < 1 || i >= nx - 1 || j < 1 || j >= ny - 1)
+                    return; // skip boundary cells
+                if ((i + j) % 2 != 0)
+                    return; // skip red grid points
+                update_potential(cell);
+            });
+        // update black grid points using already updated red grid points
+        Kokkos::parallel_for(
+            cells.size(), KOKKOS_CLASS_LAMBDA(int k) {
+                Cell cell = cells[k];
+                auto [i, j] = cell.location;
+                if (i < 1 || i >= nx - 1 || j < 1 || j >= ny - 1)
+                    return; // skip boundary cells
+                if ((i + j) % 2 != 1)
+                    return; // skip red grid points
+                update_potential(cell);
+            });
+    }
+
+    double compute_error() {
+        using Kokkos::abs;
+        double err;
+        Kokkos::Max<double> max_reducer(err);
+        Kokkos::parallel_reduce(
+            cells.size(),
+            KOKKOS_CLASS_LAMBDA(int k, double& err) {
+                Cell cell = cells[k];
+                auto [i, j] = cell.location;
+                max_reducer.join(err, abs(phi(i, j) - phi_old(i, j)));
+            },
+            max_reducer);
+        return err;
+    }
+
+    void solve() {
+        GridFormat::VTKHDFImageGridTimeSeriesWriter writer{grid, "data_example7"};
         writer.set_meta_data(
             "X", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[0]; }));
         writer.set_meta_data(
             "Y", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[1]; }));
         writer.set_cell_field("phi", [&](const auto cell) { return phi(cell.location[0], cell.location[1]); });
         writer.write(0);
-        auto [nx, ny] = grid.extents();
-        for (int iter = 1; iter < 1000; ++iter) {
-            // update red grid points using black grid points in old values
-            Kokkos::parallel_for(
-                cells.size(), KOKKOS_CLASS_LAMBDA(int k) {
-                    Cell cell = cells[k];
-                    auto [i, j] = cell.location;
-                    if (i < 1 || i >= nx - 1 || j < 1 || j >= ny - 1)
-                        return; // skip boundary cells
-                    if ((i + j) % 2 != 0)
-                        return; // skip red grid points
-                    update_potential(cell);
-                });
-            // update black grid points using already updated red grid points
-            Kokkos::parallel_for(
-                cells.size(), KOKKOS_CLASS_LAMBDA(int k) {
-                    Cell cell = cells[k];
-                    auto [i, j] = cell.location;
-                    if (i < 1 || i >= nx - 1 || j < 1 || j >= ny - 1)
-                        return; // skip boundary cells
-                    if ((i + j) % 2 != 1)
-                        return; // skip red grid points
-                    update_potential(cell);
-                });
-
-            if (iter % 100 == 0) {
-                Kokkos::printf("Iteration %d completed\n", iter);
-                writer.write(iter);
+        int iter = 0;
+        Kokkos::deep_copy(phi_old, phi);
+        sor_update();
+        double err = compute_error();
+        Kokkos::printf("Iteration %d: L_inf error = %f\n", iter, err);
+        while (err > tol) {
+            iter++;
+            Kokkos::deep_copy(phi_old, phi);
+            sor_update();
+            err = compute_error();
+            if (iter % 1000 == 0) {
+                Kokkos::printf("Iteration %d: L_inf error = %f\n", iter, err);
             }
         }
+        Kokkos::printf("Iteration %d: L_inf error = %f\n", iter, err);
+
+        writer.write(1);
     }
 };
 
 int main(int argc, char* argv[]) {
     Kokkos::ScopeGuard guard(argc, argv);
-    // example 2
+    // example 3
     // GridFormat::ImageGrid<2, double> grid{
     //     {0, 0},     // origin
     //     {1.0, 1.0}, // domain size
@@ -301,7 +339,7 @@ int main(int argc, char* argv[]) {
     poisson_solver.init();
     Kokkos::Timer timer;
     double start_time = timer.seconds();
-    poisson_solver.sor_update();
+    poisson_solver.solve();
     double end_time = timer.seconds();
     Kokkos::printf("Total time taken: %f seconds\n", end_time - start_time);
     return 0;

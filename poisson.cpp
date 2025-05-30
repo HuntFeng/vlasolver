@@ -31,8 +31,12 @@ class PoissonSolver {
     }
 
     double surface(double x, double y) const {
-        double x_c = 0.5, y_c = 0.5;
-        return (x - x_c) * (x - x_c) + (y - y_c) * (y - y_c) - 0.25 * 0.25;
+        // example 2
+        // return (x - 0.5) * (x - 0.5) + (y - 0.5) * (y - 0.5) - 0.25 * 0.25;
+        // example 5
+        // return x * x + y * y - 0.5 * 0.5;
+        // example 7
+        return x * x + y * y - 0.5 * 0.5;
     }
 
     std::array<double, 2> normal(double x, double y) const {
@@ -66,31 +70,66 @@ class PoissonSolver {
                 double eta_r = surface(x + dx, y);
                 double eta_b = surface(x, y - dy);
                 double eta_t = surface(x, y + dy);
-                // initialize permittivity and charge density
-                if (eta <= 0.0) {
-                    eps(i, j) = 2.0;
-                    rho(i, j) = 8 * (x * x + y * y - 1) * exp(-x * x - y * y);
-                } else {
-                    eps(i, j) = 1.0;
-                    rho(i, j) = 0.0;
-                }
+                // example 2
+                // if (eta <= 0.0) {
+                //     eps(i, j) = 2.0;
+                //     rho(i, j) = 8 * (x * x + y * y - 1) * exp(-x * x - y * y);
+                // } else {
+                //     eps(i, j) = 1.0;
+                //     rho(i, j) = 0.0;
+                // }
+                // if (eta * eta_l <= 0.0) {
+                //     a(i, j) = -exp(-x * x - y * y);
+                //     b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
+                // }
+                // if (eta * eta_r <= 0.0) {
+                //     a(i, j) = -exp(-x * x - y * y);
+                //     b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
+                // }
+                // if (eta * eta_b <= 0.0) {
+                //     a(i, j) = -exp(-x * x - y * y);
+                //     b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
+                // }
+                // if (eta * eta_t <= 0.0) {
+                //     a(i, j) = -exp(-x * x - y * y);
+                //     b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
+                // }
 
-                // initialize jump conditions
+                // example 5
+                // eps(i, j) = 1.0;
+                // rho(i, j) = 0.0;
+                // a(i, j) = 0.0;
+                // if (eta * eta_l <= 0.0) {
+                //     b(i, j) = 2;
+                // }
+                // if (eta * eta_r <= 0.0) {
+                //     b(i, j) = 2;
+                // }
+                // if (eta * eta_b <= 0.0) {
+                //     b(i, j) = 2;
+                // }
+                // if (eta * eta_t <= 0.0) {
+                //     b(i, j) = 2;
+                // }
+
+                // example 5
+                eps(i, j) = 1.0;
+                rho(i, j) = 0.0;
                 if (eta * eta_l <= 0.0) {
-                    a(i, j) = -exp(-x * x - y * y);
-                    b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
+                    a(i, j) = y * y - x * x;
+                    b(i, j) = 4 * (y * y - x * x);
                 }
                 if (eta * eta_r <= 0.0) {
-                    a(i, j) = -exp(-x * x - y * y);
-                    b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
+                    a(i, j) = y * y - x * x;
+                    b(i, j) = 4 * (y * y - x * x);
                 }
                 if (eta * eta_b <= 0.0) {
-                    a(i, j) = -exp(-x * x - y * y);
-                    b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
+                    a(i, j) = y * y - x * x;
+                    b(i, j) = 4 * (y * y - x * x);
                 }
                 if (eta * eta_t <= 0.0) {
-                    a(i, j) = -exp(-x * x - y * y);
-                    b(i, j) = 8 * (2 * x * x + 2 * y * y - x - y) * exp(-x * x - y * y);
+                    a(i, j) = y * y - x * x;
+                    b(i, j) = 4 * (y * y - x * x);
                 }
             });
     }
@@ -165,7 +204,7 @@ class PoissonSolver {
             double a_gamma = (a(i, j) * abs(eta_b) + a(i, j - 1) * abs(eta)) / (abs(eta) + abs(eta_b));
             double b_gamma = (b(i, j) * ny * abs(eta_b) + b(i, j - 1) * ny_b * abs(eta)) / (abs(eta) + abs(eta_b));
             if (eta <= 0.0)
-                F_b = eps_b * a_gamma / (dy * dy) + eps_b * b_gamma * theta / (eps_p * dy);
+                F_b = eps_b * a_gamma / (dy * dy) - eps_b * b_gamma * theta / (eps_p * dy);
             else
                 F_b = -eps_b * a_gamma / (dy * dy) + eps_b * b_gamma * theta / (eps_m * dy);
         }
@@ -198,11 +237,15 @@ class PoissonSolver {
     }
 
     void sor_update() {
-        GridFormat::VTKHDFTimeSeriesWriter writer{grid, "data"};
+        GridFormat::VTKHDFTimeSeriesWriter writer{grid, "data_example7"};
+        writer.set_meta_data(
+            "X", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[0]; }));
+        writer.set_meta_data(
+            "Y", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[1]; }));
         writer.set_cell_field("phi", [&](const auto cell) { return phi(cell.location[0], cell.location[1]); });
         writer.write(0);
         auto [nx, ny] = grid.extents();
-        for (int iter = 1; iter < 5000; ++iter) {
+        for (int iter = 1; iter < 1000; ++iter) {
             // update red grid points using black grid points in old values
             Kokkos::parallel_for(
                 cells.size(), KOKKOS_CLASS_LAMBDA(int k) {
@@ -226,10 +269,9 @@ class PoissonSolver {
                     update_potential(cell);
                 });
 
-            writer.set_cell_field("phi", [&](const auto cell) { return phi(cell.location[0], cell.location[1]); });
-            writer.write(iter);
             if (iter % 100 == 0) {
                 Kokkos::printf("Iteration %d completed\n", iter);
+                writer.write(iter);
             }
         }
     }
@@ -237,9 +279,23 @@ class PoissonSolver {
 
 int main(int argc, char* argv[]) {
     Kokkos::ScopeGuard guard(argc, argv);
+    // example 2
+    // GridFormat::ImageGrid<2, double> grid{
+    //     {0, 0},     // origin
+    //     {1.0, 1.0}, // domain size
+    //     {61, 61}    // number of cells (pixels) in each direction
+    // };
+    // example 5
+    // GridFormat::ImageGrid<2, double> grid{
+    //     {-1.0, -1.0}, // origin
+    //     {2.0, 2.0},   // domain size
+    //     {61, 61}      // number of cells (pixels) in each direction
+    // };
+    // example 7
     GridFormat::ImageGrid<2, double> grid{
-        {1.0, 1.0}, // domain size
-        {61, 61}    // number of cells (pixels) in each direction
+        {-1.0, -1.0}, // origin
+        {2.0, 2.0},   // domain size
+        {61, 61}      // number of cells (pixels) in each direction
     };
     PoissonSolver poisson_solver(grid);
     poisson_solver.init();

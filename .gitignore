@@ -1,6 +1,7 @@
-*.pdf
-.DS_Store
-build
-data*
+build/
+data/
+reports/
 .ipynb_checkpoints
 *.png
+*.pdf
+.DS_Store

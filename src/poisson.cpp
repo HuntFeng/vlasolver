@@ -13,6 +13,7 @@ class PoissonSolver {
     std::vector<Cell> cells;
     Kokkos::View<double**> phi_old;
     double tol;
+    double omega;
 
   public:
     Kokkos::View<double**> phi;
@@ -31,6 +32,7 @@ class PoissonSolver {
         a = Kokkos::View<double**>("a", nx, ny);
         b = Kokkos::View<double**>("b", nx, ny);
         phi_old = Kokkos::View<double**>("phi_old", nx, ny);
+        omega = 2 / (1 + Kokkos::sin(Kokkos::numbers::pi / (nx + 1)));
     }
 
     double surface(double x, double y) const {
@@ -243,10 +245,11 @@ class PoissonSolver {
         double Fx = F_l + F_r;
         double Fy = F_b + F_t;
 
-        phi(i, j) = (average - rho(i, j) - Fx - Fy) / denom;
+        // sor update
+        phi(i, j) = phi(i, j) + omega * (average - rho(i, j) - Fx - Fy - denom * phi(i, j)) / denom;
     }
 
-    void sor_update() {
+    void red_black_update() {
         auto [nx, ny] = grid.extents();
         // update red grid points using black grid points in old values
         Kokkos::parallel_for(
@@ -288,22 +291,24 @@ class PoissonSolver {
     }
 
     void solve() {
-        GridFormat::VTKHDFImageGridTimeSeriesWriter writer{grid, "data_example7"};
-        writer.set_meta_data(
-            "X", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[0]; }));
-        writer.set_meta_data(
-            "Y", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[1]; }));
-        writer.set_cell_field("phi", [&](const auto cell) { return phi(cell.location[0], cell.location[1]); });
-        writer.write(0);
+        // GridFormat::VTKHDFImageGridTimeSeriesWriter writer{grid, "data_example7"};
+        // writer.set_meta_data(
+        //     "X", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[0];
+        //     }));
+        // writer.set_meta_data(
+        //     "Y", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[1];
+        //     }));
+        // writer.set_cell_field("phi", [&](const auto cell) { return phi(cell.location[0], cell.location[1]); });
+        // writer.write(0);
         int iter = 0;
         Kokkos::deep_copy(phi_old, phi);
-        sor_update();
+        red_black_update();
         double err = compute_error();
         Kokkos::printf("Iteration %d: L_inf error = %f\n", iter, err);
         while (err > tol) {
             iter++;
             Kokkos::deep_copy(phi_old, phi);
-            sor_update();
+            red_black_update();
             err = compute_error();
             if (iter % 1000 == 0) {
                 Kokkos::printf("Iteration %d: L_inf error = %f\n", iter, err);
@@ -311,7 +316,16 @@ class PoissonSolver {
         }
         Kokkos::printf("Iteration %d: L_inf error = %f\n", iter, err);
 
-        writer.write(1);
+        // writer.write(1);
+
+        GridFormat::VTKHDFImageGridWriter writer{grid};
+        writer.set_meta_data("iter", iter);
+        writer.set_meta_data(
+            "X", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[0]; }));
+        writer.set_meta_data(
+            "Y", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[1]; }));
+        writer.set_cell_field("phi", [&](const auto cell) { return phi(cell.location[0], cell.location[1]); });
+        writer.write("data_example7");
     }
 };
 

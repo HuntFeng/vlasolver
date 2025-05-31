@@ -1,6 +1,7 @@
 #include <KokkosBlas1_nrm2.hpp>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Macros.hpp>
+#include <Kokkos_MathematicalConstants.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
 #include <Kokkos_Timer.hpp>
 #include <gridformat/gridformat.hpp>
@@ -14,7 +15,7 @@ class PoissonSolver {
     std::vector<Cell> cells;
     double tol;
     Kokkos::View<double*> phi_old;
-    Kokkos::View<double*> residual;
+    double omega;
 
   public:
     Kokkos::View<double*> phi;
@@ -33,7 +34,7 @@ class PoissonSolver {
         a = Kokkos::View<double*>("a", nx);
         b = Kokkos::View<double*>("b", nx);
         phi_old = Kokkos::View<double*>("phi", nx);
-        residual = Kokkos::View<double*>("residual", nx);
+        omega = 2 / (1 + Kokkos::sin(Kokkos::numbers::pi / (nx + 1)));
     }
 
     double surface(double x) const {
@@ -171,10 +172,11 @@ class PoissonSolver {
         double average = (eps_l * phi(i - 1) + eps_r * phi(i + 1)) / (dx * dx);
         double Fx = F_l + F_r;
 
-        phi(i) = (average - rho(i) - Fx) / denom;
+        // sor update
+        phi(i) = phi(i) + omega * (average - rho(i) - Fx - denom * phi(i)) / denom;
     }
 
-    void sor_update() {
+    void red_black_update() {
         auto [nx] = grid.extents();
         Kokkos::parallel_for(
             cells.size(), KOKKOS_CLASS_LAMBDA(int k) {
@@ -201,33 +203,29 @@ class PoissonSolver {
 
     double compute_err() {
         using Kokkos::abs;
-        auto [nx] = grid.extents();
-        double err = 0.0;
-        Kokkos::parallel_for(
-            nx, KOKKOS_CLASS_LAMBDA(int i) {
-                if (i < 1 || i >= nx - 1)
-                    return; // skip boundary cells
-                residual(i) = abs(phi(i) - phi_old(i));
-            });
-        return KokkosBlas::nrm2(residual);
+        double err;
+        Kokkos::Max<double> max_reducer(err);
+        Kokkos::parallel_reduce(
+            cells.size(),
+            KOKKOS_CLASS_LAMBDA(int k, double& err) {
+                Cell cell = cells[k];
+                auto [i] = cell.location;
+                max_reducer.join(err, abs(phi(i) - phi_old(i)));
+            },
+            max_reducer);
+        return err;
     }
 
     void solve() {
-        GridFormat::VTKHDFImageGridTimeSeriesWriter writer{grid, "data_example1"};
-        writer.set_meta_data(
-            "X", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[0]; }));
-        writer.set_cell_field("phi", [&](const auto cell) { return phi(cell.location[0]); });
-        writer.write(0);
-
         int iter = 0;
         Kokkos::deep_copy(phi_old, phi);
-        sor_update();
+        red_black_update();
         double err = compute_err();
         Kokkos::printf("Iteration %d: L2 error = %f\n", iter, err);
         while (err > tol) {
             iter++;
             Kokkos::deep_copy(phi_old, phi);
-            sor_update();
+            red_black_update();
             err = compute_err();
             if (iter % 1000 == 0) {
                 Kokkos::printf("Iteration %d: L2 error = %f\n", iter, err);
@@ -235,7 +233,11 @@ class PoissonSolver {
         }
         Kokkos::printf("Iteration %d: L2 error = %f\n", iter, err);
 
-        writer.write(1);
+        GridFormat::VTKHDFImageGridWriter writer{grid};
+        writer.set_meta_data(
+            "X", std::ranges::views::transform(grid.cells(), [&](const auto& cell) { return grid.center(cell)[0]; }));
+        writer.set_cell_field("phi", [&](const auto cell) { return phi(cell.location[0]); });
+        writer.write("data_example1");
     }
 };
 

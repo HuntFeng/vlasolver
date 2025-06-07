@@ -8,7 +8,7 @@ USER ubuntu
 WORKDIR /home/ubuntu
 
 # make .config writable
-RUN mkdir /home/ubuntu/.config
+RUN mkdir /home/ubuntu/.config \
     && chown ubuntu:ubuntu /home/ubuntu/.config
 
 # essential things
@@ -24,6 +24,8 @@ pip install GDBKokkos
 sudo apt install -y gdb 
 # xclip for system clipboard
 sudo apt install -y xclip
+# ripgre for searching files
+sudo apt install -y ripgrep
 EOF
 
 # inih for reading .ini file
@@ -68,17 +70,12 @@ wget https://github.com/dglaeser/gridformat/archive/refs/tags/v${GRIDFORMAT_VERS
 tar -xvzf gridformat-${GRIDFORMAT_VERSION}.tar.gz
 rm gridformat-${GRIDFORMAT_VERSION}.tar.gz
 cd gridformat-${GRIDFORMAT_VERSION}
-# git clone https://github.com/dglaeser/gridformat.git
-# cd gridformat
-# git checkout cleanup/api-unavailable-writer-error
 cmake -B build
 cmake --build build --parallel 4
 sudo cmake --install build --prefix /usr/local
 EOF
 
 # Kokkos HPC framework
-# use -DCMAKE_BUILD_TYPE=Release for release build
-# use -DCMAKE_BUILD_TYPE=Debug for debug build (recommended for development)
 RUN <<EOF
 export KOKKOS_VERSION=4.5.01
 wget https://github.com/kokkos/kokkos/releases/download/${KOKKOS_VERSION}/kokkos-${KOKKOS_VERSION}.tar.gz
@@ -89,7 +86,6 @@ cmake -B build \
 -DCMAKE_CXX_COMPILER=g++ \
 -DCMAKE_BUILD_TYPE=Release \
 -DKokkos_ENABLE_OPENMP=On \
--DKokkos_ARCH_NATIVE=On \
 -DKokkos_ENABLE_DEPRECATED_CODE_4=Off
 cmake --build build --parallel 4
 sudo cmake --install build --prefix /usr/local
@@ -97,20 +93,6 @@ EOF
 # set these env vars to optimize OPENMP 4.0 performance
 ENV OMP_PROC_BIND=spread
 ENV OMP_PLACES=threads
-
-# install KokkosKernels for matrix operations
-RUN <<EOF
-export KOKKOS_VERSION=4.5.01
-wget https://github.com/kokkos/kokkos-kernels/releases/download/${KOKKOS_VERSION}/kokkos-kernels-${KOKKOS_VERSION}.tar.gz
-tar -xvzf kokkos-kernels-${KOKKOS_VERSION}.tar.gz
-rm kokkos-kernels-${KOKKOS_VERSION}.tar.gz
-cd kokkos-kernels-${KOKKOS_VERSION}
-cmake -B build \
--DCMAKE_CXX_COMPILER=g++ \
--DKokkos_ROOT=/usr/local
-cmake --build build --parallel 4
-sudo cmake --install build --prefix /usr/local
-EOF
 
 # Neovim
 RUN <<EOF

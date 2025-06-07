@@ -1,0 +1,26 @@
+services:
+  container:
+    build:
+      context: ..
+      dockerfile: .devcontainer/cuda.Dockerfile
+    container_name: vlasolver-cuda
+    platform: linux/amd64
+    volumes:
+      - ..:/workspace/vlasolver
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ~/.config/nvim:/home/ubuntu/.config/nvim:ro
+      - ~/.ssh:/home/ubuntu/.ssh:ro
+      - ~/.gitconfig:/home/ubuntu/.gitconfig:ro
+    environment:
+      - DISPLAY=$DISPLAY
+    working_dir: /workspace/vlasolver
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    tty: true
+    stdin_open: true

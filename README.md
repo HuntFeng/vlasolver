@@ -7,13 +7,20 @@
 1. Build the docker image then run it as daemon using the command
 
 ```bash
-docker compose up --build -d
+cd .devcontainer
+# OpenMP build
+docker compose -f compose.yaml up --build -d
+# or CUDA build together with OpenMP for host parallelization
+docker compose -f compose.cuda.yaml up --build -d
 ```
 
 2. Start and/or attach to the existing container daemon
 
 ```bash
+# Kokkos container with OpenMP backend
 docker start -ai vlasolver
+# or Kokkos container with CUDA backend
+docker start -ai vlasolver-cuda
 ```
 
 ## Setup Neovim (Optional)
@@ -52,4 +59,19 @@ export DISPLAY=host.docker.internal:0
 ```bash
 cmake -B build
 cmake --build build
+```
+
+## Debugging
+
+- Configure CMake to build with debug symbols
+
+```bash
+cmake -DCMAKE_BUILD_TYPE=Debug -B build
+cmake --build build
+```
+
+- Use `gdb` to debug the executable
+
+```bash
+gdb build/vlasolver
 ```

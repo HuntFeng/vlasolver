@@ -1,10 +1,12 @@
 services:
   container:
-    build: .
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
     container_name: vlasolver
     platform: linux/amd64
     volumes:
-      - .:/workspace/vlasolver
+      - ..:/workspace/vlasolver
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
       - ~/.config/nvim:/home/ubuntu/.config/nvim:ro
       - ~/.ssh:/home/ubuntu/.ssh:ro

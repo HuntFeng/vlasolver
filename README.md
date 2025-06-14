@@ -1,6 +1,61 @@
 # Discontinuous Galerkin Method for Ideal MHD
 
-## Set Up Environment
+## Set Up Apptainer Environment (Recommended)
+
+- Apptainer is required for creating isolated and stable environment.
+
+1. For development
+
+- Build the apptainer image in sandbox mode using the command
+
+```bash
+apptainer build --sandbox .devcontainer/kokkos_cuda .devcontainer/Apptainer.def
+```
+
+- Start the apptainer shell with writable tmpfs and NVIDIA support
+
+```bash
+apptainer shell --writable-tmpfs --nv .devcontainer/kokkos_cuda
+```
+
+2. For code execution only
+
+- Build the apptainer image
+
+```bash
+apptainer build .devcontainer/kokkos_cuda.sif .devcontainer/Apptainer.def
+```
+
+- Build and Run the code in container
+
+```bash
+apptainer run --nv --app build .devcontainer/kokkos_cuda.sif
+apptainer run --nv --app run .devcontainer/kokkos_cuda.sif
+```
+
+### Usage on HPC
+
+1. Make sure the Apptainer image, `kokkos_cuda.sif`, is built.
+2. Make sure the Vlasolver code is built.
+3. Put the following script into a file, e.g., `vlasolver.sh`, and make it executable.
+
+```bash
+#!/bin/bash
+#SBATCH --gpus=1
+#SBATCH --time=00:10:00
+#SBATCH --job-name=vlasolver
+#SBATCH --output=vlasolver.out
+
+apptainer run --nv --app run .devcontainer/kokkos_cuda.sif
+```
+
+4. Submit the job script to the scheduler
+
+```bash
+sbatch vlasolver.sh
+```
+
+## Set Up Docker Environment (Only for Local Development)
 
 - Docker is required for creating isolated and stable environment.
 
@@ -70,8 +125,12 @@ cmake -DCMAKE_BUILD_TYPE=Debug -B build
 cmake --build build
 ```
 
-- Use `gdb` to debug the executable
+- Use `gdb` or `cuda-gdb` to debug the executable
 
 ```bash
 gdb build/vlasolver
 ```
+
+## Profiling
+
+- If code is built with CUDA backend, `nsys`, `ncu` can be used to profile the code.

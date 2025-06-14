@@ -5,3 +5,7 @@ reports/
 .ipynb_checkpoints
 *.png
 .DS_Store
+.devcontainer/
+!.devcontainer/*.def
+!.devcontainer/*.yaml
+!.devcontainer/*Dockerfile

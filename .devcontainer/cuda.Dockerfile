@@ -28,7 +28,7 @@ sudo apt install -y xclip
 # ripgre for searching files
 sudo apt install -y ripgrep
 # nsight systems for profiling
-sudo apt-get install -y nsight-systems-2025.1.3
+sudo apt-get install -y nsight-systems-2024.2.3
 EOF
 
 # inih for reading .ini file

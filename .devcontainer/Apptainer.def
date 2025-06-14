@@ -1,0 +1,108 @@
+Bootstrap: docker
+From: nvidia/cuda:12.3.0-devel-ubuntu22.04
+
+%help
+    This Apptainer/Singularity definition gives you:
+      - Access to NVIDIA GPUs (`--nv`)
+      - NVIDIA profiling/debugging tools: cuda-gdb, ncu (Nsight Compute), nsys (Nsight Systems)
+      - Git installed and host config available (bind-mount ~/.gitconfig by default)
+      - CMake, build-essential, and other core tools for building C++ projects
+      - HDF5 and HighFive for HDF5 file handling
+      - Kokkos framework for parallel programming
+
+%post
+    # update and install core tools
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        wget \
+        unzip \
+        build-essential \
+        cmake \
+        git \
+        software-properties-common \
+        ripgrep \
+        xclip \
+        nsight-systems-2024.2.3
+
+    # inih for ini file parsing
+    apt-get install -y libinih-dev
+
+    # hdf5
+    export HDF5_VERSION=1.14.5
+    wget https://github.com/HDFGroup/hdf5/releases/download/hdf5_${HDF5_VERSION}/hdf5-${HDF5_VERSION}.tar.gz
+    tar -xvzf hdf5-${HDF5_VERSION}.tar.gz
+    rm hdf5-${HDF5_VERSION}.tar.gz
+    cd hdf5-${HDF5_VERSION}
+    cmake -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DHDF5_ENABLE_ZLIB_SUPPORT=Off \
+    -DHDF5_ENABLE_SZIP_SUPPORT=Off
+    cmake --build build --parallel 4
+    cmake --install build --prefix /usr/local
+    rm -rf hdf5-${HDF5_VERSION}
+
+    # highfive for easier hdf5 usage
+    export HIGHFIVE_VERSION=2.10.1
+    wget https://github.com/BlueBrain/HighFive/archive/refs/tags/v${HIGHFIVE_VERSION}.tar.gz -O highfive-${HIGHFIVE_VERSION}.tar.gz
+    tar -xvzf highfive-${HIGHFIVE_VERSION}.tar.gz
+    rm highfive-${HIGHFIVE_VERSION}.tar.gz
+    cd HighFive-${HIGHFIVE_VERSION}
+    cmake -B build \
+    -DHIGHFIVE_USE_BOOST=Off \
+    -DHIGHFIVE_EXAMPLES=Off \
+    -DHIGHFIVE_USE_BOOST=Off \
+    -DHIGHFIVE_UNIT_TESTS=Off
+    cmake --build build --parallel 4
+    cmake --install build --prefix /usr/local
+    rm -rf HighFive-${HIGHFIVE_VERSION}
+
+    # kokkos framework
+    export KOKKOS_VERSION=4.5.01
+    wget https://github.com/kokkos/kokkos/releases/download/${KOKKOS_VERSION}/kokkos-${KOKKOS_VERSION}.tar.gz
+    tar -xvzf kokkos-${KOKKOS_VERSION}.tar.gz
+    rm kokkos-${KOKKOS_VERSION}.tar.gz
+    cd kokkos-${KOKKOS_VERSION}
+    # Host Serial: SERIAL
+    # Host Parallel: OpenMP
+    # Device Parallel: CUDA
+    cmake -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_STANDARD=20 \
+    -DKokkos_ARCH_TURING75=On \
+    -DKokkos_ENABLE_CUDA=On \
+    -DKokkos_ENABLE_OPENMP=On \
+    -DKokkos_ENABLE_SERIAL=On \
+    -DKokkos_ENABLE_DEPRECATED_CODE_4=Off
+    cmake --build build --parallel 4
+    cmake --install build --prefix /usr/local
+    rm -rf kokkos-${KOKKOS_VERSION}
+
+%environment
+    export PATH="/usr/local/cuda/bin:$PATH"
+    export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
+    # for better openmp performance
+    export OMP_PROC_BIND=spread
+    export OMP_PLACES=threads
+
+%apprun build
+    echo "Building Vlasov code in the container."
+    cmake -B build
+    cmake --build build --parallel 4
+    echo "Build completed."
+
+%apprun run
+    echo "Running Vlasov code in the container."
+    exec ./build/vlasov
+
+%labels
+    Author HuntFeng
+
+%test
+    echo "Running test: nvidia-smi (if run with --nv)"
+    nvidia-smi || echo "nvidia-smi not found or --nv not used"
+    echo "Running test: cuda-gdb version"
+    cuda-gdb --version || echo "cuda-gdb not found"
+    echo "Running test: ncu version"
+    ncu --version || echo "ncu not found"
+    echo "Running test: nsys version"
+    nsys --version || echo "nsys not found"

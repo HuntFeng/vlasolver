@@ -4,18 +4,18 @@
 
 - Apptainer is required for creating isolated and stable environment.
 
-1. For development
+1. Build container
 
-- Build the apptainer image in sandbox mode using the command
+- Build the apptainer image in using the command
 
 ```bash
-apptainer build --sandbox .devcontainer/kokkos_cuda .devcontainer/Apptainer.def
+apptainer build .devcontainer/kokkos_cuda.sif .devcontainer/Apptainer.def
 ```
 
 - Start the apptainer shell with writable tmpfs and NVIDIA support
 
 ```bash
-apptainer shell --writable-tmpfs --nv .devcontainer/kokkos_cuda
+apptainer shell --nv .devcontainer/kokkos_cuda
 ```
 
 2. For code execution only
@@ -31,6 +31,21 @@ apptainer build .devcontainer/kokkos_cuda.sif .devcontainer/Apptainer.def
 ```bash
 apptainer run --nv --app build .devcontainer/kokkos_cuda.sif
 apptainer run --nv --app run .devcontainer/kokkos_cuda.sif
+```
+
+3. Development in container
+
+- To install editors and other tools, we can use overlay feature of Apptainer.
+
+```bash
+mkdir -p .devcontainer/overlay
+apptainer shell --no-home --fakeroot --overlay .devcontainer/overlay .devcontainer/kokkos_cuda.sif
+```
+
+Now we can have root previlege. After installations, we can restart the container with without `--fakeroot` option.
+
+```bash
+apptainer shell --no-home --nv --overlay .devcontainer/overlay .devcontainer/kokkos_cuda.sif
 ```
 
 ### Usage on HPC

@@ -5,5 +5,8 @@ ColumnLimit: 120
 Language: Cpp
 DerivePointerAlignment: false
 PointerAlignment: Left
+BinPackParameters: false
+PackConstructorInitializers: Never
+AlignConsecutiveAssignments: AcrossEmptyLines
 ---
 

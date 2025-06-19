@@ -4,4 +4,4 @@ apptainer shell --nv \
   --bind ~/.ssh \
   --bind ~/.gitconfig \
   --bind /usr/share/terminfo \
-  --overlay .devcontainer/overlay .devcontainer/kokkos_cuda.sif
+  --overlay .devcontainer/dev_overlay .devcontainer/kokkos_cuda.sif

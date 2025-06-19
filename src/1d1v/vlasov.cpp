@@ -45,21 +45,20 @@ class Vlasolver {
         auto& grid    = world.grid;
         auto& f       = world.f;
 
-        auto [nx, nv] = grid.extents();
-        auto [dx, dv] = grid.spacing();
-        int ngc       = grid.ngc;
+        auto [nx, nv] = grid.ncells;
+        auto [dx, dv] = grid.spacing;
+        auto [Lx, Lv] = grid.size;
+        Kokkos::printf("size: Lv = %f\n", nv * dv);
+        int ngc = grid.ngc;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, nv}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 if (j < ngc || j >= nv - ngc)
                     return;
 
                 auto [x, v] = grid.center({i, j});
-                // f(i, j, 0) = (exp(-pow(v - v_d, 2) / (2.0 * Te)) + exp(-pow(v + v_d, 2) / (2.0 * Te))) *
-                //              (1 + alpha * cos(2.0 * pi * x)) / (2.0 * sqrt(2.0 * pi * Te));
-                // f(i, j, 1) = exp(-pow(v, 2) / (2.0 * Ti)) / sqrt(2.0 * pi * Ti);
 
-                f(i, j, 0) = exp(-pow(v, 2) / 2.0) * (1 + alpha * cos(k * x)) / sqrt(2.0 * pi);
-                f(i, j, 1) = 1.0 / (nv * dv);
+                f(i, j, 0)  = exp(-pow(v, 2) / 2.0) * (1 + alpha * cos(k * x)) / sqrt(2.0 * pi);
+                f(i, j, 1)  = 1.0 / Lv;
             });
 
         // open boundary condition in the v-direction
@@ -88,8 +87,8 @@ class Vlasolver {
         auto& grid = world.grid;
 
         Kokkos::deep_copy(rho, 0.0);
-        auto [dx, dv] = grid.spacing();
-        auto [nx, nv] = grid.extents();
+        auto [dx, dv] = grid.spacing;
+        auto [nx, nv] = grid.ncells;
         int ngc       = grid.ngc;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int j, const int s) {
@@ -116,11 +115,11 @@ class Vlasolver {
         auto& grid = world.grid;
 
         Kokkos::deep_copy(phi, 0.0);
-        int ngc       = grid.ngc;
-        auto [nx, nv] = grid.extents();
-        double omega  = 2 / (1 + Kokkos::sin(Kokkos::numbers::pi / ((nx - 2 * ngc) + 1)));
-        auto [dx, dv] = grid.spacing();
-        double denom  = 2.0 / (dx * dx);
+        int ngc      = grid.ngc;
+        int nx       = grid.ncells[0];
+        double omega = 2 / (1 + Kokkos::sin(Kokkos::numbers::pi / ((nx - 2 * ngc) + 1)));
+        double dx    = grid.spacing[0];
+        double denom = 2.0 / (dx * dx);
 
         for (int iter = 0; iter < 500; ++iter) {
             Kokkos::parallel_for(
@@ -163,8 +162,8 @@ class Vlasolver {
         auto& grid = world.grid;
 
         Kokkos::deep_copy(E, 0.0);
-        double dx = grid.spacing()[0];
-        int nx    = grid.extents()[0];
+        double dx = grid.spacing[0];
+        int nx    = grid.ncells[0];
         int ngc   = grid.ngc;
         Kokkos::parallel_for(
             nx, KOKKOS_CLASS_LAMBDA(const int i) {
@@ -230,8 +229,8 @@ class Vlasolver {
         auto& f       = world.f;
         auto& grid    = world.grid;
 
-        auto [dx, dv] = grid.spacing();
-        auto [nx, nv] = grid.extents();
+        auto [dx, dv] = grid.spacing;
+        auto [nx, nv] = grid.ncells;
         int ngc       = grid.ngc;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int j, const int s) {
@@ -266,8 +265,8 @@ class Vlasolver {
         auto& mu      = world.mu;
         auto& grid    = world.grid;
 
-        auto [dx, dv] = grid.spacing();
-        auto [nx, nv] = grid.extents();
+        auto [dx, dv] = grid.spacing;
+        auto [nx, nv] = grid.ncells;
         int ngc       = grid.ngc;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int j, const int s) {
@@ -313,7 +312,7 @@ class Vlasolver {
 
         size_t stepnum = 500;       // number of steps
         double dt      = 1.0 / 8.0; // time step size
-        auto [nx, nv]  = world.grid.extents();
+        auto [nx, nv]  = world.grid.ncells;
 
         File file("data/strong_landau_new.hdf", File::Overwrite);
         std::vector<size_t> dims_dist  = {stepnum, (size_t)nx, (size_t)nv};

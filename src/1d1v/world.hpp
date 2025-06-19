@@ -3,10 +3,9 @@
 #include <Kokkos_Core.hpp>
 
 /**
- * World class contains physical properties of the particles, fields, and the immersed boundary.
+ * World struct contains physical properties of the particles, fields, and the immersed boundary.
  */
-class World {
-  public:
+struct World {
     Grid& grid;
     Kokkos::Array<double, 2> q;  // charge number of the particle
     Kokkos::Array<double, 2> mu; // mass ratio of the particle (relative to the electron mass)
@@ -25,18 +24,7 @@ class World {
      * @param x The coordinate at which to evaluate the surface function.
      * @return The value of the surface function at x.
      */
-    // KOKKOS_FUNCTION
-    // double surface(double x) const;
-
-    /**
-     * Normal vector at the surface.
-     * @param x The coordinate at which to evaluate the normal vector.
-     * @return The normal vector at x.
-     */
-    // KOKKOS_FUNCTION
-    // Kokkos::Array<double, 1> normal(double x) const;
-
-    KOKKOS_FUNCTION
+    KOKKOS_INLINE_FUNCTION
     double surface(double x) const {
         using Kokkos::abs;
         // example 1
@@ -45,7 +33,12 @@ class World {
         // return abs(x - 0.45) - 0.15;
     }
 
-    KOKKOS_FUNCTION
+    /**
+     * Normal vector at the surface.
+     * @param x The coordinate at which to evaluate the normal vector.
+     * @return The normal vector at x.
+     */
+    KOKKOS_INLINE_FUNCTION
     Kokkos::Array<double, 1> normal(double x, double dx) const {
         using Kokkos::abs;
         using Kokkos::pow;

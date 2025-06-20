@@ -14,8 +14,8 @@ struct World {
     Kokkos::View<double*> phi;
     Kokkos::View<double*> E;
     Kokkos::View<double*> eps;
-    Kokkos::View<double*> phi_jump;
-    Kokkos::View<double*> E_jump;
+    Kokkos::View<double*> a; // jump condition for poisson
+    Kokkos::View<double*> b; // jump condition for poisson
 
     World(Grid& grid, Kokkos::Array<double, 2> q = {-1.0, 1.0}, Kokkos::Array<double, 2> mu = {1.0, 1e6});
 

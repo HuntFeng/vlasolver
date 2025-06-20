@@ -2,6 +2,12 @@
 #include "world.hpp"
 #include <Kokkos_Core.hpp>
 
+/**
+ * PoissonSolver class implements the red-black Gauss-Seidel method to solve Poisson's equation
+ *
+ *  laplacian phi = -rho
+ *
+ **/
 class PoissonSolver {
   private:
     World& world;

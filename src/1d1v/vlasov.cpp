@@ -108,6 +108,23 @@ class Vlasolver {
             });
     }
 
+    void compute_poisson_jump_conditions() const {
+        auto& grid = world.grid;
+        auto& a    = world.a;
+        auto& b    = world.b;
+
+        // jump conditions for the Poisson solver
+        int nx  = grid.ncells[0];
+        int ngc = grid.ngc;
+        Kokkos::parallel_for(
+            nx, KOKKOS_CLASS_LAMBDA(const int i) {
+                if (i < ngc || i >= nx - ngc)
+                    return;
+                a(i) = 0.0;
+                b(i) = 0.0;
+            });
+    }
+
     void compute_potential_field() const {
         // laplacian phi = -rho
         auto& phi  = world.phi;
@@ -298,8 +315,9 @@ class Vlasolver {
         pfc_update_along_x(dt / 2.0);
         // compute electric field
         compute_charge_density();
-        compute_potential_field();
-        // poisson_solver.solve();
+        // compute_potential_field();
+        compute_poisson_jump_conditions();
+        poisson_solver.solve();
         compute_electric_field();
         // perform shift along the v-axis
         pfc_update_along_v(dt);
@@ -331,8 +349,9 @@ class Vlasolver {
 
         initialize_distribution();
         compute_charge_density();
-        compute_potential_field();
-        // poisson_solver.solve();
+        // compute_potential_field();
+        compute_poisson_jump_conditions();
+        poisson_solver.solve();
         compute_electric_field();
 
         std::vector<size_t> offset_dist  = {0, 0, 0};

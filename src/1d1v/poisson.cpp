@@ -6,10 +6,9 @@ PoissonSolver::PoissonSolver(World& world, double tol)
     : world(world),
       tol(tol) {
     int nx  = world.grid.ncells[0];
-    a       = Kokkos::View<double*>("a", nx);
-    b       = Kokkos::View<double*>("b", nx);
     phi_old = Kokkos::View<double*>("phi", nx);
     omega   = 2 / (1 + Kokkos::sin(Kokkos::numbers::pi / (nx + 1)));
+    Kokkos::deep_copy(phi_old, 0.0);
 }
 
 void PoissonSolver::red_black_update(int is_update_red) {
@@ -18,6 +17,8 @@ void PoissonSolver::red_black_update(int is_update_red) {
     auto& phi  = world.phi;
     auto& rho  = world.rho;
     auto& eps  = world.eps;
+    auto& a    = world.a;
+    auto& b    = world.b;
 
     int nx     = grid.ncells[0];
     double dx  = grid.spacing[0];
@@ -85,7 +86,7 @@ void PoissonSolver::red_black_update(int is_update_red) {
             double Fx      = F_l + F_r;
 
             // sor update
-            phi(i) += omega * (average - rho(i) - Fx - denom * phi(i)) / denom;
+            phi(i) += omega * (average + rho(i) - Fx - denom * phi(i)) / denom;
         });
 }
 
@@ -107,16 +108,12 @@ void PoissonSolver::solve() {
     red_black_update(1);
     double err = compute_error();
     iter++;
-    // Kokkos::printf("(PoissonSolver) Iteration %d: L2 error = %f\n", iter, err);
     while (err > tol && iter < max_iter) {
         Kokkos::deep_copy(phi_old, world.phi);
         red_black_update(0);
         red_black_update(1);
         err = compute_error();
         iter++;
-        // if (iter % 1000 == 0) {
-        //     Kokkos::printf("(PoissonSolver) Iteration %d: L2 error = %f\n", iter, err);
-        // }
     }
-    Kokkos::printf("(PoissonSolver) Iteration %d: L2 error = %f\n", iter, err);
+    Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
 };

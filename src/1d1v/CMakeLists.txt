@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.22)
+
+project(Vlasolver)
+message(STATUS "CMAKE_CURRENT_SOURCE_DIR = ${CMAKE_CURRENT_SOURCE_DIR}")
+find_package(Kokkos REQUIRED)
+find_package(OpenMP REQUIRED)
+find_package(HighFive REQUIRED)
+add_executable(vlasolver_1d1v grid.cpp world.cpp poisson.cpp vlasov.cpp)
+# add_executable(vlasolver_1d1v main.cpp)
+target_include_directories(vlasolver_1d1v PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(vlasolver_1d1v Kokkos::kokkos HighFive)

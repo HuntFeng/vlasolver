@@ -35,11 +35,10 @@ class Vlasolver {
         using Kokkos::pow;
         using Kokkos::sqrt;
         using Kokkos::numbers::pi;
-        // double v_d = 1.0;    // drift velocity
-        // double Te = 0.5;     // electron temperature
-        // double Ti = 0.01;    // ion temperature
-        double alpha = 0.5; // modulation amplitude
-        double k     = 0.5;
+        // double alpha = 0.5; // modulation amplitude
+        // double k     = 0.5;
+        double Te = 1.0; // electron temperature, 1ev
+        double Ti = 0.1; // ion temperature, 0.1ev
 
         // must assign grid and f here, otherwise, using world.grid.xxx in device region causes illegal memory access
         auto& grid    = world.grid;
@@ -48,34 +47,85 @@ class Vlasolver {
         auto [nx, nv] = grid.ncells;
         auto [dx, dv] = grid.spacing;
         auto [Lx, Lv] = grid.size;
-        Kokkos::printf("size: Lv = %f\n", nv * dv);
-        int ngc = grid.ngc;
+        int ngc       = grid.ngc;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, nv}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                if (j < ngc || j >= nv - ngc)
+            Kokkos::MDRangePolicy({0, 0}, {nx, nv}), KOKKOS_CLASS_LAMBDA(const int i, const int iv) {
+                if (iv < ngc || iv >= nv - ngc)
                     return;
 
-                auto [x, v] = grid.center({i, j});
-
-                f(i, j, 0)  = exp(-pow(v, 2) / 2.0) * (1 + alpha * cos(k * x)) / sqrt(2.0 * pi);
-                f(i, j, 1)  = 1.0 / Lv;
+                auto [x, v] = grid.center({i, iv});
+                double eta  = world.surface(x);
+                if (eta < 0.0) {
+                    f(i, iv, 0) = 0.0;
+                    f(i, iv, 1) = 0.0;
+                } else {
+                    // f(i, iv, 0) = exp(-pow(v, 2) / 2.0) * (1 + alpha * cos(k * x)) / sqrt(2.0 * pi);
+                    // f(i, iv, 1) = 1.0 / Lv;
+                    f(i, iv, 0) = exp(-pow(v, 2) / (2.0 * Te) + (x - Lx) / (20 * Te));
+                    f(i, iv, 1) = exp(-pow(v, 2) / (2.0 * Ti)) * Te / Ti;
+                }
             });
 
         // open boundary condition in the v-direction
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int j, const int s) {
-                if (j < ngc || j >= nv - ngc) {
-                    f(i, j, s) = 0.0;
+            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int iv, const int s) {
+                if (iv < ngc || iv >= nv - ngc) {
+                    f(i, iv, s) = 0.0;
+                }
+            });
+
+        // inject boundary condition at the right boundary
+        Kokkos::parallel_for(
+            nv, KOKKOS_CLASS_LAMBDA(const int iv) {
+                for (int i = 1; i <= ngc; ++i) {
+                    auto [x, v] = grid.center({nx - i, iv});
+                    if (v < 0.0) {
+                        f(nx - i, iv, 0) = exp(-pow(v, 2) / Te) / pi;
+                        f(nx - i, iv, 1) = exp(-pow(v, 2) / Ti) / pi;
+                    }
                 }
             });
 
         // periodic boundary condition in the x-direction
+        // Kokkos::parallel_for(
+        //     Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int iv, const int
+        //     s) {
+        //         if (i < ngc) {
+        //             f(i, iv, s) = f(nx - 2 * ngc + i, iv, s);
+        //         } else if (i >= nx - ngc) {
+        //             f(i, iv, s) = f(i - nx + 2 * ngc, iv, s);
+        //         }
+        //     });
+    }
+
+    void extrapolate_distribution_function() const {
+        auto& grid    = world.grid;
+        auto& f       = world.f;
+        auto [nx, nv] = grid.ncells;
+        int ngc       = grid.ngc;
+        double dx     = grid.spacing[0];
+
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int j, const int s) {
-                if (i < ngc) {
-                    f(i, j, s) = f(nx - 2 * ngc + i, j, s);
-                } else if (i >= nx - ngc) {
-                    f(i, j, s) = f(i - nx + 2 * ngc, j, s);
+            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int iv, const int s) {
+                if (i < ngc || i >= nx - ngc)
+                    return;
+
+                auto [x, v] = grid.center({i, iv});
+
+                // always extrapolate the ghost cells of immersed boundary from the interior cells
+                double eta = world.surface(x);
+                if (eta < 0.0)
+                    return;
+
+                double eta_l = world.surface(x - dx);
+                double eta_r = world.surface(x + dx);
+                auto [n1]    = world.normal(x, dx);
+                // extrapolate outflow (v.n < 0), 0 inflow(v.n >= 0)
+                if (eta * eta_l <= 0.0) {
+                    f(i - 1, iv, s) = (v * n1 < 0.0) ? 1.5 * f(i, iv, s) - 0.5 * f(i + 1, iv, s) : 0.0;
+                }
+                if (eta * eta_r <= 0.0) {
+                    f(i + 1, iv, s) = (v * n1 < 0.0) ? 1.5 * f(i, iv, s) - 0.5 * f(i - 1, iv, s) : 0.0;
                 }
             });
     }
@@ -84,6 +134,7 @@ class Vlasolver {
         auto& rho  = world.rho;
         auto& q    = world.q;
         auto& f    = world.f;
+        auto& n    = world.n;
         auto& grid = world.grid;
 
         Kokkos::deep_copy(rho, 0.0);
@@ -91,86 +142,34 @@ class Vlasolver {
         auto [nx, nv] = grid.ncells;
         int ngc       = grid.ngc;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int j, const int s) {
+            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int iv, const int s) {
                 if (i < ngc || i >= nx - ngc)
                     return;
-                Kokkos::atomic_add(&rho(i), q[s] * f(i, j, s) * dv);
+                Kokkos::atomic_add(&n(i, s), f(i, iv, s) * dv);
+                Kokkos::atomic_add(&rho(i), q[s] * f(i, iv, s) * dv);
             });
 
         // periodic boundary condition in the x-direction
-        Kokkos::parallel_for(
-            nx, KOKKOS_CLASS_LAMBDA(const int i) {
-                if (i < ngc) {
-                    rho(i) = rho(nx - 2 * ngc + i);
-                } else if (i >= nx - ngc) {
-                    rho(i) = rho(i - nx + 2 * ngc);
-                }
-            });
+        // Kokkos::parallel_for(
+        //     nx, KOKKOS_CLASS_LAMBDA(const int i) {
+        //         if (i < ngc) {
+        //             rho(i) = rho(nx - 2 * ngc + i);
+        //         } else if (i >= nx - ngc) {
+        //             rho(i) = rho(i - nx + 2 * ngc);
+        //         }
+        //     });
     }
 
     void compute_poisson_jump_conditions() const {
-        auto& grid = world.grid;
-        auto& a    = world.a;
-        auto& b    = world.b;
-
-        // jump conditions for the Poisson solver
-        int nx  = grid.ncells[0];
-        int ngc = grid.ngc;
+        auto& a   = world.a;
+        auto& b   = world.b;
+        auto& rho = world.rho;
+        int nx    = world.grid.ncells[0];
         Kokkos::parallel_for(
             nx, KOKKOS_CLASS_LAMBDA(const int i) {
-                if (i < ngc || i >= nx - ngc)
-                    return;
                 a(i) = 0.0;
-                b(i) = 0.0;
+                b(i) = -rho(i);
             });
-    }
-
-    void compute_potential_field() const {
-        // laplacian phi = -rho
-        auto& phi  = world.phi;
-        auto& rho  = world.rho;
-        auto& grid = world.grid;
-
-        Kokkos::deep_copy(phi, 0.0);
-        int ngc      = grid.ngc;
-        int nx       = grid.ncells[0];
-        double omega = 2 / (1 + Kokkos::sin(Kokkos::numbers::pi / ((nx - 2 * ngc) + 1)));
-        double dx    = grid.spacing[0];
-        double denom = 2.0 / (dx * dx);
-
-        for (int iter = 0; iter < 500; ++iter) {
-            Kokkos::parallel_for(
-                nx, KOKKOS_CLASS_LAMBDA(const int i) {
-                    if (i < ngc || i >= nx - ngc)
-                        return;
-                    if (i % 2 != 0)
-                        return; // skip red grid points
-
-                    double average = (phi(i - 1) + phi(i + 1)) / (dx * dx);
-                    Kokkos::atomic_add(&phi(i), omega * (average + rho(i) - denom * phi(i)) / denom);
-                });
-
-            Kokkos::parallel_for(
-                nx, KOKKOS_CLASS_LAMBDA(const int i) {
-                    if (i < ngc || i >= nx - ngc)
-                        return;
-                    if (i % 2 != 1)
-                        return; // skip black grid points
-
-                    double average = (phi(i - 1) + phi(i + 1)) / (dx * dx);
-                    Kokkos::atomic_add(&phi(i), omega * (average + rho(i) - denom * phi(i)) / denom);
-                });
-
-            // periodic boundary condition in the x-direction
-            Kokkos::parallel_for(
-                nx, KOKKOS_CLASS_LAMBDA(const int i) {
-                    if (i < ngc) {
-                        phi(i) = phi(nx - 2 * ngc + i);
-                    } else if (i >= nx - ngc) {
-                        phi(i) = phi(i - nx + 2 * ngc);
-                    }
-                });
-        }
     }
 
     void compute_electric_field() const {
@@ -191,26 +190,26 @@ class Vlasolver {
             });
 
         // periodic boundary condition in the x-direction
-        Kokkos::parallel_for(
-            nx, KOKKOS_CLASS_LAMBDA(const int i) {
-                if (i < ngc) {
-                    E(i) = E(nx - 2 * ngc + i);
-                } else if (i >= nx - ngc) {
-                    E(i) = E(i - nx + 2 * ngc);
-                }
-            });
+        // Kokkos::parallel_for(
+        //     nx, KOKKOS_CLASS_LAMBDA(const int i) {
+        //         if (i < ngc) {
+        //             E(i) = E(nx - 2 * ngc + i);
+        //         } else if (i >= nx - ngc) {
+        //             E(i) = E(i - nx + 2 * ngc);
+        //         }
+        //     });
     }
 
     KOKKOS_FUNCTION
-    double compute_flux(int i, int j, int s, int axis, double nu, const Kokkos::View<double***>& f) const {
+    double compute_flux(int i, int iv, int s, int axis, double nu, const Kokkos::View<double***>& f) const {
         // third order upwind-biased interpolation
         using Kokkos::max;
         using Kokkos::min;
         auto f_val = KOKKOS_CLASS_LAMBDA(int offset)->double {
             if (axis == 0) {
-                return f(i + offset, j, s);
+                return f(i + offset, iv, s);
             } else {
-                return f(i, j + offset, s);
+                return f(i, iv + offset, s);
             }
         };
 
@@ -250,27 +249,31 @@ class Vlasolver {
         auto [nx, nv] = grid.ncells;
         int ngc       = grid.ngc;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int j, const int s) {
+            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int iv, const int s) {
                 if (i < ngc || i >= nx - ngc)
                     return;
 
-                auto [x, v]     = grid.center({i, j});
+                auto [x, v] = grid.center({i, iv});
+                double eta  = world.surface(x);
+                if (eta < 0.0)
+                    return; // skip interior of immersed object
                 double nu       = -v * dt / dx;
 
-                double flux_out = compute_flux(i, j, s, 0, nu, f);
-                double flux_in  = compute_flux(i - 1, j, s, 0, nu, f);
-                f(i, j, s) += flux_in - flux_out;
+                double flux_out = compute_flux(i, iv, s, 0, nu, f);
+                double flux_in  = compute_flux(i - 1, iv, s, 0, nu, f);
+                f(i, iv, s) += flux_in - flux_out;
             });
 
         // periodic boundary condition in the x-direction
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int j, const int s) {
-                if (i < ngc) {
-                    f(i, j, s) = f(nx - 2 * ngc + i, j, s);
-                } else if (i >= nx - ngc) {
-                    f(i, j, s) = f(i - nx + 2 * ngc, j, s);
-                }
-            });
+        // Kokkos::parallel_for(
+        //     Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int iv, const int
+        //     s) {
+        //         if (i < ngc) {
+        //             f(i, iv, s) = f(nx - 2 * ngc + i, iv, s);
+        //         } else if (i >= nx - ngc) {
+        //             f(i, iv, s) = f(i - nx + 2 * ngc, iv, s);
+        //         }
+        //     });
     }
 
     void pfc_update_along_v(double dt) const {
@@ -286,33 +289,41 @@ class Vlasolver {
         auto [nx, nv] = grid.ncells;
         int ngc       = grid.ngc;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int j, const int s) {
+            Kokkos::MDRangePolicy({0, 0, 0}, {nx, nv, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int iv, const int s) {
                 // third order upwind-biased interpolation
                 double a  = q[s] / mu[s] * E(i); // acceleration
                 double nu = -a * dt / dv;
+
                 // open boundary condition in the v-direction
-                if (j < ngc || j >= nv - ngc)
+                if (i < ngc || i >= nx - ngc || iv < ngc || iv >= nv - ngc)
                     return;
+
+                auto [x, v] = grid.center({i, iv});
+                double eta  = world.surface(x);
+                if (eta < 0.0)
+                    return; // skip interior of immersed object
 
                 // open boundary condition in the v-direction
                 double flux_in = 0.0, flux_out = 0.0;
-                if (j == 2 && a < 0.0) {
+                if (iv == 2 && a < 0.0) {
                     flux_in  = 0.0;
-                    flux_out = a * dt / dv * f(i, j, s);
-                } else if (j == nv - ngc && a > 0.0) {
+                    flux_out = a * dt / dv * f(i, iv, s);
+                } else if (iv == nv - ngc && a > 0.0) {
                     flux_in  = 0.0;
-                    flux_out = a * dt / dv * f(i, j, s);
+                    flux_out = a * dt / dv * f(i, iv, s);
                 } else {
-                    flux_in  = compute_flux(i, j - 1, s, 1, nu, f);
-                    flux_out = compute_flux(i, j, s, 1, nu, f);
+                    flux_in  = compute_flux(i, iv - 1, s, 1, nu, f);
+                    flux_out = compute_flux(i, iv, s, 1, nu, f);
                 }
-                f(i, j, s) += flux_in - flux_out;
+                f(i, iv, s) += flux_in - flux_out;
             });
     }
 
     void advance(double dt) {
         // perform half time step shift along the x-axis
         pfc_update_along_x(dt / 2.0);
+        // extrapolate the distribution function for the ghost cells
+        extrapolate_distribution_function();
         // compute electric field
         compute_charge_density();
         // compute_potential_field();
@@ -328,11 +339,10 @@ class Vlasolver {
     void solve() {
         using namespace HighFive;
 
-        size_t stepnum = 500;       // number of steps
-        double dt      = 1.0 / 8.0; // time step size
+        size_t stepnum = 100; // number of steps
         auto [nx, nv]  = world.grid.ncells;
 
-        File file("data/strong_landau_new.hdf", File::Overwrite);
+        File file("data/plasma_sheath.hdf", File::Overwrite);
         std::vector<size_t> dims_dist  = {stepnum, (size_t)nx, (size_t)nv};
         std::vector<size_t> dims_field = {stepnum, (size_t)nx};
         DataSetCreateProps props_dist;
@@ -343,11 +353,14 @@ class Vlasolver {
             Chunking(std::vector<hsize_t>{1, (hsize_t)nx})); // enable chunking for efficient writing per step
         DataSet dataset_fe  = file.createDataSet<double>("VTKHDF/CellData/fe", DataSpace(dims_dist), props_dist);
         DataSet dataset_fi  = file.createDataSet<double>("VTKHDF/CellData/fi", DataSpace(dims_dist), props_dist);
+        DataSet dataset_ne  = file.createDataSet<double>("VTKHDF/CellData/ne", DataSpace(dims_field), props_field);
+        DataSet dataset_ni  = file.createDataSet<double>("VTKHDF/CellData/ni", DataSpace(dims_field), props_field);
         DataSet dataset_rho = file.createDataSet<double>("VTKHDF/CellData/rho", DataSpace(dims_field), props_field);
         DataSet dataset_phi = file.createDataSet<double>("VTKHDF/CellData/phi", DataSpace(dims_field), props_field);
         DataSet dataset_E   = file.createDataSet<double>("VTKHDF/CellData/E", DataSpace(dims_field), props_field);
 
         initialize_distribution();
+        extrapolate_distribution_function();
         compute_charge_density();
         // compute_potential_field();
         compute_poisson_jump_conditions();
@@ -359,6 +372,7 @@ class Vlasolver {
         std::vector<size_t> offset_field = {0, 0};
         std::vector<size_t> count_field  = {1, (size_t)nx};
         auto f_host                      = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.f);
+        auto n_host                      = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.n);
         auto rho_host                    = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.rho);
         auto phi_host                    = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
         auto E_host                      = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
@@ -366,6 +380,8 @@ class Vlasolver {
                                                          std::vector<std::vector<double>>(nx, std::vector<double>(nv)));
         std::vector<std::vector<std::vector<double>>> fi(1,
                                                          std::vector<std::vector<double>>(nx, std::vector<double>(nv)));
+        std::vector<std::vector<double>> ne_data(1, std::vector<double>(nx));
+        std::vector<std::vector<double>> ni_data(1, std::vector<double>(nx));
         std::vector<std::vector<double>> rho_data(1, std::vector<double>(nx));
         std::vector<std::vector<double>> phi_data(1, std::vector<double>(nx));
         std::vector<std::vector<double>> E_data(1, std::vector<double>(nx));
@@ -373,6 +389,8 @@ class Vlasolver {
             for (int j = 0; j < nv; ++j) {
                 fe[0][i][j]    = f_host(i, j, 0);
                 fi[0][i][j]    = f_host(i, j, 1);
+                ne_data[0][i]  = n_host(i, 0);
+                ni_data[0][i]  = n_host(i, 1);
                 rho_data[0][i] = rho_host(i);
                 phi_data[0][i] = phi_host(i);
                 E_data[0][i]   = E_host(i);
@@ -380,6 +398,8 @@ class Vlasolver {
         }
         dataset_fe.select(offset_dist, count_dist).write(fe);
         dataset_fi.select(offset_dist, count_dist).write(fi);
+        dataset_ne.select(offset_field, count_field).write(ne_data);
+        dataset_ni.select(offset_field, count_field).write(ni_data);
         dataset_rho.select(offset_field, count_field).write(rho_data);
         dataset_phi.select(offset_field, count_field).write(phi_data);
         dataset_E.select(offset_field, count_field).write(E_data);
@@ -387,9 +407,10 @@ class Vlasolver {
         Kokkos::printf("Step %d completed.\n", 0);
 
         for (int step = 1; step < stepnum; ++step) {
-            advance(dt);
+            advance(world.dt);
             Kokkos::printf("Step %d completed.\n", step);
             f_host       = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.f);
+            n_host       = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.n);
             rho_host     = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.rho);
             phi_host     = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
             E_host       = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
@@ -399,6 +420,8 @@ class Vlasolver {
                 for (int j = 0; j < nv; ++j) {
                     fe[0][i][j]    = f_host(i, j, 0);
                     fi[0][i][j]    = f_host(i, j, 1);
+                    ne_data[0][i]  = n_host(i, 0);
+                    ni_data[0][i]  = n_host(i, 1);
                     rho_data[0][i] = rho_host(i);
                     phi_data[0][i] = phi_host(i);
                     E_data[0][i]   = E_host(i);
@@ -406,6 +429,8 @@ class Vlasolver {
             }
             dataset_fe.select(offset_dist, count_dist).write(fe);
             dataset_fi.select(offset_dist, count_dist).write(fi);
+            dataset_ne.select(offset_field, count_field).write(ne_data);
+            dataset_ni.select(offset_field, count_field).write(ni_data);
             dataset_rho.select(offset_field, count_field).write(rho_data);
             dataset_phi.select(offset_field, count_field).write(phi_data);
             dataset_E.select(offset_field, count_field).write(E_data);
@@ -415,14 +440,18 @@ class Vlasolver {
 
 int main(int argc, char* argv[]) {
     Kokkos::ScopeGuard guard(argc, argv);
-    Kokkos::Array<double, 2> origin        = {0.0, -6.0};                     // origin of the grid
-    Kokkos::Array<double, 2> size          = {4 * Kokkos::numbers::pi, 12.0}; // size of the grid
-    Kokkos::Array<int, 2> ncells_interior  = {32, 64};    // number of cells in the grid (excluding ghost cells)
-    int ngc                                = 3;           // number of ghost cells on each side
-    Kokkos::Array<double, 2> charge_number = {-1.0, 1.0}; // charge number of the particle
-    Kokkos::Array<double, 2> mass_ratio    = {1.0, 1e6};  // mass ratio of the particle (relative to the electron mass)
+    // Kokkos::Array<double, 2> origin        = {0.0, -6.0};                     // origin of the grid
+    // Kokkos::Array<double, 2> size          = {4 * Kokkos::numbers::pi, 12.0}; // size of the grid
+    Kokkos::Array<double, 2> origin        = {0.0, -10.0}; // origin of the grid
+    Kokkos::Array<double, 2> size          = {20.0, 20.0}; // size of the grid
+    int ngc                                = 3;            // number of ghost cells on each side
+    Kokkos::Array<int, 2> ncells_interior  = {32 - 2 * ngc,
+                                              64 - 2 * ngc}; // number of cells in the grid (excluding ghost cells)
+    Kokkos::Array<double, 2> charge_number = {-1.0, 1.0};    // charge number of the particle
+    Kokkos::Array<double, 2> mass_ratio    = {1.0, 1836.0};  // mass ratio of the particle (relative to the electron)
+    double dt                              = 1.0 / 8.0;      // time step size
     Grid grid(origin, size, ncells_interior, ngc);
-    World world(grid, charge_number, mass_ratio);
+    World world(grid, dt, charge_number, mass_ratio);
     PoissonSolver poisson_solver(world);
     Vlasolver vlasolver(world, poisson_solver);
 

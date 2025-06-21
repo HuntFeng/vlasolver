@@ -1,6 +1,9 @@
 #include "poisson.hpp"
 #include "world.hpp"
+#include <Cuda/Kokkos_Cuda_Team.hpp>
+#include <Kokkos_Atomic.hpp>
 #include <Kokkos_Core.hpp>
+#include <impl/Kokkos_Profiling.hpp>
 
 PoissonSolver::PoissonSolver(World& world, double tol)
     : world(world),
@@ -9,6 +12,36 @@ PoissonSolver::PoissonSolver(World& world, double tol)
     phi_old = Kokkos::View<double*>("phi", nx);
     omega   = 2 / (1 + Kokkos::sin(Kokkos::numbers::pi / (nx + 1)));
     Kokkos::deep_copy(phi_old, 0.0);
+}
+
+void PoissonSolver::apply_boundary_conditions() {
+    using Kokkos::abs;
+    auto& grid    = world.grid;
+    auto& phi     = world.phi;
+    int nx        = grid.ncells[0];
+    int nv        = grid.ncells[1];
+    auto [dx, dv] = grid.spacing;
+    int ngc       = grid.ngc;
+    auto& f       = world.f;
+    double dt     = world.dt;
+
+    double flux   = 0.0;
+    Kokkos::Sum<double> flux_reducer(flux);
+    Kokkos::parallel_reduce(
+        nv,
+        KOKKOS_CLASS_LAMBDA(int iv, double& flux) {
+            auto [x, v] = grid.center({ngc - 1, iv});
+            flux_reducer.join(flux, v * (f(ngc - 1, iv, 1) - f(ngc - 1, iv, 0)) * dv);
+        },
+        flux_reducer);
+
+    // just to make the assignment to happen in the device
+    double E_w = flux * dt; // electric field at the left boundary
+    Kokkos::parallel_for(
+        ngc, KOKKOS_CLASS_LAMBDA(int i) {
+            phi(nx - i) = 0.0;                        // Dirichlet boundary condition at right boundary
+            phi(i)      = phi(ngc) - 2 * dx * (-E_w); // Neumann boundary condition at left boundary
+        });
 }
 
 void PoissonSolver::red_black_update(int is_update_red) {
@@ -52,11 +85,11 @@ void PoissonSolver::red_black_update(int is_update_red) {
                 double eps_m   = (eta <= 0.0) ? eps(i) : eps(i - 1);
                 eps_l          = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
 
-                auto [nx]      = world.normal(x, dx);
-                auto [nx_l]    = world.normal(x - dx, dx);
+                auto [n1]      = world.normal(x, dx);
+                auto [n1_l]    = world.normal(x - dx, dx);
                 double theta   = abs(eta_l) / (abs(eta) + abs(eta_l));
                 double a_gamma = (a(i) * abs(eta_l) + a(i - 1) * abs(eta)) / (abs(eta) + abs(eta_l));
-                double b_gamma = (b(i) * nx * abs(eta_l) + b(i - 1) * nx_l * abs(eta)) / (abs(eta) + abs(eta_l));
+                double b_gamma = (b(i) * n1 * abs(eta_l) + b(i - 1) * n1_l * abs(eta)) / (abs(eta) + abs(eta_l));
                 if (eta <= 0.0)
                     F_l = eps_l * a_gamma / (dx * dx) - eps_l * b_gamma * theta / (eps_p * dx);
                 else
@@ -69,11 +102,11 @@ void PoissonSolver::red_black_update(int is_update_red) {
                 double eps_m   = (eta <= 0.0) ? eps(i) : eps(i + 1);
                 eps_r          = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
 
-                auto [nx]      = world.normal(x, dx);
-                auto [nx_r]    = world.normal(x + dx, dx);
+                auto [n1]      = world.normal(x, dx);
+                auto [n1_r]    = world.normal(x + dx, dx);
                 double theta   = abs(eta_r) / (abs(eta) + abs(eta_r));
                 double a_gamma = (a(i) * abs(eta_r) + a(i + 1) * abs(eta)) / (abs(eta) + abs(eta_r));
-                double b_gamma = (b(i) * nx * abs(eta_r) + b(i + 1) * nx_r * abs(eta)) / (abs(eta) + abs(eta_r));
+                double b_gamma = (b(i) * n1 * abs(eta_r) + b(i + 1) * n1_r * abs(eta)) / (abs(eta) + abs(eta_r));
                 if (eta <= 0.0)
                     F_r = eps_r * a_gamma / (dx * dx) + eps_r * b_gamma * theta / (eps_p * dx);
                 else
@@ -104,16 +137,19 @@ double PoissonSolver::compute_error() {
 void PoissonSolver::solve() {
     int iter = 0;
     Kokkos::deep_copy(phi_old, world.phi);
+    apply_boundary_conditions();
     red_black_update(0);
     red_black_update(1);
     double err = compute_error();
     iter++;
     while (err > tol && iter < max_iter) {
         Kokkos::deep_copy(phi_old, world.phi);
+        apply_boundary_conditions();
         red_black_update(0);
         red_black_update(1);
         err = compute_error();
         iter++;
     }
+    apply_boundary_conditions();
     Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
 };

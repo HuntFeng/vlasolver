@@ -1,57 +1,45 @@
 #pragma once
-
 #include <Kokkos_Core.hpp>
 
-class Grid {
-  private:
-    Kokkos::Array<double, 2> origin; // origin of the grid
-    Kokkos::Array<double, 2> size;   // size of the grid
-    Kokkos::Array<int, 2> ncells;    // number of all cells in the grid
+const int DIM = 4; // Number of dimensions in the Vlasov solver
+/**
+ * Grid struct contains the parameters of the grid used in the Vlasov solver.
+ */
+struct Grid {
+    int ngc;                            // number of ghost cells on each side
+    Kokkos::Array<double, DIM> origin;  // origin of the grid
+    Kokkos::Array<double, DIM> size;    // size of the grid
+    Kokkos::Array<int, DIM> ncells;     // number of all cells in the grid
+    Kokkos::Array<double, DIM> spacing; // spacing in the x and v directions
 
-  public:
-    int ngc; // number of ghost cells on each side
     /**
      * Constructor to initialize Grid with custom parameters.
      *
-     * @param origin_in Origin coordinates of the grid
-     * @param size_in Size of the grid
-     * @param ncells_in Number of cells in the grid (excluding ghost cells)
+     * @param origin Origin coordinates of the grid
+     * @param size Size of the grid
+     * @param ncells_interior Number of cells in the grid (excluding ghost cells)
      * @param (optional) ngc_in Number of ghost cells on each side, defaults to
      * 3
      */
-    Grid(const Kokkos::Array<double, 2>& origin_in,
-         const Kokkos::Array<double, 2>& size_in,
-         const Kokkos::Array<int, 2>& ncells_in_without_ghosts,
-         int ngc_in = 3);
+    Grid(const Kokkos::Array<double, DIM> origin,
+         const Kokkos::Array<double, DIM> size,
+         const Kokkos::Array<int, DIM> ncells_interior,
+         int ngc = 3);
 
     /**
-     * Returns the spacing of the grid in each direction.
-     * Spacing is calculated as the grid size / number of cells (excluding ghost
-     *cells) in that direction.
+     * Calculate the center of the cell given its coordinate indexes of cells (including ghost cells).
      *
-     * @return A Kokkos::Array containing the spacing in the x and v directions.
+     * @param coord_idx Coordinate indexes of the cell, starts from 0 to ncells - 1.
+     * @return A Kokkos::Array containing the center coordinates in the x and v directions.
      **/
-    KOKKOS_FUNCTION
-    Kokkos::Array<double, 2> spacing() const;
-
-    /**
-     * Returns the number of cells in the grid (including ghost cells).
-     *
-     * @return A Kokkos::Array containing the number of cells in the x and v
-     *directions.
-     **/
-    KOKKOS_FUNCTION
-    Kokkos::Array<int, 2> extents() const;
-
-    /**
-     * Calculate the center of the cell given its coordinate indexes of cells
-     *(including ghost cells).
-     *
-     * @param coord_idx Coordinate indexes of the cell, starts from 0 to ncells
-     *- 1.
-     * @return A Kokkos::Array containing the center coordinates in the x and v
-     *directions.
-     **/
-    KOKKOS_FUNCTION
-    Kokkos::Array<double, 2> center(const Kokkos::Array<int, 2>& coord_idx) const;
+    KOKKOS_INLINE_FUNCTION
+    Kokkos::Array<double, DIM> center(const Kokkos::Array<int, DIM> coord_idx) const {
+        auto [dx, dy, dvx, dvy] = spacing;
+        return {
+            origin[0] + (coord_idx[0] - ngc) * dx + dx / 2.0,   // center in the x-direction
+            origin[1] + (coord_idx[1] - ngc) * dy + dy / 2.0,   // center in the y-direction
+            origin[2] + (coord_idx[2] - ngc) * dvx + dvx / 2.0, // center in the vx-direction
+            origin[3] + (coord_idx[3] - ngc) * dvy + dvy / 2.0  // center in the vy-direction
+        };
+    };
 };

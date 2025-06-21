@@ -7,9 +7,11 @@
  */
 struct World {
     Grid& grid;
+    double dt;
     Kokkos::Array<double, 2> q;  // charge number of the particle
     Kokkos::Array<double, 2> mu; // mass ratio of the particle (relative to the electron mass)
     Kokkos::View<double***> f;
+    Kokkos::View<double**> n; // number density of the particles
     Kokkos::View<double*> rho;
     Kokkos::View<double*> phi;
     Kokkos::View<double*> E;
@@ -17,24 +19,27 @@ struct World {
     Kokkos::View<double*> a; // jump condition for poisson
     Kokkos::View<double*> b; // jump condition for poisson
 
-    World(Grid& grid, Kokkos::Array<double, 2> q = {-1.0, 1.0}, Kokkos::Array<double, 2> mu = {1.0, 1e6});
+    World(Grid& grid, double dt, Kokkos::Array<double, 2> q = {-1.0, 1.0}, Kokkos::Array<double, 2> mu = {1.0, 1e6});
 
     /**
-     * Expression of the immersed boundary. S(x) = 0 is the surface of the immersed boundary.
+     * Expression of the immersed boundary.
+     * S(x) = 0 is the surface of the immersed boundary.
+     * S(x) < 0 is the exterior of the computational domain (interior of the immersed object).
+     * S(x) > 0 is the interior of the computational domain (exterior of the immersed object).
+     *
      * @param x The coordinate at which to evaluate the surface function.
      * @return The value of the surface function at x.
      */
     KOKKOS_INLINE_FUNCTION
     double surface(double x) const {
-        using Kokkos::abs;
-        // example 1
-        return x - 0.5;
-        // example 2
-        // return abs(x - 0.45) - 0.15;
+        // 1d plasma sheath
+        return x;
     }
 
     /**
-     * Normal vector at the surface.
+     * Unit normal vector at the surface.
+     * The normal vector is pointing inward, i.e. into the computational domain.
+     *
      * @param x The coordinate at which to evaluate the normal vector.
      * @return The normal vector at x.
      */

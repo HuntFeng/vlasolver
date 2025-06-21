@@ -12,19 +12,14 @@ class PoissonSolver {
   private:
     World& world;
     double tol;
-    Kokkos::View<double*> phi_old;
+    Kokkos::View<double**> phi_old;
     double omega;
-    Kokkos::View<double*> a;
-    Kokkos::View<double*> b;
+    Kokkos::View<double**> a;
+    Kokkos::View<double**> b;
     int max_iter = 1e4;
 
   public:
     PoissonSolver(World& world, double tol = 1e-6);
-
-    /**
-     * Apply boundary conditions to the potential field.
-     */
-    void apply_boundary_conditions();
 
     /**
      * Update the potential field using the red-black Gauss-Seidel method.

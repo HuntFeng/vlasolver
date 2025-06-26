@@ -9,3 +9,5 @@ reports/
 !.devcontainer/*.def
 !.devcontainer/*.yaml
 !.devcontainer/*Dockerfile
+*.log
+*.out

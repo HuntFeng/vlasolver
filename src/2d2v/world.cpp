@@ -3,11 +3,13 @@
 
 World::World(Grid& grid, Kokkos::Array<double, 2> q, Kokkos::Array<double, 2> mu)
     : grid(grid),
+      dt(dt),
       q(q),
       mu(mu) {
     // Initialize the views with appropriate dimensions
     auto [nx, ny, nvx, nvy] = grid.ncells;
     f                       = Kokkos::View<double*****>("f", nx, ny, nvx, nvy, 2);
+    n                       = Kokkos::View<double***>("n", nx, ny, 2);
     rho                     = Kokkos::View<double**>("rho", nx, ny);
     phi                     = Kokkos::View<double**>("phi", nx, ny);
     E                       = Kokkos::View<double***>("E", nx, ny, 2);

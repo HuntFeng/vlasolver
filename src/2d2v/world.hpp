@@ -10,12 +10,19 @@ struct World {
     Kokkos::Array<double, 2> q;  // charge number of the particle
     Kokkos::Array<double, 2> mu; // mass ratio of the particle (relative to the electron mass)
     Kokkos::View<double*****> f;
+    Kokkos::View<double***> n; // number density
     Kokkos::View<double**> rho;
     Kokkos::View<double**> phi;
     Kokkos::View<double***> E; // Ex(x,y), E_y(x,y)
     Kokkos::View<double**> eps;
     Kokkos::View<double**> a; // jump condition for poisson
     Kokkos::View<double**> b; // jump condition for poisson
+
+    // simulation time control
+    double dt;          // time step size
+    double total_time;  // total simulation time
+    size_t total_steps; // number of total steps
+    size_t diag_steps;  // number of steps between diagnostics
 
     World(Grid& grid, Kokkos::Array<double, 2> q = {-1.0, 1.0}, Kokkos::Array<double, 2> mu = {1.0, 1e6});
 
@@ -30,8 +37,8 @@ struct World {
      */
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
-        // example 2 plasma sheath from IFE-CSL
-        return y;
+        // example 4 plasma sheath from IFE-CSL
+        return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
     }
 
     /**

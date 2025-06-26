@@ -1,16 +1,47 @@
 #include "poisson.hpp"
 #include "world.hpp"
 #include <Kokkos_Core.hpp>
-#include <impl/Kokkos_Profiling.hpp>
+#include <highfive/highfive.hpp>
 
 PoissonSolver::PoissonSolver(World& world, double tol)
     : world(world),
       tol(tol) {
     int nx  = world.grid.ncells[0];
     int ny  = world.grid.ncells[1];
-    phi_old = Kokkos::View<double**>("phi", nx, ny);
+    phi_old = Kokkos::View<double**>("phi_old", nx, ny);
     omega   = 2 / (1 + Kokkos::sin(Kokkos::numbers::pi / (ny + 1)));
-    Kokkos::deep_copy(phi_old, 0.0);
+}
+
+void PoissonSolver::apply_potential_boundary_conditions() {
+    using Kokkos::abs;
+    auto& grid              = world.grid;
+    auto& phi               = world.phi;
+    int nx                  = grid.ncells[0];
+    int ny                  = grid.ncells[1];
+    auto [dx, dy, dvx, dvy] = grid.spacing;
+    int ngc                 = grid.ngc;
+    double phi_w            = -20.0; // potential at the wall of the charged cylinder
+    Kokkos::parallel_for(
+        Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+            double eta          = world.surface(x, y);
+
+            if (eta <= 0.0) {
+                phi(i, j) = phi_w; // inside the immersed object, set potential to a constant value
+            }
+            if (i == ngc - 1) {
+                phi(i, j) = 0.0; // left boundary, dirichlet
+            }
+            if (i == nx - ngc) {
+                phi(i, j) = phi(nx - ngc - 2, j); // right boundary, neumann
+            }
+            if (j == ngc - 1) {
+                phi(i, j) = phi(i, ngc + 1); // bottom boundary, neumann
+            }
+            if (j == ny - ngc) {
+                phi(i, j) = phi(i, ny - ngc - 2); // top boundary, neumann
+            }
+        });
 }
 
 void PoissonSolver::red_black_update(int is_update_red) {
@@ -30,10 +61,10 @@ void PoissonSolver::red_black_update(int is_update_red) {
         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
             if (i < grid.ngc || i >= nx - grid.ngc || j < grid.ngc || j >= ny - grid.ngc)
                 return; // skip boundary cells
-            if (i % 2 == is_update_red)
+            if ((i + j) % 2 == is_update_red)
                 return; // skip red grid points
 
-            auto [x, y, vx, ny] = grid.center({i, j, 0, 0});
+            auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
 
             // jump condition term at left, right, top, bottom fluxes
             double F_l = 0.0, F_r = 0.0, F_b = 0.0, F_t = 0.0;
@@ -129,7 +160,7 @@ void PoissonSolver::red_black_update(int is_update_red) {
             double Fy = F_b + F_t;
 
             // sor update
-            phi(i, j) += omega * (average - rho(i, j) - Fx - Fy - denom * phi(i, j)) / denom;
+            phi(i, j) = (1 - omega) * phi(i, j) + omega * (average + rho(i, j) - Fx - Fy) / denom;
         });
 }
 
@@ -150,18 +181,79 @@ double PoissonSolver::compute_error() {
 }
 
 void PoissonSolver::solve() {
-    int iter = 0;
-    Kokkos::deep_copy(phi_old, world.phi);
-    red_black_update(0);
-    red_black_update(1);
-    double err = compute_error();
-    iter++;
-    while (err > tol && iter < max_iter) {
+    if (debug) {
+        using namespace HighFive;
+        auto& grid = world.grid;
+        int nx     = grid.ncells[0];
+        int ny     = grid.ncells[1];
+        File file("data/debug_potential.hdf", File::Overwrite);
+        size_t stepnum                 = 1000; // number of steps
+        std::vector<size_t> dims_field = {stepnum + 1, (size_t)(nx * ny)};
+        DataSetCreateProps props_field;
+        props_field.add(Chunking(std::vector<hsize_t>{1, (hsize_t)(nx * ny)}));
+        DataSet dataset_phi = file.createDataSet<double>("VTKHDF/CellData/phi", DataSpace(dims_field), props_field);
+        std::vector<size_t> offset_field = {0, 0};
+        std::vector<size_t> count_field  = {1, (size_t)(nx * ny)};
+
+        std::vector<std::vector<double>> phi_data(1, std::vector<double>(nx * ny));
+
+        apply_potential_boundary_conditions();
+        Kokkos::deep_copy(phi_old, world.phi);
+        auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
+        for (int i = 0; i < nx; ++i) {
+            for (int j = 0; j < ny; ++j) {
+                phi_data[0][i * ny + j] = phi_host(i, j);
+            }
+        }
+        dataset_phi.select(offset_field, count_field).write(phi_data);
+        red_black_update(0);
+        red_black_update(1);
+        for (int iter = 1; iter < stepnum; ++iter) {
+            apply_potential_boundary_conditions();
+            Kokkos::deep_copy(phi_old, world.phi);
+            auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
+            for (int i = 0; i < nx; ++i) {
+                for (int j = 0; j < ny; ++j) {
+                    phi_data[0][i * ny + j] = phi_host(i, j);
+                }
+            }
+            offset_field = {static_cast<size_t>(iter), 0};
+            dataset_phi.select(offset_field, count_field).write(phi_data);
+            red_black_update(0);
+            red_black_update(1);
+        }
+        apply_potential_boundary_conditions();
+        phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
+        for (int i = 0; i < nx; ++i) {
+            for (int j = 0; j < ny; ++j) {
+                phi_data[0][i * ny + j] = phi_host(i, j);
+            }
+        }
+        offset_field = {static_cast<size_t>(stepnum), 0};
+        dataset_phi.select(offset_field, count_field).write(phi_data);
+        double err = compute_error();
+        Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", stepnum, err);
+    } else {
+        int iter = 0;
+        apply_potential_boundary_conditions();
+
         Kokkos::deep_copy(phi_old, world.phi);
         red_black_update(0);
         red_black_update(1);
-        err = compute_error();
+        apply_potential_boundary_conditions();
+        double err = compute_error();
         iter++;
+        while (err > tol && iter < max_iter) {
+            Kokkos::deep_copy(phi_old, world.phi);
+            red_black_update(0);
+            red_black_update(1);
+            apply_potential_boundary_conditions();
+            err = compute_error();
+            iter++;
+            if (iter % 1000 == 0) {
+                Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
+            }
+        }
+        Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
     }
-    Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
 };

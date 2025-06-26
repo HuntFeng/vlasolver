@@ -17,9 +17,20 @@ class PoissonSolver {
     Kokkos::View<double**> a;
     Kokkos::View<double**> b;
     int max_iter = 1e4;
+    bool debug   = false;
 
   public:
     PoissonSolver(World& world, double tol = 1e-6);
+
+    /**
+     * Enable debug mode for additional output.
+     */
+    void enable_debug() { debug = true; }
+
+    /**
+     * Apply boundary conditions to the potential field.
+     */
+    void apply_potential_boundary_conditions();
 
     /**
      * Update the potential field using the red-black Gauss-Seidel method.

@@ -29,8 +29,9 @@ apptainer build .devcontainer/kokkos_cuda.sif .devcontainer/Apptainer.def
 - Build and Run the code in container
 
 ```bash
-apptainer run --nv --app build .devcontainer/kokkos_cuda.sif
-apptainer run --nv --app run .devcontainer/kokkos_cuda.sif
+apptainer run --nv .devcontainer/kokkos_cuda.sif cmake -B build
+apptainer run --nv .devcontainer/kokkos_cuda.sif cmake --build build
+apptainer run --nv .devcontainer/kokkos_cuda.sif ./build/src/2d2v/vlasolver_2d2v ./examples/plasma_past_charged_cylinder.ini
 ```
 
 3. Development in container

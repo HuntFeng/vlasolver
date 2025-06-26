@@ -3,7 +3,6 @@
 
 World::World(Grid& grid, Kokkos::Array<double, 2> q, Kokkos::Array<double, 2> mu)
     : grid(grid),
-      dt(dt),
       q(q),
       mu(mu) {
     // Initialize the views with appropriate dimensions

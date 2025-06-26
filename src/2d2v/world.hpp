@@ -19,10 +19,11 @@ struct World {
     Kokkos::View<double**> b; // jump condition for poisson
 
     // simulation time control
-    double dt;          // time step size
-    double total_time;  // total simulation time
-    size_t total_steps; // number of total steps
-    size_t diag_steps;  // number of steps between diagnostics
+    double dt           = 0.0; // time step size
+    double total_time   = 1.0; // total simulation time
+    size_t total_steps  = 1;   // number of total steps
+    size_t diag_steps   = 1;   // number of steps between diagnostics
+    size_t current_step = 0;   // current step in the simulation
 
     World(Grid& grid, Kokkos::Array<double, 2> q = {-1.0, 1.0}, Kokkos::Array<double, 2> mu = {1.0, 1e6});
 

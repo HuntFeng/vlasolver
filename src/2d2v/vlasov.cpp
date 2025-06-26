@@ -324,11 +324,11 @@ void Vlasolver::solve() {
     compute_electric_field();
     writer.write(0);
 
-    for (size_t step = 1; step < world.total_steps; ++step) {
-        Kokkos::printf("Step %zu:\n", step);
+    for (world.current_step = 1; world.current_step < world.total_steps; ++world.current_step) {
+        Kokkos::printf("Step %zu:\n", world.current_step);
         advance(world.dt);
-        if (step % world.diag_steps == 0)
-            writer.write(step * world.dt);
+        if (world.current_step % world.diag_steps == 0)
+            writer.write(world.current_step * world.dt);
     }
     writer.write(world.total_time);
 }

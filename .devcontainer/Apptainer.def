@@ -85,16 +85,6 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
     export OMP_PROC_BIND=spread
     export OMP_PLACES=threads
 
-%apprun build
-    echo "Building Vlasov code in the container."
-    cmake -B build
-    cmake --build build --parallel 4
-    echo "Build completed."
-
-%apprun run
-    echo "Running Vlasov code in the container."
-    exec ./build/vlasov
-
 %labels
     Author HuntFeng
 

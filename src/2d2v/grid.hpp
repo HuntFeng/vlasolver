@@ -6,11 +6,13 @@ const int DIM = 4; // Number of dimensions in the Vlasov solver
  * Grid struct contains the parameters of the grid used in the Vlasov solver.
  */
 struct Grid {
-    int ngc;                            // number of ghost cells on each side
-    Kokkos::Array<double, DIM> origin;  // origin of the grid
-    Kokkos::Array<double, DIM> size;    // size of the grid
-    Kokkos::Array<int, DIM> ncells;     // number of all cells in the grid
-    Kokkos::Array<double, DIM> spacing; // spacing in the x and v directions
+    int ngc;                                    // number of ghost cells on each side
+    Kokkos::Array<double, DIM> origin;          // origin of the grid
+    Kokkos::Array<double, DIM> size;            // size of the grid
+    Kokkos::Array<int, DIM> ncells;             // number of all cells in the grid
+    Kokkos::Array<double, DIM> spacing;         // spacing in the x and v directions
+    Kokkos::Array<double, DIM> velocity_ranges; // velocity ranges in the x and y directions
+    Kokkos::Array<double, DIM> space_ranges;    // space ranges in the x and y directions
 
     /**
      * Constructor to initialize Grid with custom parameters.

@@ -20,7 +20,7 @@ void PoissonSolver::apply_potential_boundary_conditions() {
     int ny                  = grid.ncells[1];
     auto [dx, dy, dvx, dvy] = grid.spacing;
     int ngc                 = grid.ngc;
-    double phi_w            = -20.0; // potential at the wall of the charged cylinder
+    double phi_w            = -20.0; // normalized potential at the wall of the charged cylinder
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
             auto [x, y, vx, vy] = grid.center({i, j, 0, 0});

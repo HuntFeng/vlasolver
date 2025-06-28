@@ -4,6 +4,7 @@ reports/
 .cache/
 .ipynb_checkpoints
 *.png
+*.mp4
 .DS_Store
 .devcontainer/*
 !.devcontainer/*.def

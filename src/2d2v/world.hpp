@@ -7,10 +7,11 @@
  */
 struct World {
     Grid& grid;
-    Kokkos::Array<double, 2> q;  // charge number of the particle
-    Kokkos::Array<double, 2> mu; // mass ratio of the particle (relative to the electron mass)
-    Kokkos::View<double*****> f;
-    Kokkos::View<double***> n; // number density
+    Kokkos::Array<double, 2> q;     // charge number of the particle
+    Kokkos::Array<double, 2> mu;    // mass ratio of the particle (relative to the electron mass)
+    Kokkos::View<double*****> f;    // distribution function f(x,y,vx,vy,s) where s is the species index
+    Kokkos::View<double*****> flux; // storing fluxes to update distribution function
+    Kokkos::View<double***> n;      // number density
     Kokkos::View<double**> rho;
     Kokkos::View<double**> phi;
     Kokkos::View<double***> E; // Ex(x,y), E_y(x,y)

@@ -8,6 +8,7 @@ World::World(Grid& grid, Kokkos::Array<double, 2> q, Kokkos::Array<double, 2> mu
     // Initialize the views with appropriate dimensions
     auto [nx, ny, nvx, nvy] = grid.ncells;
     f                       = Kokkos::View<double*****>("f", nx, ny, nvx, nvy, 2);
+    flux                    = Kokkos::View<double*****>("flux", nx, ny, nvx, nvy, 2);
     n                       = Kokkos::View<double***>("n", nx, ny, 2);
     rho                     = Kokkos::View<double**>("rho", nx, ny);
     phi                     = Kokkos::View<double**>("phi", nx, ny);
@@ -16,6 +17,7 @@ World::World(Grid& grid, Kokkos::Array<double, 2> q, Kokkos::Array<double, 2> mu
     a                       = Kokkos::View<double**>("a", nx, ny); // jump condition for poisson
     b                       = Kokkos::View<double**>("b", nx, ny); // jump condition for poisson
     Kokkos::deep_copy(f, 0.0);
+    Kokkos::deep_copy(flux, 0.0);
     Kokkos::deep_copy(rho, 0.0);
     Kokkos::deep_copy(phi, 0.0);
     Kokkos::deep_copy(E, 0.0);

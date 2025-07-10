@@ -1,70 +1,151 @@
+/**
+ * Poisson solver for the nonlinear Poisson equation
+ * Multigrid V-cycle solver with red-black Gauss-Seidel smoothing
+ * The solver is modified to match our cell-centered finite difference
+ *
+ */
 #include "poisson.hpp"
 #include "world.hpp"
 #include <Kokkos_Core.hpp>
-#include <highfive/highfive.hpp>
 
-PoissonSolver::PoissonSolver(World& world, double tol)
+PoissonSolver::PoissonSolver(World& world, double tol, int levels, int max_iter)
     : world(world),
-      tol(tol) {
+      tol(tol),
+      levels(levels),
+      max_iter(max_iter) {
     int nx  = world.grid.ncells[0];
     int ny  = world.grid.ncells[1];
     phi_old = Kokkos::View<double**>("phi_old", nx, ny);
-    omega   = 2 / (1 + Kokkos::sin(Kokkos::numbers::pi / (ny + 1)));
+    omega   = 1.0;
 }
 
-void PoissonSolver::apply_potential_boundary_conditions() {
+void PoissonSolver::apply_boundary(Kokkos::View<double**>& u) {
     using Kokkos::abs;
-    auto& grid              = world.grid;
-    auto& phi               = world.phi;
-    int nx                  = grid.ncells[0];
-    int ny                  = grid.ncells[1];
-    auto [dx, dy, dvx, dvy] = grid.spacing;
-    int ngc                 = grid.ngc;
-    double phi_w            = -20.0; // normalized potential at the wall of the charged cylinder
+    auto& grid   = world.grid;
+    int ngc      = grid.ngc;
+    int nx       = u.extent(0);
+    int ny       = u.extent(1);
+    double dx    = grid.size[0] / (nx - 2 * ngc);
+    double dy    = grid.size[1] / (ny - 2 * ngc);
+    double phi_w = -20.0; // normalized potential at the wall of the charged cylinder
     Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-            auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
-            double eta          = world.surface(x, y);
-
-            if (eta <= 0.0) {
-                phi(i, j) = phi_w; // inside the immersed object, set potential to a constant value
-            }
-            if (i == ngc - 1) {
-                phi(i, j) = 0.0; // left boundary, dirichlet
-            }
-            if (i == nx - ngc) {
-                phi(i, j) = phi(nx - ngc - 2, j); // right boundary, neumann
-            }
-            if (j == ngc - 1) {
-                phi(i, j) = phi(i, ngc + 1); // bottom boundary, neumann
-            }
-            if (j == ny - ngc) {
-                phi(i, j) = phi(i, ny - ngc - 2); // top boundary, neumann
+        Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            double x   = (i - ngc + 0.5) * dx;
+            double y   = (j - ngc + 0.5) * dy;
+            double eta = world.surface(x, y);
+            if (eta < 0.0) {
+                u(i, j) = phi_w; // inside the immersed object, set potential to a constant value
             }
         });
+
+    for (int k = 0; k < ngc; ++k) {
+        // left boundary, dirichlet
+        Kokkos::deep_copy(Kokkos::subview(u, k, Kokkos::ALL), 0.0);
+        // right boundary, neumann
+        Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL), Kokkos::subview(u, nx - ngc - 2, Kokkos::ALL));
+        // bottom boundary, neumann
+        Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, ngc + 1));
+        // top boundary, neumann
+        Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1), Kokkos::subview(u, Kokkos::ALL, ny - ngc - 2));
+    }
 }
 
-void PoissonSolver::red_black_update(int is_update_red) {
+Kokkos::View<double**> PoissonSolver::nonlinear_operator(const Kokkos::View<double**>& u,
+                                                         const Kokkos::View<double**>& eps) {
+    auto& grid = world.grid;
+    int ngc    = grid.ngc;
+    int nx     = u.extent(0);
+    int ny     = u.extent(1);
+    double dx  = grid.size[0] / (nx - 2 * ngc);
+    double dy  = grid.size[1] / (ny - 2 * ngc);
+    Kokkos::View<double**> lhs("lhs", nx, ny);
+    Kokkos::deep_copy(lhs, 0.0);
+    Kokkos::parallel_for(
+        Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            // eps at left, right, top, bottom fluxes
+            double eps_l = 0.5 * (eps(i - 1, j) + eps(i, j));
+            double eps_r = 0.5 * (eps(i + 1, j) + eps(i, j));
+            double eps_b = 0.5 * (eps(i, j - 1) + eps(i, j));
+            double eps_t = 0.5 * (eps(i, j + 1) + eps(i, j));
+
+            // interior indicator
+            double x     = (i - ngc + 0.5) * dx;
+            double y     = (j - ngc + 0.5) * dy;
+            double eta   = world.surface(x, y);
+            double eta_l = world.surface(x - dx, y);
+            double eta_r = world.surface(x + dx, y);
+            double eta_b = world.surface(x, y - dy);
+            double eta_t = world.surface(x, y + dy);
+
+            // modify eps and F if discontinuity is detected
+            if (eta * eta_l <= 0.0) {
+                double eta_p = (eta > 0.0) ? eta : eta_l;
+                double eta_m = (eta <= 0.0) ? eta : eta_l;
+                double eps_p = (eta > 0.0) ? eps(i, j) : eps(i - 1, j);
+                double eps_m = (eta <= 0.0) ? eps(i, j) : eps(i - 1, j);
+                eps_l        = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
+            }
+            if (eta * eta_r <= 0.0) {
+                double eta_p = (eta > 0.0) ? eta : eta_r;
+                double eta_m = (eta <= 0.0) ? eta : eta_r;
+                double eps_p = (eta > 0.0) ? eps(i, j) : eps(i + 1, j);
+                double eps_m = (eta <= 0.0) ? eps(i, j) : eps(i + 1, j);
+                eps_r        = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
+            }
+            if (eta * eta_b <= 0.0) {
+                double eta_p = (eta > 0.0) ? eta : eta_b;
+                double eta_m = (eta <= 0.0) ? eta : eta_b;
+                double eps_p = (eta > 0.0) ? eps(i, j) : eps(i, j - 1);
+                double eps_m = (eta <= 0.0) ? eps(i, j) : eps(i, j - 1);
+                eps_b        = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
+            }
+            if (eta * eta_t <= 0.0) {
+                double eta_p = (eta > 0.0) ? eta : eta_t;
+                double eta_m = (eta <= 0.0) ? eta : eta_t;
+                double eps_p = (eta > 0.0) ? eps(i, j) : eps(i, j + 1);
+                double eps_m = (eta <= 0.0) ? eps(i, j) : eps(i, j + 1);
+                eps_t        = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
+            }
+            lhs(i, j) = (eps_r * (u(i + 1, j) - u(i, j)) - eps_l * (u(i, j) - u(i - 1, j))) / (dx * dx) +
+                        (eps_t * (u(i, j + 1) - u(i, j)) - eps_b * (u(i, j) - u(i, j - 1))) / (dy * dy) + f(u(i, j));
+        });
+    return lhs;
+}
+
+void PoissonSolver::gauss_seidel(Kokkos::View<double**>& u,
+                                 const Kokkos::View<double**>& g,
+                                 const Kokkos::View<double**>& eps,
+                                 const Kokkos::View<double**>& a,
+                                 const Kokkos::View<double**>& b,
+                                 int iters) {
+
+    for (int iter = 0; iter < iters; ++iter) {
+        red_black_update(u, g, eps, a, b, 0); // red update
+        red_black_update(u, g, eps, a, b, 1); // black update
+        apply_boundary(u);                    // apply boundary conditions after each iteration
+    }
+}
+
+void PoissonSolver::red_black_update(Kokkos::View<double**>& u,
+                                     const Kokkos::View<double**>& g,
+                                     const Kokkos::View<double**>& eps,
+                                     const Kokkos::View<double**>& a,
+                                     const Kokkos::View<double**>& b,
+                                     int is_update_red) {
     using Kokkos::abs;
     auto& grid = world.grid;
-    auto& phi  = world.phi;
-    auto& rho  = world.rho;
-    auto& eps  = world.eps;
-    auto& a    = world.a;
-    auto& b    = world.b;
-
-    int nx     = grid.ncells[0];
-    int ny     = grid.ncells[1];
-    double dx  = grid.spacing[0];
-    double dy  = grid.spacing[1];
+    int ngc    = grid.ngc;
+    int nx     = u.extent(0);
+    int ny     = u.extent(1);
+    double dx  = grid.size[0] / (nx - 2 * ngc);
+    double dy  = grid.size[1] / (ny - 2 * ngc);
     Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-            if (i < grid.ngc || i >= nx - grid.ngc || j < grid.ngc || j >= ny - grid.ngc)
-                return; // skip boundary cells
-            if ((i + j) % 2 == is_update_red)
+        Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            if ((i + j) % 2 != is_update_red)
                 return; // skip red grid points
 
-            auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+            double x = (i - ngc + 0.5) * dx;
+            double y = (j - ngc + 0.5) * dy;
 
             // jump condition term at left, right, top, bottom fluxes
             double F_l = 0.0, F_r = 0.0, F_b = 0.0, F_t = 0.0;
@@ -154,14 +235,124 @@ void PoissonSolver::red_black_update(int is_update_red) {
 
             // update potential field
             double denom   = (eps_l + eps_r) / (dx * dx) + (eps_b + eps_t) / (dy * dy);
-            double average = (eps_l * phi(i - 1, j) + eps_r * phi(i + 1, j)) / (dx * dx) +
-                             (eps_b * phi(i, j - 1) + eps_t * phi(i, j + 1)) / (dy * dy);
+            double average = (eps_l * u(i - 1, j) + eps_r * u(i + 1, j)) / (dx * dx) +
+                             (eps_b * u(i, j - 1) + eps_t * u(i, j + 1)) / (dy * dy);
             double Fx = F_l + F_r;
             double Fy = F_b + F_t;
 
-            // sor update
-            phi(i, j) = (1 - omega) * phi(i, j) + omega * (average + rho(i, j) - Fx - Fy) / denom;
+            // under-relaxation update
+            u(i, j) = (1 - omega) * u(i, j) + omega * (average - g(i, j) + f(u(i, j)) - Fx - Fy) / denom;
         });
+}
+
+Kokkos::View<double**> PoissonSolver::restrict(const Kokkos::View<double**>& u,
+                                               const Kokkos::Array<size_t, 2>& n_coarse) {
+    int ngc           = world.grid.ngc;
+    auto [nx_c, ny_c] = n_coarse;
+    Kokkos::View<double**> u_c("u_c", nx_c, ny_c);
+    Kokkos::parallel_for(
+        Kokkos::MDRangePolicy({0, 0}, {nx_c, ny_c}), KOKKOS_CLASS_LAMBDA(const int i_c, const int j_c) {
+            if (i_c < ngc || j_c < ngc || i_c >= nx_c - ngc || j_c >= ny_c - ngc) {
+                u_c(i_c, j_c) = u(i_c, j_c);
+            } else {
+                int i_f       = 2 * (i_c - ngc) + ngc;
+                int j_f       = 2 * (j_c - ngc) + ngc;
+                u_c(i_c, j_c) = (u(i_f, j_f) + u(i_f + 1, j_f) + u(i_f, j_f + 1) + u(i_f + 1, j_f + 1)) / 4.0;
+            }
+        });
+
+    return u_c;
+}
+
+Kokkos::View<double**> PoissonSolver::prolong(const Kokkos::View<double**>& e_c,
+                                              const Kokkos::Array<size_t, 2>& n_fine) {
+    auto [nx_f, ny_f] = n_fine;
+    int ngc           = world.grid.ngc;
+    Kokkos::View<double**> e_f("e_f", nx_f, ny_f);
+    Kokkos::parallel_for(
+        Kokkos::MDRangePolicy({0, 0}, {nx_f, ny_f}), KOKKOS_CLASS_LAMBDA(const int i_f, const int j_f) {
+            if (i_f < ngc || j_f < ngc || i_f >= nx_f - ngc || j_f >= ny_f - ngc) {
+                e_f(i_f, j_f) = e_c(i_f, j_f);
+            } else {
+                int i_c       = (i_f - ngc) / 2 + ngc;
+                int j_c       = (j_f - ngc) / 2 + ngc;
+                e_f(i_f, j_f) = e_c(i_c, j_c);
+                // if ((i_f - ngc) % 2 == 0 && (j_f - ngc) % 2 == 0)
+                //     e_f(i_f, j_f) = e_c(i_c, j_c);
+                // else if ((i_f - ngc) % 2 == 1 && (j_f - ngc) % 2 == 0)
+                //     e_f(i_f, j_f) = 0.5 * (e_c(i_c, j_c) + e_c(i_c + 1, j_c));
+                // else if ((i_f - ngc) % 2 == 0 && (j_f - ngc) % 2 == 1)
+                //     e_f(i_f, j_f) = 0.5 * (e_c(i_c, j_c) + e_c(i_c, j_c + 1));
+                // else
+                //     e_f(i_f, j_f) =
+                //         0.25 * (e_c(i_c, j_c) + e_c(i_c + 1, j_c) + e_c(i_c, j_c + 1) + e_c(i_c + 1, j_c + 1));
+            }
+        });
+    return e_f;
+}
+
+void PoissonSolver::v_cycle(Kokkos::View<double**>& u,
+                            const Kokkos::View<double**>& g,
+                            const Kokkos::View<double**>& eps,
+                            const Kokkos::View<double**>& a,
+                            const Kokkos::View<double**>& b,
+                            int level) {
+    gauss_seidel(u, g, eps, a, b, 10);
+    if (level == levels - 1) {
+        // on coarsest grid, do more smoothing (solving using gauss-seidel)
+        gauss_seidel(u, g, eps, a, b, 30);
+        return;
+    }
+
+    // compute N^h(u^h) = (eps u')' + f(u)
+    Kokkos::View<double**> lhs = nonlinear_operator(u, eps);
+
+    // restrict quantities to coarse grid
+    int ngc                           = world.grid.ngc;
+    Kokkos::Array<size_t, 2> n_fine   = {u.extent(0), u.extent(1)};
+    Kokkos::Array<size_t, 2> n_coarse = {(u.extent(0) - 2 * ngc) / 2 + 2 * ngc, (u.extent(1) - 2 * ngc) / 2 + 2 * ngc};
+    Kokkos::View<double**> lhs_c      = restrict(lhs, n_coarse);
+    Kokkos::View<double**> u_c        = restrict(u, n_coarse);
+    Kokkos::View<double**> g_c        = restrict(g, n_coarse);
+    Kokkos::View<double**> eps_c      = restrict(eps, n_coarse);
+    Kokkos::View<double**> a_c        = restrict(a, n_coarse);
+    Kokkos::View<double**> b_c        = restrict(b, n_coarse);
+
+    // FAS (Full approximation Scheme) correction:
+    // tau_c = N^H(I^H_h u^h) - I^H_h N^h(u^h)
+    // On the coarse grid, the equation is:
+    // u_c'' + f(u_c) = g_c + tau_c
+    apply_boundary(u_c);
+    Kokkos::View<double**> lhs_uc = nonlinear_operator(u_c, eps_c);
+    Kokkos::View<double**> g_fas("g_fas", n_coarse[0], n_coarse[1]);
+    Kokkos::parallel_for(
+        Kokkos::MDRangePolicy({0, 0}, {n_coarse[0], n_coarse[1]}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            double tau_c = lhs_c(i, j) - lhs_uc(i, j);
+            g_fas(i, j)  = g_c(i, j) + tau_c;
+        });
+
+    // save the initial coarse approximation for later computing the correction
+    Kokkos::View<double**> u_c_old("u_c_old", n_coarse[0], n_coarse[1]);
+    Kokkos::deep_copy(u_c_old, u_c);
+
+    // recursively call v_cycle to coarse grid
+    v_cycle(u_c, g_fas, eps_c, a_c, b_c, level + 1);
+
+    // prolongate correction (coarse grid solution minus restricted fine grid approximation)
+    Kokkos::View<double**> corr("corr", n_coarse[0], n_coarse[1]);
+    Kokkos::parallel_for(
+        Kokkos::MDRangePolicy({0, 0}, {n_coarse[0], n_coarse[1]}),
+        KOKKOS_CLASS_LAMBDA(const int i, const int j) { corr(i, j) = u_c(i, j) - u_c_old(i, j); });
+    Kokkos::View<double**> corr_fine = prolong(corr, n_fine);
+
+    // correction
+    Kokkos::parallel_for(
+        Kokkos::MDRangePolicy({0, 0}, {n_fine[0], n_fine[1]}),
+        KOKKOS_CLASS_LAMBDA(const int i, const int j) { u(i, j) += corr_fine(i, j); });
+    apply_boundary(u);
+
+    // post-smoothing
+    gauss_seidel(u, g, eps, a, b, 10);
 }
 
 double PoissonSolver::compute_error() {
@@ -169,10 +360,11 @@ double PoissonSolver::compute_error() {
     auto& phi = world.phi;
     int nx    = world.grid.ncells[0];
     int ny    = world.grid.ncells[1];
+    int ngc   = world.grid.ngc;
     double err;
     Kokkos::Max<double> max_reducer(err);
     Kokkos::parallel_reduce(
-        Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
+        Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
         KOKKOS_CLASS_LAMBDA(const int i, const int j, double& err) {
             max_reducer.join(err, abs(phi(i, j) - phi_old(i, j)));
         },
@@ -181,79 +373,17 @@ double PoissonSolver::compute_error() {
 }
 
 void PoissonSolver::solve() {
-    if (debug) {
-        using namespace HighFive;
-        auto& grid = world.grid;
-        int nx     = grid.ncells[0];
-        int ny     = grid.ncells[1];
-        File file("data/debug_potential.hdf", File::Overwrite);
-        size_t stepnum                 = 1000; // number of steps
-        std::vector<size_t> dims_field = {stepnum + 1, (size_t)(nx * ny)};
-        DataSetCreateProps props_field;
-        props_field.add(Chunking(std::vector<hsize_t>{1, (hsize_t)(nx * ny)}));
-        DataSet dataset_phi = file.createDataSet<double>("VTKHDF/CellData/phi", DataSpace(dims_field), props_field);
-        std::vector<size_t> offset_field = {0, 0};
-        std::vector<size_t> count_field  = {1, (size_t)(nx * ny)};
-
-        std::vector<std::vector<double>> phi_data(1, std::vector<double>(nx * ny));
-
-        apply_potential_boundary_conditions();
+    apply_boundary(world.phi);
+    for (int iter = 0; iter < max_iter; ++iter) {
         Kokkos::deep_copy(phi_old, world.phi);
-        auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
-                phi_data[0][i * ny + j] = phi_host(i, j);
-            }
-        }
-        dataset_phi.select(offset_field, count_field).write(phi_data);
-        red_black_update(0);
-        red_black_update(1);
-        for (int iter = 1; iter < stepnum; ++iter) {
-            apply_potential_boundary_conditions();
-            Kokkos::deep_copy(phi_old, world.phi);
-            auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
-            for (int i = 0; i < nx; ++i) {
-                for (int j = 0; j < ny; ++j) {
-                    phi_data[0][i * ny + j] = phi_host(i, j);
-                }
-            }
-            offset_field = {static_cast<size_t>(iter), 0};
-            dataset_phi.select(offset_field, count_field).write(phi_data);
-            red_black_update(0);
-            red_black_update(1);
-        }
-        apply_potential_boundary_conditions();
-        phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
-                phi_data[0][i * ny + j] = phi_host(i, j);
-            }
-        }
-        offset_field = {static_cast<size_t>(stepnum), 0};
-        dataset_phi.select(offset_field, count_field).write(phi_data);
+        v_cycle(world.phi, world.rho, world.eps, world.a, world.b, 0);
         double err = compute_error();
-        Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", stepnum, err);
-    } else {
-        int iter = 0;
-        apply_potential_boundary_conditions();
-
-        Kokkos::deep_copy(phi_old, world.phi);
-        red_black_update(0);
-        red_black_update(1);
-        apply_potential_boundary_conditions();
-        double err = compute_error();
-        iter++;
-        while (err > tol && iter < max_iter) {
-            Kokkos::deep_copy(phi_old, world.phi);
-            red_black_update(0);
-            red_black_update(1);
-            apply_potential_boundary_conditions();
-            err = compute_error();
-            iter++;
-            if (iter % 1000 == 0) {
-                Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
-            }
+        if (iter % 10 == 0 || iter == max_iter - 1) {
+            Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
         }
-        Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
+        if (err < tol) {
+            Kokkos::printf("(PoissonSolver) Converged in %d iterations with error %e\n", iter, err);
+            return;
+        }
     }
-};
+}

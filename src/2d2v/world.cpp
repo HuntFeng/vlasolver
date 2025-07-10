@@ -1,15 +1,13 @@
 #include "world.hpp"
 #include <Kokkos_Core.hpp>
 
-World::World(Grid& grid, Kokkos::Array<double, 2> q, Kokkos::Array<double, 2> mu)
-    : grid(grid),
-      q(q),
-      mu(mu) {
+World::World(Grid& grid)
+    : grid(grid) {
     // Initialize the views with appropriate dimensions
     auto [nx, ny, nvx, nvy] = grid.ncells;
-    f                       = Kokkos::View<double*****>("f", nx, ny, nvx, nvy, 2);
-    flux                    = Kokkos::View<double*****>("flux", nx, ny, nvx, nvy, 2);
-    n                       = Kokkos::View<double***>("n", nx, ny, 2);
+    f                       = Kokkos::View<double****>("f", nx, ny, nvx, nvy);
+    flux                    = Kokkos::View<double****>("flux", nx, ny, nvx, nvy);
+    n                       = Kokkos::View<double**>("n", nx, ny);
     rho                     = Kokkos::View<double**>("rho", nx, ny);
     phi                     = Kokkos::View<double**>("phi", nx, ny);
     E                       = Kokkos::View<double***>("E", nx, ny, 2);

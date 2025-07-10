@@ -51,10 +51,8 @@ int main(int argc, char* argv[]) {
     Kokkos::Array<int, DIM> ncells_interior = {nx - 2 * ngc, ny - 2 * ngc, nvx - 2 * ngc,
                                                nvy - 2 * ngc}; // number of cells in the grid (excluding ghost cells)
 
-    Kokkos::Array<double, 2> charge_number  = {-1.0, 1.0}; // charge number of the particle
-    Kokkos::Array<double, 2> mass_ratio     = {1.0, 1836}; // mass ratio of the particle (relative to the electron mass)
     Grid grid(origin, size, ncells_interior, ngc);
-    World world(grid, charge_number, mass_ratio);
+    World world(grid);
 
     world.dt          = dt;          // time step size
     world.total_time  = total_time;  // total simulation time
@@ -63,7 +61,7 @@ int main(int argc, char* argv[]) {
 
     PoissonSolver poisson_solver(world);
     // poisson_solver.enable_debug();
-    Writer writer(world, output_folder, output_prefix, {"ne", "ni", "phi", "Ex"});
+    Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 
     Kokkos::Timer timer;

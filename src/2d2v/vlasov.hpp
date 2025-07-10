@@ -43,10 +43,9 @@ class Vlasolver {
     KOKKOS_FUNCTION
     double compute_flux(Kokkos::Array<int, DIM> index,
                         Kokkos::Array<double, DIM> spacing,
-                        int s,
                         int axis,
                         double advection_velocity,
-                        const Kokkos::View<double*****>& f) const {
+                        const Kokkos::View<double****>& f) const {
         // third order upwind-biased interpolation
         using Kokkos::max;
         using Kokkos::min;
@@ -57,18 +56,18 @@ class Vlasolver {
         auto f_val              = KOKKOS_CLASS_LAMBDA(int offset)->double {
             if (axis == 0) {
                 int is = i - floor_v;
-                return f(is + offset, j, iv, jv, s);
+                return f(is + offset, j, iv, jv);
             } else if (axis == 1) {
                 int js = j - floor_v;
-                return f(i, js + offset, iv, jv, s);
+                return f(i, js + offset, iv, jv);
             } else if (axis == 2) {
                 int ivs = iv - floor_v;
                 int ind = max(min(ivs + offset, f.extent_int(2) - 1), 0);
-                return f(i, j, ind, jv, s);
+                return f(i, j, ind, jv);
             } else {
                 int jvs = jv - floor_v;
                 int ind = max(min(jvs + offset, f.extent_int(3) - 1), 0);
-                return f(i, j, iv, ind, s);
+                return f(i, j, iv, ind);
             }
         };
 
@@ -104,37 +103,37 @@ class Vlasolver {
             int is = i - floor_v;
             if (advection_velocity >= 0.0) {
                 for (int n = is + 1; n <= i; ++n)
-                    flux += f(n, j, iv, jv, s) * dx;
+                    flux += f(n, j, iv, jv) * dx;
             } else {
                 for (int n = i + 1; n <= is - 1; ++n)
-                    flux -= f(n, j, iv, jv, s) * dx;
+                    flux -= f(n, j, iv, jv) * dx;
             }
         } else if (axis == 1) {
             int js = j - floor_v;
             if (advection_velocity >= 0.0) {
                 for (int n = js + 1; n <= j; ++n)
-                    flux += f(i, n, iv, jv, s) * dy;
+                    flux += f(i, n, iv, jv) * dy;
             } else {
                 for (int n = j + 1; n <= js - 1; ++n)
-                    flux -= f(i, n, iv, jv, s) * dy;
+                    flux -= f(i, n, iv, jv) * dy;
             }
         } else if (axis == 2) {
             int ivs = iv - floor_v;
             if (advection_velocity >= 0.0) {
                 for (int n = max(ivs + 1, 0); n <= iv; ++n)
-                    flux += f(i, j, n, jv, s) * dvx;
+                    flux += f(i, j, n, jv) * dvx;
             } else {
                 for (int n = iv + 1; n <= min(ivs - 1, f.extent_int(2) - 1); ++n)
-                    flux -= f(i, j, n, jv, s) * dvx;
+                    flux -= f(i, j, n, jv) * dvx;
             }
         } else {
             int jvs = jv - floor_v;
             if (advection_velocity >= 0.0) {
                 for (int n = max(jvs + 1, 0); n <= jv; ++n)
-                    flux += f(i, j, iv, n, s) * dvy;
+                    flux += f(i, j, iv, n) * dvy;
             } else {
                 for (int n = jv + 1; n <= min(jvs - 1, f.extent_int(3) - 1); ++n)
-                    flux -= f(i, j, iv, n, s) * dvy;
+                    flux -= f(i, j, iv, n) * dvy;
             }
         }
         return flux;

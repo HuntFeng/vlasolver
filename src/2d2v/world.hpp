@@ -7,17 +7,15 @@
  */
 struct World {
     Grid& grid;
-    Kokkos::Array<double, 2> q;     // charge number of the particle
-    Kokkos::Array<double, 2> mu;    // mass ratio of the particle (relative to the electron mass)
-    Kokkos::View<double*****> f;    // distribution function f(x,y,vx,vy,s) where s is the species index
-    Kokkos::View<double*****> flux; // storing fluxes to update distribution function
-    Kokkos::View<double***> n;      // number density
-    Kokkos::View<double**> rho;
-    Kokkos::View<double**> phi;
-    Kokkos::View<double***> E; // Ex(x,y), E_y(x,y)
-    Kokkos::View<double**> eps;
-    Kokkos::View<double**> a; // jump condition for poisson
-    Kokkos::View<double**> b; // jump condition for poisson
+    Kokkos::View<double****> f;    // distribution function f(x,y,vx,vy) of ion
+    Kokkos::View<double****> flux; // storing fluxes to update distribution function
+    Kokkos::View<double**> n;      // number density of ion
+    Kokkos::View<double**> rho;    // ion charge density
+    Kokkos::View<double**> phi;    // potential field (assuming Boltzmann distribution for electron)
+    Kokkos::View<double***> E;     // Ex(x,y), E_y(x,y)
+    Kokkos::View<double**> eps;    // permittivity field
+    Kokkos::View<double**> a;      // jump condition for poisson
+    Kokkos::View<double**> b;      // jump condition for poisson
 
     // simulation time control
     double dt           = 0.0; // time step size
@@ -26,7 +24,7 @@ struct World {
     size_t diag_steps   = 1;   // number of steps between diagnostics
     size_t current_step = 0;   // current step in the simulation
 
-    World(Grid& grid, Kokkos::Array<double, 2> q = {-1.0, 1.0}, Kokkos::Array<double, 2> mu = {1.0, 1e6});
+    World(Grid& grid);
 
     /**
      * Expression of the immersed boundary.

@@ -13,11 +13,8 @@ class Writer {
     std::string prefix;
 
     // host arrays to temporary store the data for writing
-    std::vector<double> fe;
     std::vector<double> fi;
-    std::vector<double> ne;
     std::vector<double> ni;
-    std::vector<double> rho;
     std::vector<double> phi;
     std::vector<double> Ex;
     std::vector<double> Ey;

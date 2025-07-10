@@ -30,8 +30,7 @@ void Vlasolver::initialize_distribution() const {
             auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
             double eta          = world.surface(x, y);
             // example 4 plasma past charged cylinder from IFE-CSL, no ions and electrons initially
-            f(i, j, iv, jv, 0) = 0.0;
-            f(i, j, iv, jv, 1) = 0.0;
+            f(i, j, iv, jv) = 0.0;
         });
 }
 
@@ -44,19 +43,16 @@ void Vlasolver::apply_particle_boundary_conditions() const {
     int ngc                 = grid.ngc;
 
     Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({0, 0, 0, 0, 0}, {nx, ny, nvx, nvy, 2}),
-        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv, const int s) {
+        Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
+        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
             auto [vx_min, vy_min, vx_max, vy_max] = grid.velocity_ranges;
             auto [dx, dy, dvx, dvy]               = grid.spacing;
             auto [x, y, vx, vy]                   = grid.center({i, j, iv, jv});
             if (i < ngc) {
-                // f(i, j, iv, jv, s) = (vx > 0.0) ? 2 * vx * exp(-pow(vx, 2)) : 0.0; // left boundary, injection
-                f(i, j, iv, jv, s) = (vx > 0.0) ? exp(-pow((vx - 5), 2)) : 0.0; // left boundary, injection
-                // f(i, j, iv, jv, s) =
-                //     (vx > 0.0 && s == 1) ? exp(-(pow(vx - 5, 2) + pow(vy, 2))) : 0.0; // left boundary, injection
+                f(i, j, iv, jv) = (vx > 0.0) ? exp(-pow((vx - 5), 2)) : 0.0; // left boundary, injection
             } else if (i >= nx - ngc) {
                 if (vx < 0.0)
-                    f(i, j, iv, jv, s) = 0.0; // right boundary, zero-inflow
+                    f(i, j, iv, jv) = 0.0; // right boundary, zero-inflow
             } else if (j < ngc) {
                 // bottom boundary, reflective
                 // find the grid point with reversed normal velocity (vy)
@@ -65,7 +61,7 @@ void Vlasolver::apply_particle_boundary_conditions() const {
 
                 // check if the reflected index is valid
                 if (jv_reflected >= 0 && jv_reflected < nvy) {
-                    f(i, j, iv, jv, s) = f(i, 2 * ngc - j - 1, iv, jv_reflected, s);
+                    f(i, j, iv, jv) = f(i, 2 * ngc - j - 1, iv, jv_reflected);
                 }
             } else if (j >= ny - ngc) {
                 // top boundary, reflective
@@ -75,7 +71,7 @@ void Vlasolver::apply_particle_boundary_conditions() const {
 
                 // check if the reflected index is valid
                 if (jv_reflected >= 0 && jv_reflected < nvy) {
-                    f(i, j, iv, jv, s) = f(i, 2 * (ny - ngc) - j - 1, iv, jv_reflected, s);
+                    f(i, j, iv, jv) = f(i, 2 * (ny - ngc) - j - 1, iv, jv_reflected);
                 }
             }
         });
@@ -90,8 +86,8 @@ void Vlasolver::extrapolate_distribution_function() const {
     double dy               = grid.spacing[1];
 
     Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({0, 0, 0, 0, 0}, {nx, ny, nvx, nvy, 2}),
-        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv, const int s) {
+        Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
+        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
             if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc)
                 return;
 
@@ -113,32 +109,32 @@ void Vlasolver::extrapolate_distribution_function() const {
             double extrapolated_value = 0.0;
             if (eta * eta_l <= 0.0) {
                 double v_dot_n = vx * n1 + vy * n2;
-                double f_F1    = f(i - 1, j, iv, jv, s);
-                double f_F2    = f(i - 2, j, iv, jv, s);
+                double f_F1    = f(i - 1, j, iv, jv);
+                double f_F2    = f(i - 2, j, iv, jv);
                 double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
                 extrapolated_value += 2 * f_I - f_F1;
                 Ng++;
             }
             if (eta * eta_r <= 0.0) {
                 double v_dot_n = vx * n1 + vy * n2;
-                double f_F1    = f(i + 1, j, iv, jv, s);
-                double f_F2    = f(i + 2, j, iv, jv, s);
+                double f_F1    = f(i + 1, j, iv, jv);
+                double f_F2    = f(i + 2, j, iv, jv);
                 double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
                 extrapolated_value += 2 * f_I - f_F1;
                 Ng++;
             }
             if (eta * eta_b <= 0.0) {
                 double v_dot_n = vx * n1 + vy * n2;
-                double f_F1    = f(i, j - 1, iv, jv, s);
-                double f_F2    = f(i, j - 2, iv, jv, s);
+                double f_F1    = f(i, j - 1, iv, jv);
+                double f_F2    = f(i, j - 2, iv, jv);
                 double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
                 extrapolated_value += 2 * f_I - f_F1;
                 Ng++;
             }
             if (eta * eta_t <= 0.0) {
                 double v_dot_n = vx * n1 + vy * n2;
-                double f_F1    = f(i, j + 1, iv, jv, s);
-                double f_F2    = f(i, j + 2, iv, jv, s);
+                double f_F1    = f(i, j + 1, iv, jv);
+                double f_F2    = f(i, j + 2, iv, jv);
                 double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
                 extrapolated_value += 2 * f_I - f_F1;
                 Ng++;
@@ -147,13 +143,12 @@ void Vlasolver::extrapolate_distribution_function() const {
             if (Ng > 0)
                 // set lower bound to 0 to preserve positivity
                 // then divide by Ng to get the average value
-                f(i, j, iv, jv, s) = Kokkos::max(extrapolated_value, 0.0) / Ng;
+                f(i, j, iv, jv) = Kokkos::max(extrapolated_value, 0.0) / Ng;
         });
 }
 
 void Vlasolver::compute_charge_density() const {
     auto& rho  = world.rho;
-    auto& q    = world.q;
     auto& f    = world.f;
     auto& n    = world.n;
     auto& grid = world.grid;
@@ -165,30 +160,28 @@ void Vlasolver::compute_charge_density() const {
     int ngc                 = grid.ngc;
 
     Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({0, 0, 0}, {nx, ny, 2}), KOKKOS_CLASS_LAMBDA(const int i, const int j, const int s) {
+        Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
             if (i < ngc || i >= nx - ngc)
                 return;
 
             double number_density = 0.0;
             for (int iv = ngc; iv < nvx - ngc; ++iv)
                 for (int jv = ngc; jv < nvy - ngc; ++jv)
-                    number_density += f(i, j, iv, jv, s) * dvx * dvy;
-            n(i, j, s) = number_density;
-            rho(i, j) += q[s] * number_density;
+                    number_density += f(i, j, iv, jv) * dvx * dvy;
+            n(i, j)   = number_density;
+            rho(i, j) = number_density; // only count ions, electrons follow Boltzmann distribution
         });
 }
 
 void Vlasolver::compute_poisson_jump_conditions() const {
     auto& a = world.a;
     auto& b = world.b;
-    // auto& rho = world.rho;
-    int nx = world.grid.ncells[0];
-    int ny = world.grid.ncells[1];
+    int nx  = world.grid.ncells[0];
+    int ny  = world.grid.ncells[1];
 
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
             a(i, j) = 0.0;
-            // b(i, j) = -rho(i, j);
             b(i, j) = 0.0;
         });
 }
@@ -224,8 +217,8 @@ void Vlasolver::pfc_update_along_space(double dt) const {
     int ngc                 = grid.ngc;
 
     Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({0, 0, 0, 0, 0}, {nx, ny, nvx, nvy, 2}),
-        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv, const int s) {
+        Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
+        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
             if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc || iv < ngc || iv >= nvx - ngc || jv < ngc ||
                 jv >= nvy - ngc)
                 return;
@@ -238,20 +231,20 @@ void Vlasolver::pfc_update_along_space(double dt) const {
             double advection_vx = vx * dt / dx;
             double advection_vy = vy * dt / dy;
 
-            flux_in += compute_flux({i - 1, j, iv, jv}, grid.spacing, s, 0, advection_vx, f);
-            flux_in += compute_flux({i, j - 1, iv, jv}, grid.spacing, s, 1, advection_vy, f);
-            flux_out += compute_flux({i, j, iv, jv}, grid.spacing, s, 0, advection_vx, f);
-            flux_out += compute_flux({i, j, iv, jv}, grid.spacing, s, 1, advection_vy, f);
-            flux(i, j, iv, jv, s) = flux_in - flux_out;
+            flux_in += compute_flux({i - 1, j, iv, jv}, grid.spacing, 0, advection_vx, f);
+            flux_in += compute_flux({i, j - 1, iv, jv}, grid.spacing, 1, advection_vy, f);
+            flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 0, advection_vx, f);
+            flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 1, advection_vy, f);
+            flux(i, j, iv, jv) = flux_in - flux_out;
         });
 
     Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({0, 0, 0, 0, 0}, {nx, ny, nvx, nvy, 2}),
-        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv, const int s) {
+        Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
+        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
             if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc || iv < ngc || iv >= nvx - ngc || jv < ngc ||
                 jv >= nvy - ngc)
                 return;
-            f(i, j, iv, jv, s) += flux(i, j, iv, jv, s);
+            f(i, j, iv, jv) += flux(i, j, iv, jv);
         });
 }
 
@@ -261,8 +254,6 @@ void Vlasolver::pfc_update_along_velocity(double dt) const {
     auto& f                 = world.f;
     auto& flux              = world.flux;
     auto& E                 = world.E;
-    auto& q                 = world.q;
-    auto& mu                = world.mu;
     auto& grid              = world.grid;
 
     auto [dx, dy, dvx, dvy] = grid.spacing;
@@ -270,16 +261,14 @@ void Vlasolver::pfc_update_along_velocity(double dt) const {
     int ngc                 = grid.ngc;
 
     Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({0, 0, 0, 0, 0}, {nx, ny, nvx, nvy, 2}),
-        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv, const int s) {
-            // if (iv < ngc || iv >= nvx - ngc || jv < ngc || jv >= nvy - ngc)
-            //     return;
+        Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
+        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
             if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc || iv < ngc || iv >= nvx - ngc || jv < ngc ||
                 jv >= nvy - ngc)
                 return;
             // third order upwind-biased interpolation
-            double advection_ax = q[s] / mu[s] * E(i, j, 0) * dt / dvx;
-            double advection_ay = q[s] / mu[s] * E(i, j, 1) * dt / dvy;
+            double advection_ax = E(i, j, 0) * dt / dvx;
+            double advection_ay = E(i, j, 1) * dt / dvy;
 
             auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
             double eta          = world.surface(x, y);
@@ -288,39 +277,33 @@ void Vlasolver::pfc_update_along_velocity(double dt) const {
 
             // open boundary condition in the v-direction
             double flux_in = 0.0, flux_out = 0.0;
-            flux_in += compute_flux({i, j, iv - 1, jv}, grid.spacing, s, 2, advection_ax, f);
-            flux_in += compute_flux({i, j, iv, jv - 1}, grid.spacing, s, 3, advection_ay, f);
-            flux_out += compute_flux({i, j, iv, jv}, grid.spacing, s, 2, advection_ax, f);
-            flux_out += compute_flux({i, j, iv, jv}, grid.spacing, s, 3, advection_ay, f);
-            flux(i, j, iv, jv, s) = flux_in - flux_out;
+            flux_in += compute_flux({i, j, iv - 1, jv}, grid.spacing, 2, advection_ax, f);
+            flux_in += compute_flux({i, j, iv, jv - 1}, grid.spacing, 3, advection_ay, f);
+            flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 2, advection_ax, f);
+            flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 3, advection_ay, f);
+            flux(i, j, iv, jv) = flux_in - flux_out;
         });
 
     Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({0, 0, 0, 0, 0}, {nx, ny, nvx, nvy, 2}),
-        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv, const int s) {
+        Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
+        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
             if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc || iv < ngc || iv >= nvx - ngc || jv < ngc ||
                 jv >= nvy - ngc)
                 return;
-            f(i, j, iv, jv, s) += flux(i, j, iv, jv, s);
+            f(i, j, iv, jv) += flux(i, j, iv, jv);
         });
 }
 
 void Vlasolver::advance(double dt) {
-    // perform half time step shift along the x-axis
     pfc_update_along_space(dt / 2.0);
     apply_particle_boundary_conditions();
-    // extrapolate the distribution function for the ghost cells
     extrapolate_distribution_function();
-    // compute electric field
     compute_charge_density();
-    // compute potential field();
     compute_poisson_jump_conditions();
     poisson_solver.solve();
     compute_electric_field();
-    // perform shift along the v-axis
     pfc_update_along_velocity(dt);
     apply_particle_boundary_conditions();
-    // perform second half time step shift along the x-axis
     pfc_update_along_space(dt / 2.0);
     apply_particle_boundary_conditions();
 }

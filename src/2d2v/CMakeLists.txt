@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-
 project(Vlasolver)
-message(STATUS "CMAKE_CURRENT_SOURCE_DIR = ${CMAKE_CURRENT_SOURCE_DIR}")
 find_package(Kokkos REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(HighFive REQUIRED)

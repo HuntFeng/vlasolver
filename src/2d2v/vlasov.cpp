@@ -49,7 +49,7 @@ void Vlasolver::apply_particle_boundary_conditions() const {
             auto [dx, dy, dvx, dvy]               = grid.spacing;
             auto [x, y, vx, vy]                   = grid.center({i, j, iv, jv});
             if (i < ngc) {
-                f(i, j, iv, jv) = (vx > 0.0) ? exp(-pow((vx - 5), 2)) : 0.0; // left boundary, injection
+                f(i, j, iv, jv) = (vx > 0.0) ? exp(-pow((vx - 1.4), 2)) / 30 : 0.0; // left boundary, injection
             } else if (i >= nx - ngc) {
                 if (vx < 0.0)
                     f(i, j, iv, jv) = 0.0; // right boundary, zero-inflow
@@ -161,7 +161,7 @@ void Vlasolver::compute_charge_density() const {
 
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-            if (i < ngc || i >= nx - ngc)
+            if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc)
                 return;
 
             double number_density = 0.0;

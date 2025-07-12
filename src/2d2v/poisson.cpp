@@ -8,6 +8,19 @@
 #include "world.hpp"
 #include <Kokkos_Core.hpp>
 
+/**
+ * Normalized electron charge density, f(phi) = -exp(phi).
+ *
+ * @param phi: Potential field value.
+ */
+KOKKOS_INLINE_FUNCTION
+double f(double u) {
+    double u0 = 0.3; // reference potential value, eV
+    double Te = 1.5; // electron temperature, eV
+    // double lambda_D = 0.2275;                                       // Debye length, normalized
+    return -Kokkos::exp((u - u0) / Te) / 0.1035; // normalized electron charge density
+};
+
 PoissonSolver::PoissonSolver(World& world, double tol, int levels, int max_iter)
     : world(world),
       tol(tol),
@@ -373,10 +386,15 @@ double PoissonSolver::compute_error() {
 }
 
 void PoissonSolver::solve() {
+    auto& rho = world.rho;
+    Kokkos::View<double**> g("g", rho.extent(0), rho.extent(1));
+    Kokkos::parallel_for(
+        Kokkos::MDRangePolicy({0, 0}, {rho.extent(0), rho.extent(1)}),
+        KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j) / 0.1035; });
     apply_boundary(world.phi);
     for (int iter = 0; iter < max_iter; ++iter) {
         Kokkos::deep_copy(phi_old, world.phi);
-        v_cycle(world.phi, world.rho, world.eps, world.a, world.b, 0);
+        v_cycle(world.phi, g, world.eps, world.a, world.b, 0);
         double err = compute_error();
         if (iter % 10 == 0 || iter == max_iter - 1) {
             Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);

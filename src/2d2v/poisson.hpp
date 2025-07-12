@@ -103,14 +103,6 @@ class PoissonSolver {
     void apply_boundary(Kokkos::View<double**>& u);
 
     /**
-     * Normalized electron charge density, f(phi) = -exp(phi).
-     *
-     * @param phi: Potential field value.
-     */
-    KOKKOS_INLINE_FUNCTION
-    double f(double u) const { return -Kokkos::exp(u); };
-
-    /**
      * Compute the nonlinear operator for the Poisson equation. laplacian phi + f(phi).
      *
      * @param u: Potential field.

@@ -103,6 +103,21 @@ class PoissonSolver {
     void apply_boundary(Kokkos::View<double**>& u);
 
     /**
+     * Construct permittivity field
+     */
+    Kokkos::View<double**> construct_permittivity(const Kokkos::View<double**>& u);
+
+    /**
+     * Construct jump condition [phi]_Gamma
+     */
+    Kokkos::View<double**> construct_jump_condition_a(const Kokkos::View<double**>& u);
+
+    /**
+     * Construct jump condition [eps*dphi/dn]_Gamma
+     */
+    Kokkos::View<double**> construct_jump_condition_b(const Kokkos::View<double**>& u);
+
+    /**
      * Compute the nonlinear operator for the Poisson equation. laplacian phi + f(phi).
      *
      * @param u: Potential field.

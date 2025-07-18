@@ -12,7 +12,7 @@
 apptainer build .devcontainer/kokkos_cuda.sif .devcontainer/Apptainer.def
 ```
 
-- Start the apptainer shell with writable tmpfs and NVIDIA support
+- Start the apptainer shell with NVIDIA support
 
 ```bash
 apptainer shell --nv .devcontainer/kokkos_cuda

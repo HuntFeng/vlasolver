@@ -3,6 +3,8 @@
  * Multigrid V-cycle solver with red-black Gauss-Seidel smoothing
  * The solver is modified to match our cell-centered finite difference
  *
+ * u'' + f(u) = g
+ *
  */
 #include "poisson.hpp"
 #include "world.hpp"
@@ -18,7 +20,8 @@ double f(double u) {
     double u0 = 0.3; // reference potential value, eV
     double Te = 1.5; // electron temperature, eV
     // double lambda_D = 0.2275;                                       // Debye length, normalized
-    return -Kokkos::exp((u - u0) / Te) / 0.1035; // normalized electron charge density
+    // return -Kokkos::exp((u - u0) / Te) / 0.1035; // normalized electron charge density
+    return 0;
 };
 
 PoissonSolver::PoissonSolver(World& world, double tol, int levels, int max_iter)
@@ -40,7 +43,7 @@ void PoissonSolver::apply_boundary(Kokkos::View<double**>& u) {
     int ny       = u.extent(1);
     double dx    = grid.size[0] / (nx - 2 * ngc);
     double dy    = grid.size[1] / (ny - 2 * ngc);
-    double phi_w = -20.0; // normalized potential at the wall of the charged cylinder
+    double phi_w = -66.67; // normalized potential at the wall of the charged cylinder
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
             double x   = (i - ngc + 0.5) * dx;
@@ -61,6 +64,30 @@ void PoissonSolver::apply_boundary(Kokkos::View<double**>& u) {
         // top boundary, neumann
         Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1), Kokkos::subview(u, Kokkos::ALL, ny - ngc - 2));
     }
+}
+
+Kokkos::View<double**> PoissonSolver::construct_permittivity(const Kokkos::View<double**>& u) {
+    int nx = u.extent(0);
+    int ny = u.extent(1);
+    Kokkos::View<double**> eps("eps", nx, ny);
+    Kokkos::deep_copy(eps, 1.0);
+    return eps;
+}
+
+Kokkos::View<double**> PoissonSolver::construct_jump_condition_a(const Kokkos::View<double**>& u) {
+    int nx = u.extent(0);
+    int ny = u.extent(1);
+    Kokkos::View<double**> a("a", nx, ny);
+    Kokkos::deep_copy(a, 0.0);
+    return a;
+}
+
+Kokkos::View<double**> PoissonSolver::construct_jump_condition_b(const Kokkos::View<double**>& u) {
+    int nx = u.extent(0);
+    int ny = u.extent(1);
+    Kokkos::View<double**> b("b", nx, ny);
+    Kokkos::deep_copy(b, 0.0);
+    return b;
 }
 
 Kokkos::View<double**> PoissonSolver::nonlinear_operator(const Kokkos::View<double**>& u,
@@ -263,10 +290,11 @@ Kokkos::View<double**> PoissonSolver::restrict(const Kokkos::View<double**>& u,
     int ngc           = world.grid.ngc;
     auto [nx_c, ny_c] = n_coarse;
     Kokkos::View<double**> u_c("u_c", nx_c, ny_c);
+    Kokkos::deep_copy(u_c, 0.0);
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {nx_c, ny_c}), KOKKOS_CLASS_LAMBDA(const int i_c, const int j_c) {
             if (i_c < ngc || j_c < ngc || i_c >= nx_c - ngc || j_c >= ny_c - ngc) {
-                u_c(i_c, j_c) = u(i_c, j_c);
+                // u_c(i_c, j_c) = u(i_c, j_c);
             } else {
                 int i_f       = 2 * (i_c - ngc) + ngc;
                 int j_f       = 2 * (j_c - ngc) + ngc;
@@ -282,10 +310,11 @@ Kokkos::View<double**> PoissonSolver::prolong(const Kokkos::View<double**>& e_c,
     auto [nx_f, ny_f] = n_fine;
     int ngc           = world.grid.ngc;
     Kokkos::View<double**> e_f("e_f", nx_f, ny_f);
+    Kokkos::deep_copy(e_f, 0.0);
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {nx_f, ny_f}), KOKKOS_CLASS_LAMBDA(const int i_f, const int j_f) {
             if (i_f < ngc || j_f < ngc || i_f >= nx_f - ngc || j_f >= ny_f - ngc) {
-                e_f(i_f, j_f) = e_c(i_f, j_f);
+                // e_f(i_f, j_f) = e_c(i_f, j_f);
             } else {
                 int i_c       = (i_f - ngc) / 2 + ngc;
                 int j_c       = (j_f - ngc) / 2 + ngc;
@@ -327,9 +356,12 @@ void PoissonSolver::v_cycle(Kokkos::View<double**>& u,
     Kokkos::View<double**> lhs_c      = restrict(lhs, n_coarse);
     Kokkos::View<double**> u_c        = restrict(u, n_coarse);
     Kokkos::View<double**> g_c        = restrict(g, n_coarse);
-    Kokkos::View<double**> eps_c      = restrict(eps, n_coarse);
-    Kokkos::View<double**> a_c        = restrict(a, n_coarse);
-    Kokkos::View<double**> b_c        = restrict(b, n_coarse);
+    // Kokkos::View<double**> eps_c      = restrict(eps, n_coarse);
+    // Kokkos::View<double**> a_c        = restrict(a, n_coarse);
+    // Kokkos::View<double**> b_c        = restrict(b, n_coarse);
+    Kokkos::View<double**> eps_c = construct_permittivity(u_c);
+    Kokkos::View<double**> a_c   = construct_jump_condition_a(u_c);
+    Kokkos::View<double**> b_c   = construct_jump_condition_b(u_c);
 
     // FAS (Full approximation Scheme) correction:
     // tau_c = N^H(I^H_h u^h) - I^H_h N^h(u^h)

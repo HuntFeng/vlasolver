@@ -9,6 +9,7 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
       - CMake, build-essential, and other core tools for building C++ projects
       - HDF5 and HighFive for HDF5 file handling
       - Kokkos framework for parallel programming
+      - Google Test (gtest) for unit testing
 
 %post
     # update and install core tools
@@ -37,7 +38,8 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
     cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DHDF5_ENABLE_ZLIB_SUPPORT=Off \
-    -DHDF5_ENABLE_SZIP_SUPPORT=Off
+    -DHDF5_ENABLE_SZIP_SUPPORT=Off \
+    -DBUILD_TESTING=Off
     cmake --build build --parallel 4
     cmake --install build --prefix /usr/local
     rm -rf hdf5-${HDF5_VERSION}
@@ -77,6 +79,18 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
     cmake --build build --parallel 4
     cmake --install build --prefix /usr/local
     rm -rf kokkos-${KOKKOS_VERSION}
+
+    # gtest for unit testing
+    export GTEST_VERSION=1.17.0
+    wget https://github.com/google/googletest/releases/download/v${GTEST_VERSION}/googletest-${GTEST_VERSION}.tar.gz
+    tar -xvzf googletest-${GTEST_VERSION}.tar.gz
+    rm googletest-${GTEST_VERSION}.tar.gz
+    cd googletest-${GTEST_VERSION}
+    cmake -B build \
+    -DCMAKE_BUILD_TYPE=Release
+    cmake --build build --parallel 4
+    cmake --install build --prefix /usr/local
+    rm -rf googletest-${GTEST_VERSION}
 
 %environment
     export PATH="/usr/local/cuda/bin:$PATH"

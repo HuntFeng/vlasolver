@@ -12,3 +12,4 @@ reports/
 !.devcontainer/*Dockerfile
 *.log
 *.out
+dev.sh

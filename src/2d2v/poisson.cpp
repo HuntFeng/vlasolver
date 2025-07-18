@@ -20,11 +20,11 @@ double f(double u) {
     double u0 = 0.3; // reference potential value, eV
     double Te = 1.5; // electron temperature, eV
     // double lambda_D = 0.2275;                                       // Debye length, normalized
-    // return -Kokkos::exp((u - u0) / Te) / 0.1035; // normalized electron charge density
-    return 0;
+    return -Kokkos::exp((u - u0) / Te); // normalized electron charge density
+    // return 0;
 };
 
-PoissonSolver::PoissonSolver(World& world, double tol, int levels, int max_iter)
+PoissonSolver::PoissonSolver(World& world, double tol, int max_iter, int levels)
     : world(world),
       tol(tol),
       levels(levels),
@@ -32,7 +32,12 @@ PoissonSolver::PoissonSolver(World& world, double tol, int levels, int max_iter)
     int nx  = world.grid.ncells[0];
     int ny  = world.grid.ncells[1];
     phi_old = Kokkos::View<double**>("phi_old", nx, ny);
-    omega   = 1.0;
+    // Using omega to control the relaxation rate of Gauss-Seidel iterations
+    // For problem with Dirichlet boundaries, optimal omega is given by
+    // omega     = 2.0 / (1.0 + (sin(pi / (nx - 2 * ngc))));
+    // For mixed boundary conditions, a lower value is needed or it won't converge
+    // If using Gauss-Seidel as a smoother for multigrid method, omega needs to be <= 1.0 it does under-relaxation
+    omega = 1.9;
 }
 
 void PoissonSolver::apply_boundary(Kokkos::View<double**>& u) {
@@ -280,7 +285,7 @@ void PoissonSolver::red_black_update(Kokkos::View<double**>& u,
             double Fx = F_l + F_r;
             double Fy = F_b + F_t;
 
-            // under-relaxation update
+            // relaxation update
             u(i, j) = (1 - omega) * u(i, j) + omega * (average - g(i, j) + f(u(i, j)) - Fx - Fy) / denom;
         });
 }
@@ -422,13 +427,14 @@ void PoissonSolver::solve() {
     Kokkos::View<double**> g("g", rho.extent(0), rho.extent(1));
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {rho.extent(0), rho.extent(1)}),
-        KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j) / 0.1035; });
+        KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j); });
     apply_boundary(world.phi);
     for (int iter = 0; iter < max_iter; ++iter) {
         Kokkos::deep_copy(phi_old, world.phi);
-        v_cycle(world.phi, g, world.eps, world.a, world.b, 0);
+        // v_cycle(world.phi, g, world.eps, world.a, world.b, 0);
+        gauss_seidel(world.phi, g, world.eps, world.a, world.b, 1);
         double err = compute_error();
-        if (iter % 10 == 0 || iter == max_iter - 1) {
+        if (iter % 1000 == 0 || iter == max_iter - 1) {
             Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
         }
         if (err < tol) {

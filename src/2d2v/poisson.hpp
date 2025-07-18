@@ -21,17 +21,12 @@ class PoissonSolver {
     bool debug = false;
 
   public:
-    PoissonSolver(World& world, double tol = 1e-6, int levels = 4, int max_iter = 200);
+    PoissonSolver(World& world, double tol = 1e-6, int max_iter = 1e5, int levels = 4);
 
     /**
      * Enable debug mode for additional output.
      */
     void enable_debug() { debug = true; }
-
-    /**
-     * Apply boundary conditions to the potential field.
-     */
-    void apply_potential_boundary_conditions();
 
     /**
      * Update the potential field using the red-black Gauss-Seidel method.

@@ -38,7 +38,9 @@ struct World {
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
         // example 4 plasma sheath from IFE-CSL
-        return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+        // return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+        // debug use, a square immersed object near left boundary
+        return Kokkos::max(Kokkos::abs(x - 0.2) - 0.02, Kokkos::abs(y - 0.1) - 0.1);
     }
 
     /**

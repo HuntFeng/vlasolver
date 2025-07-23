@@ -1,4 +1,5 @@
 #include "vlasov.hpp"
+#include <impl/Kokkos_HostThreadTeam.hpp>
 
 Vlasolver::Vlasolver(World& world, PoissonSolver& poisson_solver, Writer& writer)
     : world(world),
@@ -235,6 +236,9 @@ void Vlasolver::pfc_update_along_space(double dt) const {
             flux_in += compute_flux({i, j - 1, iv, jv}, grid.spacing, 1, advection_vy, f);
             flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 0, advection_vx, f);
             flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 1, advection_vy, f);
+            if ((i == 4 && j == 40 && iv == 67 && jv == 130) || (i == 4 && j == 41 && iv == 67 && jv == 130))
+                Kokkos::printf("(PFC space) flux_in = %e, flux_out = %e, f(%d, %d, %d, %d) = %e\n", flux_in, flux_out,
+                               i, j, iv, jv, f(i, j, iv, jv));
             flux(i, j, iv, jv) = flux_in - flux_out;
         });
 
@@ -245,6 +249,9 @@ void Vlasolver::pfc_update_along_space(double dt) const {
                 jv >= nvy - ngc)
                 return;
             f(i, j, iv, jv) += flux(i, j, iv, jv);
+
+            if (f(i, j, iv, jv) < 0.0)
+                Kokkos::printf("(PFC space) f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
         });
 }
 
@@ -281,6 +288,9 @@ void Vlasolver::pfc_update_along_velocity(double dt) const {
             flux_in += compute_flux({i, j, iv, jv - 1}, grid.spacing, 3, advection_ay, f);
             flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 2, advection_ax, f);
             flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 3, advection_ay, f);
+            if ((i == 3 && j == 40 && iv == 67 && jv == 130) || (i == 3 && j == 41 && iv == 67 && jv == 130))
+                Kokkos::printf("(PFC velocity) flux_in = %e, flux_out = %e, f(%d, %d, %d, %d) = %e\n", flux_in,
+                               flux_out, i, j, iv, jv, f(i, j, iv, jv));
             flux(i, j, iv, jv) = flux_in - flux_out;
         });
 
@@ -291,21 +301,37 @@ void Vlasolver::pfc_update_along_velocity(double dt) const {
                 jv >= nvy - ngc)
                 return;
             f(i, j, iv, jv) += flux(i, j, iv, jv);
+            if (f(i, j, iv, jv) < 0.0)
+                Kokkos::printf("(PFC velocity) f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
         });
 }
 
 void Vlasolver::advance(double dt) {
+    Kokkos::printf("start pfc update along space by dt/2------------------------------------------\n");
     pfc_update_along_space(dt / 2.0);
+    Kokkos::fence();
     apply_particle_boundary_conditions();
+    Kokkos::fence();
     extrapolate_distribution_function();
+    Kokkos::fence();
     compute_charge_density();
+    Kokkos::fence();
     compute_poisson_jump_conditions();
+    Kokkos::fence();
     poisson_solver.solve();
+    Kokkos::fence();
     compute_electric_field();
+    Kokkos::fence();
+    Kokkos::printf("start pfc update along velocity by dt------------------------------------------\n");
     pfc_update_along_velocity(dt);
+    Kokkos::fence();
     apply_particle_boundary_conditions();
+    Kokkos::fence();
+    Kokkos::printf("start pfc update along space by dt/2------------------------------------------\n");
     pfc_update_along_space(dt / 2.0);
+    Kokkos::fence();
     apply_particle_boundary_conditions();
+    Kokkos::fence();
 }
 
 void Vlasolver::solve() {
@@ -319,6 +345,7 @@ void Vlasolver::solve() {
     compute_electric_field();
     writer.write(0);
 
+    debug = true;
     for (world.current_step = 1; world.current_step <= world.total_steps; ++world.current_step) {
         Kokkos::printf("Step %zu:\n", world.current_step);
         advance(world.dt);

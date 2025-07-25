@@ -17,10 +17,12 @@
  */
 KOKKOS_INLINE_FUNCTION
 double f(double u) {
-    double u0 = 0.3; // reference potential value, eV
-    double Te = 1.5; // electron temperature, eV
-    // double lambda_D = 0.2275;                                       // Debye length, normalized
-    return -Kokkos::exp((u - u0) / Te); // normalized electron charge density
+    double u0       = 0.3;                                          // reference potential value, eV
+    double Te       = 1.5;                                          // electron temperature, eV
+    double Ld       = 0.288;                                        // Debye length, m
+    double Lx       = 0.4;                                          // domain length, m
+    double lambda_D = Ld / Lx;                                      // normalized Debye length
+    return -Kokkos::exp((u - u0) / Te) / (2 * lambda_D * lambda_D); // normalized electron charge density
     // return 0;
 };
 
@@ -49,6 +51,7 @@ void PoissonSolver::apply_boundary(Kokkos::View<double**>& u) {
     double dx    = grid.size[0] / (nx - 2 * ngc);
     double dy    = grid.size[1] / (ny - 2 * ngc);
     double phi_w = -66.67; // normalized potential at the wall of the charged cylinder
+    // double phi_w = -10; // normalized potential at the wall of the charged cylinder
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
             double x   = (i - ngc + 0.5) * dx;
@@ -425,9 +428,13 @@ double PoissonSolver::compute_error() {
 void PoissonSolver::solve() {
     auto& rho = world.rho;
     Kokkos::View<double**> g("g", rho.extent(0), rho.extent(1));
+
+    double Ld       = 0.288;   // Debye length, m
+    double Lx       = 0.4;     // domain length, m
+    double lambda_D = Ld / Lx; // normalized Debye length
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {rho.extent(0), rho.extent(1)}),
-        KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j); });
+        KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j) / (2 * lambda_D * lambda_D); });
     apply_boundary(world.phi);
     for (int iter = 0; iter < max_iter; ++iter) {
         Kokkos::deep_copy(phi_old, world.phi);

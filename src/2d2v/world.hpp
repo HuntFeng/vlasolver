@@ -7,15 +7,17 @@
  */
 struct World {
     Grid& grid;
-    Kokkos::View<double****> f;    // distribution function f(x,y,vx,vy) of ion
-    Kokkos::View<double****> flux; // storing fluxes to update distribution function
-    Kokkos::View<double**> n;      // number density of ion
-    Kokkos::View<double**> rho;    // ion charge density
-    Kokkos::View<double**> phi;    // potential field (assuming Boltzmann distribution for electron)
-    Kokkos::View<double***> E;     // Ex(x,y), E_y(x,y)
-    Kokkos::View<double**> eps;    // permittivity field
-    Kokkos::View<double**> a;      // jump condition for poisson
-    Kokkos::View<double**> b;      // jump condition for poisson
+    Kokkos::View<double****> f;      // distribution function f(x,y,vx,vy) of ion
+    Kokkos::View<double****> flux;   // storing fluxes to update distribution function
+    Kokkos::View<double****> flux_l; // storing fluxes to update distribution function
+    Kokkos::View<double****> flux_r; // storing fluxes to update distribution function
+    Kokkos::View<double**> n;        // number density of ion
+    Kokkos::View<double**> rho;      // ion charge density
+    Kokkos::View<double**> phi;      // potential field (assuming Boltzmann distribution for electron)
+    Kokkos::View<double***> E;       // Ex(x,y), E_y(x,y)
+    Kokkos::View<double**> eps;      // permittivity field
+    Kokkos::View<double**> a;        // jump condition for poisson
+    Kokkos::View<double**> b;        // jump condition for poisson
 
     // simulation time control
     double dt           = 0.0; // time step size
@@ -38,9 +40,10 @@ struct World {
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
         // example 4 plasma sheath from IFE-CSL
-        // return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+        return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
         // debug use, a square immersed object near left boundary
-        return Kokkos::max(Kokkos::abs(x - 0.15) - 0.04, Kokkos::abs(y - 0.1) - 0.1);
+        // return Kokkos::max(Kokkos::abs(x - 0.15) - 0.04, Kokkos::abs(y - 0.1) - 0.1);
+        // return x + 1;
     }
 
     /**

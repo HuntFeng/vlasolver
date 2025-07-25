@@ -43,6 +43,9 @@ class Vlasolver {
 
     void compute_electric_field() const;
 
+    /**
+     * Compute flux using third order extrapolation
+     */
     KOKKOS_FUNCTION
     double compute_flux(Kokkos::Array<int, DIM> index,
                         Kokkos::Array<double, DIM> spacing,
@@ -74,19 +77,9 @@ class Vlasolver {
             }
         };
 
-        double fm2 = f_val(-2);
-        double fm1 = f_val(-1);
-        double f0  = f_val(0);
-        double fp1 = f_val(1);
-        double fp2 = f_val(2);
-
-        // double f_max1 = max(max(fm1, f0), min(2.0 * fm1 - fm2, 2.0 * f0 - fp1));
-        // double f_max2 = max(max(fp1, f0), min(2.0 * fp1 - fp2, 2.0 * f0 - fm1));
-        // double f_min1 = min(min(fm1, f0), max(2.0 * fm1 - fm2, 2.0 * f0 - fp1));
-        // double f_min2 = min(min(fp1, f0), max(2.0 * fp1 - fp2, 2.0 * f0 - fm1));
-        // double f_max  = max(f_max1, f_max2);
-        // double f_min  = max(0.0, min(f_min1, f_min2));
-
+        double fm1   = f_val(-1);
+        double f0    = f_val(0);
+        double fp1   = f_val(1);
         double f_min = 0.0;
         double f_max = 0.0;
         if (axis == 0) {
@@ -107,7 +100,7 @@ class Vlasolver {
             }
         }
 
-        // limiter
+        // third order extrapolation
         double plus_diff  = fp1 - f0;
         double minus_diff = f0 - fm1;
         double ep_plus =
@@ -116,105 +109,58 @@ class Vlasolver {
             (minus_diff >= 0) ? min(1.0, 2.0 * (f_max - f0) / minus_diff) : min(1.0, 2.0 * (f_min - f0) / minus_diff);
 
         double flux = 0.0;
+        double nu   = 0.0;
         if (advection_velocity >= 0.0) {
             // downwind
-            double nu = advection_velocity - floor_v;
-            flux      = f0;
+            nu   = advection_velocity - floor_v;
+            flux = f0;
             flux += ep_plus * (1 - nu) * (2 - nu) * plus_diff / 6.0;
             flux += ep_minus * (1 - nu) * (1 + nu) * minus_diff / 6.0;
             flux *= nu;
-            // flux      = nu * f0 + nu * (1.0 - nu) * (2.0 - nu) * Lp / 6.0 + nu * (1.0 - nu) * (1.0 + nu) * Lm / 6.0;
         } else {
             // upwind
-            double nu = advection_velocity - (floor_v + 1);
-            flux      = f0;
+            nu   = advection_velocity - (floor_v + 1);
+            flux = f0;
             flux += -ep_plus * (1 - nu) * (1 + nu) * plus_diff / 6.0;
             flux += -ep_minus * (2 + nu) * (1 + nu) * minus_diff / 6.0;
             flux *= nu;
-            // flux      = nu * f0 - nu * (1.0 - nu) * (1.0 + nu) * Lp / 6.0 - nu * (1.0 + nu) * (2.0 + nu) * Lm / 6.0;
         }
 
         if (axis == 0) {
             int is = i - floor_v;
             if (advection_velocity >= 0.0) {
                 for (int n = is + 1; n <= i; ++n)
-                    flux += f(n, j, iv, jv) * dx;
+                    flux += f(n, j, iv, jv);
             } else {
                 for (int n = i + 1; n <= is - 1; ++n)
-                    flux -= f(n, j, iv, jv) * dx;
+                    flux -= f(n, j, iv, jv);
             }
         } else if (axis == 1) {
             int js = j - floor_v;
             if (advection_velocity >= 0.0) {
                 for (int n = js + 1; n <= j; ++n)
-                    flux += f(i, n, iv, jv) * dy;
+                    flux += f(i, n, iv, jv);
             } else {
                 for (int n = j + 1; n <= js - 1; ++n)
-                    flux -= f(i, n, iv, jv) * dy;
+                    flux -= f(i, n, iv, jv);
             }
         } else if (axis == 2) {
             int ivs = iv - floor_v;
             if (advection_velocity >= 0.0) {
                 for (int n = max(ivs + 1, 0); n <= iv; ++n)
-                    flux += f(i, j, n, jv) * dvx;
+                    flux += f(i, j, n, jv);
             } else {
                 for (int n = iv + 1; n <= min(ivs - 1, f.extent_int(2) - 1); ++n)
-                    flux -= f(i, j, n, jv) * dvx;
+                    flux -= f(i, j, n, jv);
             }
         } else {
             int jvs = jv - floor_v;
             if (advection_velocity >= 0.0) {
                 for (int n = max(jvs + 1, 0); n <= jv; ++n)
-                    flux += f(i, j, iv, n) * dvy;
+                    flux += f(i, j, iv, n);
             } else {
                 for (int n = jv + 1; n <= min(jvs - 1, f.extent_int(3) - 1); ++n)
-                    flux -= f(i, j, iv, n) * dvy;
-            }
-        }
-
-        if (axis == 0) {
-            if (i == 4 && j == 40 && iv == 67 && jv == 130) {
-                Kokkos::printf("(Compute Flux) is = %d\n", i - floor_v);
-                Kokkos::printf("(Compute Flux) flux_%d(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, flux);
-                Kokkos::printf("(Compute Flux) fm1 = %e, f0 = %e, fp1 = %e, f_max = %e\n", fm1, f0, fp1, f_max);
-            }
-            if (i == 3 && j == 40 && iv == 67 && jv == 130) {
-                Kokkos::printf("(Compute Flux) is = %d\n", i - floor_v);
-                Kokkos::printf("(Compute Flux) flux_%d(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, flux);
-                Kokkos::printf("(Compute Flux) fm1 = %e, f0 = %e, fp1 = %e, f_max = %e\n", fm1, f0, fp1, f_max);
-            }
-        } else if (axis == 1) {
-            if (i == 4 && j == 40 && iv == 67 && jv == 130) {
-                Kokkos::printf("(Compute Flux) is = %d\n", j - floor_v);
-                Kokkos::printf("(Compute Flux) flux_%d(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, flux);
-                Kokkos::printf("(Compute Flux) fm1 = %e, f0 = %e, fp1 = %e, f_max = %e\n", fm1, f0, fp1, f_max);
-            }
-            if (i == 4 && j == 39 && iv == 67 && jv == 130) {
-                Kokkos::printf("(Compute Flux) is = %d\n", j - floor_v);
-                Kokkos::printf("(Compute Flux) flux_%d(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, flux);
-                Kokkos::printf("(Compute Flux) fm1 = %e, f0 = %e, fp1 = %e, f_max = %e\n", fm1, f0, fp1, f_max);
-            }
-        } else if (axis == 2) {
-            if (i == 3 && j == 40 && iv == 67 && jv == 130) {
-                Kokkos::printf("(Compute Flux) ivs = %d\n", iv - floor_v);
-                Kokkos::printf("(Compute Flux) flux_%d(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, flux);
-                Kokkos::printf("(Compute Flux) fm1 = %e, f0 = %e, fp1 = %e, f_max = %e\n", fm1, f0, fp1, f_max);
-            }
-            if (i == 3 && j == 40 && iv == 66 && jv == 130) {
-                Kokkos::printf("(Compute Flux) ivs = %d\n", iv - floor_v);
-                Kokkos::printf("(Compute Flux) flux_%d(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, flux);
-                Kokkos::printf("(Compute Flux) fm1 = %e, f0 = %e, fp1 = %e, f_max = %e\n", fm1, f0, fp1, f_max);
-            }
-        } else {
-            if (i == 3 && j == 40 && iv == 67 && jv == 130) {
-                Kokkos::printf("(Compute Flux) jvs = %d\n", jv - floor_v);
-                Kokkos::printf("(Compute Flux) flux_%d(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, flux);
-                Kokkos::printf("(Compute Flux) fm1 = %e, f0 = %e, fp1 = %e, f_max = %e\n", fm1, f0, fp1, f_max);
-            }
-            if (i == 3 && j == 40 && iv == 67 && jv == 129) {
-                Kokkos::printf("(Compute Flux) jvs = %d\n", jv - floor_v);
-                Kokkos::printf("(Compute Flux) flux_%d(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, flux);
-                Kokkos::printf("(Compute Flux) fm1 = %e, f0 = %e, fp1 = %e,  = %e\n", fm1, f0, fp1, f_max);
+                    flux -= f(i, j, iv, n);
             }
         }
         return flux;
@@ -223,6 +169,8 @@ class Vlasolver {
     void pfc_update_along_space(double dt) const;
 
     void pfc_update_along_velocity(double dt) const;
+
+    void pfc_update(double dt, int axis) const;
 
     void advance(double dt);
 

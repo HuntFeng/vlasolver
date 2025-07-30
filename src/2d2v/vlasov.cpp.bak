@@ -1,5 +1,4 @@
 #include "vlasov.hpp"
-#include <Kokkos_Core.hpp>
 #include <impl/Kokkos_HostThreadTeam.hpp>
 
 Vlasolver::Vlasolver(World& world, PoissonSolver& poisson_solver, Writer& writer)
@@ -193,16 +192,151 @@ void Vlasolver::compute_electric_field() const {
         });
 }
 
+// void Vlasolver::pfc_update_along_space(double dt) const {
+//     auto& f                 = world.f;
+//     auto& flux              = world.flux;
+//     auto& grid              = world.grid;
+//
+//     auto [dx, dy, dvx, dvy] = grid.spacing;
+//     auto [nx, ny, nvx, nvy] = grid.ncells;
+//     int ngc                 = grid.ngc;
+//
+//     Kokkos::parallel_for(
+//         Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+//         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+//             auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+//             double eta          = world.surface(x, y);
+//             if (eta < 0.0)
+//                 return; // skip interior of immersed object
+//             double flux_in = 0.0, flux_out = 0.0;
+//             double advection_vx = vx * dt / dx;
+//             double advection_vy = vy * dt / dy;
+//
+//             flux_in += compute_flux({i - 1, j, iv, jv}, grid.spacing, 0, advection_vx, f);
+//             flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 0, advection_vx, f);
+//             flux_in += compute_flux({i, j - 1, iv, jv}, grid.spacing, 1, advection_vy, f);
+//             flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 1, advection_vy, f);
+//             if ((i == 4 && j == 40 && iv == 67 && jv == 130) || (i == 4 && j == 41 && iv == 67 && jv == 130))
+//                 Kokkos::printf("(PFC space) flux_in = %e, flux_out = %e, f(%d, %d, %d, %d) = %e\n", flux_in,
+//                 flux_out,
+//                                i, j, iv, jv, f(i, j, iv, jv));
+//             flux(i, j, iv, jv) = flux_in - flux_out;
+//         });
+//
+//     Kokkos::parallel_for(
+//         Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+//         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+//             f(i, j, iv, jv) += flux(i, j, iv, jv);
+//
+//             if (f(i, j, iv, jv) < 0.0)
+//                 Kokkos::printf("(PFC space) f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
+//         });
+// }
+//
+// void Vlasolver::pfc_update_along_velocity(double dt) const {
+//     using Kokkos::max;
+//     using Kokkos::min;
+//     auto& f                 = world.f;
+//     auto& flux              = world.flux;
+//     auto& E                 = world.E;
+//     auto& grid              = world.grid;
+//
+//     auto [dx, dy, dvx, dvy] = grid.spacing;
+//     auto [nx, ny, nvx, nvy] = grid.ncells;
+//     int ngc                 = grid.ngc;
+//
+//     Kokkos::parallel_for(
+//         Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+//         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+//             // third order upwind-biased interpolation
+//             double advection_ax = E(i, j, 0) * dt / dvx;
+//             double advection_ay = E(i, j, 1) * dt / dvy;
+//
+//             auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+//             double eta          = world.surface(x, y);
+//             if (eta < 0.0)
+//                 return; // skip interior of immersed object
+//
+//             // open boundary condition in the v-direction
+//             double flux_in = 0.0, flux_out = 0.0;
+//             flux_in += compute_flux({i, j, iv - 1, jv}, grid.spacing, 2, advection_ax, f);
+//             flux_in += compute_flux({i, j, iv, jv - 1}, grid.spacing, 3, advection_ay, f);
+//             flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 2, advection_ax, f);
+//             flux_out += compute_flux({i, j, iv, jv}, grid.spacing, 3, advection_ay, f);
+//             if ((i == 3 && j == 40 && iv == 67 && jv == 130) || (i == 3 && j == 41 && iv == 67 && jv == 130))
+//                 Kokkos::printf("(PFC velocity) flux_in = %e, flux_out = %e, f(%d, %d, %d, %d) = %e\n", flux_in,
+//                                flux_out, i, j, iv, jv, f(i, j, iv, jv));
+//             flux(i, j, iv, jv) = flux_in - flux_out;
+//         });
+//
+//     Kokkos::parallel_for(
+//         Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+//         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+//             f(i, j, iv, jv) += flux(i, j, iv, jv);
+//             if (f(i, j, iv, jv) < 0.0)
+//                 Kokkos::printf("(PFC velocity) f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
+//         });
+// }
+
+// void Vlasolver::pfc_update(double dt, int axis) const {
+//     auto& flux              = world.flux;
+//     auto& grid              = world.grid;
+//     auto& f                 = world.f;
+//     auto& E                 = world.E;
+//
+//     auto [dx, dy, dvx, dvy] = grid.spacing;
+//     auto [nx, ny, nvx, nvy] = grid.ncells;
+//     int ngc                 = grid.ngc;
+//
+//     Kokkos::deep_copy(flux, 0.0);
+//     Kokkos::parallel_for(
+//         Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+//         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+//             // third order upwind-biased interpolation
+//             auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+//             if (world.surface(x, y) < 0.0)
+//                 return; // skip interior of immersed object
+//
+//             if (axis == 0) {
+//                 double advection_vx = vx * dt / dx;
+//                 double flux_in      = compute_flux({i - 1, j, iv, jv}, grid.spacing, 0, advection_vx, f);
+//                 double flux_out     = compute_flux({i, j, iv, jv}, grid.spacing, 0, advection_vx, f);
+//                 flux(i, j, iv, jv)  = flux_in - flux_out;
+//             } else if (axis == 1) {
+//                 double advection_vy = vy * dt / dy;
+//                 double flux_in      = compute_flux({i, j - 1, iv, jv}, grid.spacing, 1, advection_vy, f);
+//                 double flux_out     = compute_flux({i, j, iv, jv}, grid.spacing, 1, advection_vy, f);
+//                 flux(i, j, iv, jv)  = flux_in - flux_out;
+//             } else if (axis == 2) {
+//                 double advection_ax = E(i, j, 0) * dt / dvx;
+//                 double flux_in      = compute_flux({i, j, iv - 1, jv}, grid.spacing, 2, advection_ax, f);
+//                 double flux_out     = compute_flux({i, j, iv, jv}, grid.spacing, 2, advection_ax, f);
+//                 flux(i, j, iv, jv)  = flux_in - flux_out;
+//             } else if (axis == 3) {
+//                 double advection_ay = E(i, j, 1) * dt / dvy;
+//                 double flux_in      = compute_flux({i, j, iv, jv - 1}, grid.spacing, 3, advection_ay, f);
+//                 double flux_out     = compute_flux({i, j, iv, jv}, grid.spacing, 3, advection_ay, f);
+//                 flux(i, j, iv, jv)  = flux_in - flux_out;
+//             }
+//         });
+//
+//     Kokkos::parallel_for(
+//         Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+//         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+//             f(i, j, iv, jv) += flux(i, j, iv, jv);
+//             if (f(i, j, iv, jv) < 0.0) {
+//                 f(i, j, iv, jv) = 0.0; // enforce positivity
+//                 // Kokkos::printf("(PFC velocity) f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
+//             }
+//         });
+// }
+
 void Vlasolver::pfc_update(double dt, int axis) const {
     auto& grid              = world.grid;
     auto& f                 = world.f;
     auto& E                 = world.E;
     auto& flux_l            = world.flux_l;
     auto& flux_r            = world.flux_r;
-    auto& flux_1st_l        = world.flux_1st_l;
-    auto& flux_1st_r        = world.flux_1st_r;
-    auto& ep_l              = world.ep_l;
-    auto& ep_r              = world.ep_r;
 
     auto [dx, dy, dvx, dvy] = grid.spacing;
     auto [nx, ny, nvx, nvy] = grid.ncells;
@@ -210,12 +344,8 @@ void Vlasolver::pfc_update(double dt, int axis) const {
 
     Kokkos::deep_copy(flux_l, 0.0);
     Kokkos::deep_copy(flux_r, 0.0);
-    Kokkos::deep_copy(flux_1st_l, 0.0);
-    Kokkos::deep_copy(flux_1st_r, 0.0);
-    Kokkos::deep_copy(ep_l, 0.0);
-    Kokkos::deep_copy(ep_r, 0.0);
     Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({ngc - 2, ngc - 2, ngc - 2, ngc - 2}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+        Kokkos::MDRangePolicy({ngc - 1, ngc - 1, ngc - 1, ngc - 1}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
             auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
             if (world.surface(x, y) < 0.0)
@@ -225,6 +355,8 @@ void Vlasolver::pfc_update(double dt, int axis) const {
             double advection_velocity = 0;
             int floor_v               = 0;
             int s                     = 0;
+            // double f_min              = 0.0;
+            // double f_max              = 0.0;
             if (axis == 0) {
                 advection_velocity = vx * dt / dx;
                 floor_v            = (int)Kokkos::floor(advection_velocity);
@@ -232,6 +364,9 @@ void Vlasolver::pfc_update(double dt, int axis) const {
                 f0                 = f(s, j, iv, jv);
                 fp1                = f(s + 1, j, iv, jv);
                 fm1                = f(s - 1, j, iv, jv);
+                // for (int n = 0; n < f.extent_int(0); ++n) {
+                //     f_max = Kokkos::max(f_max, f(n, j, iv, jv));
+                // }
             } else if (axis == 1) {
                 advection_velocity = vy * dt / dy;
                 floor_v            = (int)Kokkos::floor(advection_velocity);
@@ -239,6 +374,9 @@ void Vlasolver::pfc_update(double dt, int axis) const {
                 f0                 = f(i, s, iv, jv);
                 fp1                = f(i, s + 1, iv, jv);
                 fm1                = f(i, s - 1, iv, jv);
+                // for (int n = 0; n < f.extent_int(1); ++n) {
+                //     f_max = Kokkos::max(f_max, f(i, n, iv, jv));
+                // }
             } else if (axis == 2) {
                 advection_velocity = E(i, j, 0) * dt / dvx;
                 floor_v            = (int)Kokkos::floor(advection_velocity);
@@ -246,6 +384,9 @@ void Vlasolver::pfc_update(double dt, int axis) const {
                 f0                 = f(i, j, s, jv);
                 fp1                = f(i, j, s + 1, jv);
                 fm1                = f(i, j, s - 1, jv);
+                // for (int n = 0; n < f.extent_int(2); ++n) {
+                //     f_max = Kokkos::max(f_max, f(i, j, n, jv));
+                // }
             } else if (axis == 3) {
                 advection_velocity = E(i, j, 1) * dt / dvy;
                 floor_v            = (int)Kokkos::floor(advection_velocity);
@@ -253,25 +394,35 @@ void Vlasolver::pfc_update(double dt, int axis) const {
                 f0                 = f(i, j, iv, s);
                 fp1                = f(i, j, iv, s + 1);
                 fm1                = f(i, j, iv, s - 1);
+                // for (int n = 0; n < f.extent_int(3); ++n) {
+                //     f_max = Kokkos::max(f_max, f(i, j, iv, n));
+                // }
             }
 
             double plus_diff  = fp1 - f0;
             double minus_diff = f0 - fm1;
-            double flux       = 0.0;
-            double nu         = 0.0;
+            // double ep_plus =
+            //     (plus_diff >= 0) ? min(1.0, 2.0 * (f0 - f_min) / plus_diff) : min(1.0, 2.0 * (f0 - f_max) /
+            //     plus_diff);
+            // double ep_minus = (minus_diff >= 0) ? min(1.0, 2.0 * (f_max - f0) / minus_diff)
+            //                                     : min(1.0, 2.0 * (f_min - f0) / minus_diff);
+            double ep_plus  = 1.0;
+            double ep_minus = 1.0;
+            double flux     = 0.0;
+            double nu       = 0.0;
             if (advection_velocity >= 0.0) {
                 // downwind
                 nu   = advection_velocity - floor_v;
                 flux = f0;
-                flux += (1 - nu) * (2 - nu) * plus_diff / 6.0;
-                flux += (1 - nu) * (1 + nu) * minus_diff / 6.0;
+                flux += ep_plus * (1 - nu) * (2 - nu) * plus_diff / 6.0;
+                flux += ep_minus * (1 - nu) * (1 + nu) * minus_diff / 6.0;
                 flux *= nu;
             } else {
                 // upwind
                 nu   = advection_velocity - (floor_v + 1);
                 flux = f0;
-                flux += -(1 - nu) * (1 + nu) * plus_diff / 6.0;
-                flux += -(2 + nu) * (1 + nu) * minus_diff / 6.0;
+                flux += -ep_plus * (1 - nu) * (1 + nu) * plus_diff / 6.0;
+                flux += -ep_minus * (2 + nu) * (1 + nu) * minus_diff / 6.0;
                 flux *= nu;
             }
 
@@ -281,16 +432,13 @@ void Vlasolver::pfc_update(double dt, int axis) const {
                         flux += f(n, j, iv, jv);
                 } else {
                     for (int n = i + 1; n <= s - 1; ++n)
-                        // flux -= f(n, j, iv, jv);
-                        flux += f(n, j, iv, jv);
+                        flux -= f(n, j, iv, jv);
                 }
                 if (i != nx - ngc - 1) {
-                    flux_1st_l(i + 1, j, iv, jv) = nu * f(i, j, iv, jv);
-                    flux_l(i + 1, j, iv, jv)     = flux;
+                    flux_l(i + 1, j, iv, jv) = flux;
                 }
-                if (i != ngc - 2) {
-                    flux_1st_r(i, j, iv, jv) = nu * f(i, j, iv, jv);
-                    flux_r(i, j, iv, jv)     = flux;
+                if (i != -1) {
+                    flux_r(i, j, iv, jv) = flux;
                 }
             } else if (axis == 1) {
                 if (advection_velocity >= 0.0) {
@@ -298,16 +446,14 @@ void Vlasolver::pfc_update(double dt, int axis) const {
                         flux += f(i, n, iv, jv);
                 } else {
                     for (int n = j + 1; n <= s - 1; ++n)
-                        flux += f(i, n, iv, jv);
+                        flux -= f(i, n, iv, jv);
                 }
 
                 if (j != ny - ngc - 1) {
-                    flux_1st_l(i, j + 1, iv, jv) = nu * f(i, j, iv, jv);
-                    flux_l(i, j + 1, iv, jv)     = flux;
+                    flux_l(i, j + 1, iv, jv) = flux;
                 }
-                if (j != ngc - 2) {
-                    flux_1st_r(i, j, iv, jv) = nu * f(i, j, iv, jv);
-                    flux_r(i, j, iv, jv)     = flux;
+                if (j != -1) {
+                    flux_r(i, j, iv, jv) = flux;
                 }
             } else if (axis == 2) {
                 if (advection_velocity >= 0.0) {
@@ -315,16 +461,14 @@ void Vlasolver::pfc_update(double dt, int axis) const {
                         flux += f(i, j, n, jv);
                 } else {
                     for (int n = iv + 1; n <= min(s - 1, f.extent_int(2) - 1); ++n)
-                        flux += f(i, j, n, jv);
+                        flux -= f(i, j, n, jv);
                 }
 
                 if (iv != nvx - ngc - 1) {
-                    flux_1st_l(i, j, iv + 1, jv) = nu * f(i, j, iv, jv);
-                    flux_l(i, j, iv + 1, jv)     = flux;
+                    flux_l(i, j, iv + 1, jv) = flux;
                 }
-                if (iv != ngc - 2) {
-                    flux_1st_r(i, j, iv, jv) = nu * f(i, j, iv, jv);
-                    flux_r(i, j, iv, jv)     = flux;
+                if (iv != -1) {
+                    flux_r(i, j, iv, jv) = flux;
                 }
             } else {
                 if (advection_velocity >= 0.0) {
@@ -332,45 +476,15 @@ void Vlasolver::pfc_update(double dt, int axis) const {
                         flux += f(i, j, iv, n);
                 } else {
                     for (int n = jv + 1; n <= min(s - 1, f.extent_int(3) - 1); ++n)
-                        flux += f(i, j, iv, n);
+                        flux -= f(i, j, iv, n);
                 }
 
                 if (jv != nvy - ngc - 1) {
-                    flux_1st_l(i, j, iv, jv + 1) = nu * f(i, j, iv, jv);
-                    flux_l(i, j, iv, jv + 1)     = flux;
+                    flux_l(i, j, iv, jv + 1) = flux;
                 }
-                if (jv != ngc - 2) {
-                    flux_1st_r(i, j, iv, jv) = nu * f(i, j, iv, jv);
-                    flux_r(i, j, iv, jv)     = flux;
+                if (jv != -1) {
+                    flux_r(i, j, iv, jv) = flux;
                 }
-            }
-        });
-
-    Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({ngc - 1, ngc - 1, ngc - 1, ngc - 1}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
-        KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-            auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-            if (world.surface(x, y) < 0.0)
-                return; // skip interior of immersed object
-            double d_r   = flux_r(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
-            double d_l   = flux_l(i, j, iv, jv) - flux_1st_l(i, j, iv, jv);
-            double delta = -f(i, j, iv, jv) + flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
-            // if (delta < 0.0)
-            //     Kokkos::printf("Negative delta(%d, %d, %d, %d) = %e\n", i, j, iv, jv, delta);
-            double p = d_l - d_r - delta;
-            if (d_l < 0.0 && d_r <= 0.0) {
-                ep_l(i, j, iv, jv) = Kokkos::min(1.0, delta / d_l);
-            } else if (d_l * d_r < 0.0 && p < 0.0) {
-                ep_l(i, j, iv, jv) = delta / (d_l - d_r);
-            } else {
-                ep_l(i, j, iv, jv) = 1.0;
-            }
-            if (d_l >= 0.0 && d_r > 0.0) {
-                ep_r(i, j, iv, jv) = Kokkos::min(1.0, -delta / d_r);
-            } else if (d_l * d_r < 0.0 && p < 0.0) {
-                ep_r(i, j, iv, jv) = delta / (d_l - d_r);
-            } else {
-                ep_r(i, j, iv, jv) = 1.0;
             }
         });
 
@@ -381,31 +495,55 @@ void Vlasolver::pfc_update(double dt, int axis) const {
             if (world.surface(x, y) < 0.0)
                 return; // skip interior of immersed object
 
-            // modified flux
-            double ep_left = 0.0, ep_right = 0.0;
-            if (axis == 0) {
-                ep_left  = Kokkos::min(ep_r(i - 1, j, iv, jv), ep_l(i, j, iv, jv));
-                ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv));
-            } else if (axis == 1) {
-                ep_left  = Kokkos::min(ep_r(i, j - 1, iv, jv), ep_l(i, j, iv, jv));
-                ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
-            } else if (axis == 2) {
-                ep_left  = Kokkos::min(ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
-                ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));
-            } else {
-                ep_left  = Kokkos::min(ep_r(i, j, iv, jv - 1), ep_l(i, j, iv, jv));
-                ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
-            }
-            double flux_hat_l = ep_left * (flux_l(i, j, iv, jv) - flux_1st_l(i, j, iv, jv)) + flux_1st_l(i, j, iv, jv);
-            double flux_hat_r = ep_right * (flux_r(i, j, iv, jv) - flux_1st_r(i, j, iv, jv)) + flux_1st_r(i, j, iv, jv);
+            // Hongtao Liu's PP limiter
+            // double f0 = 0.0, fp1 = 0.0, fm1 = 0.0;
+            // double advection_velocity = 0;
+            // int floor_v               = 0;
+            // int s                     = 0;
+            // if (axis == 0) {
+            //     advection_velocity = vx * dt / dx;
+            //     floor_v            = (int)Kokkos::floor(advection_velocity);
+            //     s                  = i - floor_v;
+            //     f0                 = f(s, j, iv, jv);
+            //     fp1                = f(s + 1, j, iv, jv);
+            //     fm1                = f(s - 1, j, iv, jv);
+            // } else if (axis == 1) {
+            //     advection_velocity = vy * dt / dy;
+            //     floor_v            = (int)Kokkos::floor(advection_velocity);
+            //     s                  = j - floor_v;
+            //     f0                 = f(i, s, iv, jv);
+            //     fp1                = f(i, s + 1, iv, jv);
+            //     fm1                = f(i, s - 1, iv, jv);
+            // } else if (axis == 2) {
+            //     advection_velocity = E(i, j, 0) * dt / dvx;
+            //     floor_v            = (int)Kokkos::floor(advection_velocity);
+            //     s                  = iv - floor_v;
+            //     f0                 = f(i, j, s, jv);
+            //     fp1                = f(i, j, s + 1, jv);
+            //     fm1                = f(i, j, s - 1, jv);
+            // } else if (axis == 3) {
+            //     advection_velocity = E(i, j, 1) * dt / dvy;
+            //     floor_v            = (int)Kokkos::floor(advection_velocity);
+            //     s                  = jv - floor_v;
+            //     f0                 = f(i, j, iv, s);
+            //     fp1                = f(i, j, iv, s + 1);
+            //     fm1                = f(i, j, iv, s - 1);
+            // }
+            // double nu = 0.0;
+            // if (advection_velocity >= 0.0) {
+            //     nu = advection_velocity - floor_v;
+            // } else {
+            //     // upwind
+            //     nu = advection_velocity - (floor_v + 1);
+            // }
+            // double d_r = flux_r(i, j, iv, jv) - nu * f0;
+            // double d_l = flux_l(i, j, iv, jv) - nu * fm1;
+            // double p = d_l - d_r - delta;
 
-            // udpate distribution function
-            f(i, j, iv, jv) += flux_hat_l - flux_hat_r;
+            f(i, j, iv, jv) += flux_l(i, j, iv, jv) - flux_r(i, j, iv, jv);
 
-            if (f(i, j, iv, jv) < 0.0) {
-                // Kokkos::printf("Negative f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
-                f(i, j, iv, jv) = 0.0;
-            }
+            if (f(i, j, iv, jv) < 0.0)
+                f(i, j, iv, jv) = 0.0; // enforce positivity
         });
 }
 

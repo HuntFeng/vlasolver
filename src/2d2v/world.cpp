@@ -9,6 +9,10 @@ World::World(Grid& grid)
     flux                    = Kokkos::View<double****>("flux", nx, ny, nvx, nvy);
     flux_l                  = Kokkos::View<double****>("flux_l", nx, ny, nvx, nvy);
     flux_r                  = Kokkos::View<double****>("flux_r", nx, ny, nvx, nvy);
+    flux_1st_l              = Kokkos::View<double****>("flux_1st_l", nx, ny, nvx, nvy);
+    flux_1st_r              = Kokkos::View<double****>("flux_1st_r", nx, ny, nvx, nvy);
+    ep_l                    = Kokkos::View<double****>("ep_l", nx, ny, nvx, nvy);
+    ep_r                    = Kokkos::View<double****>("ep_r", nx, ny, nvx, nvy);
     n                       = Kokkos::View<double**>("n", nx, ny);
     rho                     = Kokkos::View<double**>("rho", nx, ny);
     phi                     = Kokkos::View<double**>("phi", nx, ny);
@@ -20,6 +24,10 @@ World::World(Grid& grid)
     Kokkos::deep_copy(flux, 0.0);
     Kokkos::deep_copy(flux_l, 0.0);
     Kokkos::deep_copy(flux_r, 0.0);
+    Kokkos::deep_copy(flux_1st_l, 0.0);
+    Kokkos::deep_copy(flux_1st_r, 0.0);
+    Kokkos::deep_copy(ep_l, 0.0);
+    Kokkos::deep_copy(ep_r, 0.0);
     Kokkos::deep_copy(rho, 0.0);
     Kokkos::deep_copy(phi, 0.0);
     Kokkos::deep_copy(E, 0.0);

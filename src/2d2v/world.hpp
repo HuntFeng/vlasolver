@@ -1,5 +1,6 @@
 #pragma once
 #include "grid.hpp"
+#include <KokkosCore_Config_SetupBackend.hpp>
 #include <Kokkos_Core.hpp>
 
 /**
@@ -7,17 +8,21 @@
  */
 struct World {
     Grid& grid;
-    Kokkos::View<double****> f;      // distribution function f(x,y,vx,vy) of ion
-    Kokkos::View<double****> flux;   // storing fluxes to update distribution function
-    Kokkos::View<double****> flux_l; // storing fluxes to update distribution function
-    Kokkos::View<double****> flux_r; // storing fluxes to update distribution function
-    Kokkos::View<double**> n;        // number density of ion
-    Kokkos::View<double**> rho;      // ion charge density
-    Kokkos::View<double**> phi;      // potential field (assuming Boltzmann distribution for electron)
-    Kokkos::View<double***> E;       // Ex(x,y), E_y(x,y)
-    Kokkos::View<double**> eps;      // permittivity field
-    Kokkos::View<double**> a;        // jump condition for poisson
-    Kokkos::View<double**> b;        // jump condition for poisson
+    Kokkos::View<double****> f;          // distribution function f(x,y,vx,vy) of ion
+    Kokkos::View<double****> flux;       // storing fluxes to update distribution function
+    Kokkos::View<double****> flux_l;     // storing fluxes to update distribution function
+    Kokkos::View<double****> flux_r;     // storing fluxes to update distribution function
+    Kokkos::View<double****> flux_1st_l; // storing first order fluxes to update distribution function
+    Kokkos::View<double****> flux_1st_r; // storing first order fluxes to update distribution function
+    Kokkos::View<double****> ep_l;       // storing first order fluxes to update distribution function
+    Kokkos::View<double****> ep_r;       // storing first order fluxes to update distribution function
+    Kokkos::View<double**> n;            // number density of ion
+    Kokkos::View<double**> rho;          // ion charge density
+    Kokkos::View<double**> phi;          // potential field (assuming Boltzmann distribution for electron)
+    Kokkos::View<double***> E;           // Ex(x,y), E_y(x,y)
+    Kokkos::View<double**> eps;          // permittivity field
+    Kokkos::View<double**> a;            // jump condition for poisson
+    Kokkos::View<double**> b;            // jump condition for poisson
 
     // simulation time control
     double dt           = 0.0; // time step size
@@ -27,7 +32,6 @@ struct World {
     size_t current_step = 0;   // current step in the simulation
 
     World(Grid& grid);
-
     /**
      * Expression of the immersed boundary.
      * S(x) = 0 is the surface of the immersed boundary.
@@ -44,6 +48,7 @@ struct World {
         // debug use, a square immersed object near left boundary
         // return Kokkos::max(Kokkos::abs(x - 0.15) - 0.04, Kokkos::abs(y - 0.1) - 0.1);
         // return x + 1;
+        // return 0.0;
     }
 
     /**
@@ -58,20 +63,10 @@ struct World {
      */
     KOKKOS_INLINE_FUNCTION
     Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
-        using Kokkos::abs;
+        // using Kokkos::abs;
         using Kokkos::pow;
         using Kokkos::sqrt;
-        double eta           = surface(x, y);
-        double eta_l         = surface(x - dx, y);
-        double eta_r         = surface(x + dx, y);
-        double eta_b         = surface(x, y - dy);
-        double eta_t         = surface(x, y + dy);
-        double eta_grad_x    = (eta_r - eta_l) / (2 * dx);
-        double eta_grad_y    = (eta_t - eta_b) / (2 * dy);
-        double eta_grad_norm = sqrt(pow(eta_grad_x, 2) + pow(eta_grad_y, 2));
-        // to avoid confusion, recommand to use n1 and n2 normal vector instead of nx and ny
-        double n1 = eta_grad_x / eta_grad_norm;
-        double n2 = eta_grad_y / eta_grad_norm;
-        return {n1, n2};
+        double norm = sqrt(pow(x - 0.375, 2) + pow(y, 2));
+        return {(x - 0.375) / norm, y / norm};
     }
 };

@@ -6,6 +6,21 @@
 #include <INIReader.h>
 #include <string>
 
+struct ImmersedWorld : World<ImmersedWorld> {
+    ImmersedWorld(Grid& grid)
+        : World<ImmersedWorld>(grid) {}
+
+    KOKKOS_INLINE_FUNCTION
+    double surface(double x, double y) const {
+        return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+    }
+
+    KOKKOS_INLINE_FUNCTION Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
+        double norm = Kokkos::sqrt(Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2));
+        return {(x - 0.375) / norm, y / norm};
+    }
+};
+
 int main(int argc, char* argv[]) {
     Kokkos::ScopeGuard guard(argc, argv);
 
@@ -27,10 +42,10 @@ int main(int argc, char* argv[]) {
     double Ly                 = reader.GetReal("grid", "Ly", 1.0);
     double Lvx                = reader.GetReal("grid", "Lvx", 1.0);
     double Lvy                = reader.GetReal("grid", "Lvy", 1.0);
-    int nx                    = reader.GetInteger("grid", "nx", 128);
-    int ny                    = reader.GetInteger("grid", "ny", 128);
-    int nvx                   = reader.GetInteger("grid", "nvx", 128);
-    int nvy                   = reader.GetInteger("grid", "nvy", 128);
+    int nx_intr               = reader.GetInteger("grid", "nx", 128);
+    int ny_intr               = reader.GetInteger("grid", "ny", 128);
+    int nvx_intr              = reader.GetInteger("grid", "nvx", 128);
+    int nvy_intr              = reader.GetInteger("grid", "nvy", 128);
     int ngc                   = reader.GetInteger("grid", "ngc", 3);
     double dt                 = reader.GetReal("world", "dt", 1e-3);
     double total_time         = reader.GetReal("world", "total_time", 1.0);
@@ -42,26 +57,25 @@ int main(int argc, char* argv[]) {
     Kokkos::printf("Input parameters:\n");
     Kokkos::printf("Phase space (x,y,vx,vy): [%f, %f, %f, %f]x[%f, %f, %f, %f]\n", x_min, y_min, vx_min, vy_min,
                    x_min + Lx, y_min + Ly, vx_min + Lvx, vy_min + Lvy);
-    Kokkos::printf("Grid size (nx,ny,nvx,nvy): [%d, %d, %d, %d]\n", nx, ny, nvx, nvy);
+    Kokkos::printf("Grid size, interior (nx,ny,nvx,nvy): [%d, %d, %d, %d]\n", nx_intr, ny_intr, nvx_intr, nvy_intr);
     Kokkos::printf("Simulation control: dt: %f, total_time: %f, total_steps: %d, diag_steps: %d\n", dt, total_time,
                    total_steps, diag_steps);
 
-    Kokkos::Array<double, DIM> origin       = {x_min, y_min, vx_min, vy_min}; // origin of the grid
-    Kokkos::Array<double, DIM> size         = {Lx, Ly, Lvx, Lvy};             // size of the grid
-    Kokkos::Array<int, DIM> ncells_interior = {nx - 2 * ngc, ny - 2 * ngc, nvx - 2 * ngc,
-                                               nvy - 2 * ngc}; // number of cells in the grid (excluding ghost cells)
+    Kokkos::Array<double, DIM> origin   = {x_min, y_min, vx_min, vy_min};         // origin of the grid
+    Kokkos::Array<double, DIM> size     = {Lx, Ly, Lvx, Lvy};                     // size of the grid
+    Kokkos::Array<int, DIM> ncells_intr = {nx_intr, ny_intr, nvx_intr, nvy_intr}; // number of interior cells
 
-    Grid grid(origin, size, ncells_interior, ngc);
-    World world(grid);
+    Grid grid(origin, size, ncells_intr, ngc);
+    ImmersedWorld world(grid);
 
     world.dt          = dt;          // time step size
     world.total_time  = total_time;  // total simulation time
     world.total_steps = total_steps; // number of total_steps
     world.diag_steps  = diag_steps;  // number of steps between diagnostics
 
-    PoissonSolver poisson_solver(world);
+    PoissonSolver poisson_solver(world, 1e-6, 1e6);
     // poisson_solver.enable_debug();
-    Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
+    Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex", "Ey"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 
     Kokkos::Timer timer;

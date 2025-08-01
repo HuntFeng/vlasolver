@@ -3,7 +3,8 @@ project(Vlasolver)
 find_package(Kokkos REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(HighFive REQUIRED)
-add_executable(vlasolver_2d2v grid.cpp world.cpp writer.cpp poisson.cpp
-                              vlasov.cpp main.cpp)
+# add_executable(vlasolver_2d2v grid.cpp world.cpp writer.cpp poisson.cpp
+# vlasov.cpp main.cpp)
+add_executable(vlasolver_2d2v main.cpp)
 target_include_directories(vlasolver_2d2v PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(vlasolver_2d2v Kokkos::kokkos HighFive INIReader)

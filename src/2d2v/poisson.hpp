@@ -1,21 +1,21 @@
 #pragma once
 #include <Kokkos_Core.hpp>
 
-/**
- * Normalized electron charge density, f(phi) = -exp(phi).
- *
- * @param phi: Potential field value.
- */
-KOKKOS_INLINE_FUNCTION
-double f(double u) {
-    double u0       = 0.3;                                          // reference potential value, eV
-    double Te       = 1.5;                                          // electron temperature, eV
-    double Ld       = 0.288;                                        // Debye length, m
-    double Lx       = 0.4;                                          // domain length, m
-    double lambda_D = Ld / Lx;                                      // normalized Debye length
-    return -Kokkos::exp((u - u0) / Te) / (2 * lambda_D * lambda_D); // normalized electron charge density
-    // return 0;
-};
+// /**
+//  * Normalized electron charge density, f(phi) = -exp(phi).
+//  *
+//  * @param phi: Potential field value.
+//  */
+// KOKKOS_INLINE_FUNCTION
+// double f(double u) {
+//     double u0       = 0.3;                                          // reference potential value, eV
+//     double Te       = 1.5;                                          // electron temperature, eV
+//     double Ld       = 0.288;                                        // Debye length, m
+//     double Lx       = 0.4;                                          // domain length, m
+//     double lambda_D = Ld / Lx;                                      // normalized Debye length
+//     return -Kokkos::exp((u - u0) / Te) / (2 * lambda_D * lambda_D); // normalized electron charge density
+//     // return 0;
+// };
 
 /**
  * PoissonSolver class implements the red-black Gauss-Seidel method to solve Poisson's equation
@@ -188,7 +188,8 @@ class PoissonSolver {
                 double Fy = F_b + F_t;
 
                 // relaxation update
-                u(i, j) = (1 - omega) * u(i, j) + omega * (average - g(i, j) + f(u(i, j)) - Fx - Fy) / denom;
+                u(i, j) = (1 - omega) * u(i, j) + omega * (average - g(i, j) - Fx - Fy) / denom;
+                // u(i, j) = (1 - omega) * u(i, j) + omega * (average - g(i, j) + f(u(i, j)) - Fx - Fy) / denom;
             });
     }
 

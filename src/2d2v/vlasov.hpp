@@ -240,7 +240,7 @@ class Vlasolver {
                 // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
                 int Ng                    = 0;
                 double extrapolated_value = 0.0;
-                if (eta * eta_l <= 0.0) {
+                if (eta * eta_l < 0.0) {
                     double v_dot_n = vx * n1 + vy * n2;
                     double f_F1    = f(i - 1, j, iv, jv);
                     double f_F2    = f(i - 2, j, iv, jv);
@@ -248,7 +248,7 @@ class Vlasolver {
                     extrapolated_value += 2 * f_I - f_F1;
                     Ng++;
                 }
-                if (eta * eta_r <= 0.0) {
+                if (eta * eta_r < 0.0) {
                     double v_dot_n = vx * n1 + vy * n2;
                     double f_F1    = f(i + 1, j, iv, jv);
                     double f_F2    = f(i + 2, j, iv, jv);
@@ -256,7 +256,7 @@ class Vlasolver {
                     extrapolated_value += 2 * f_I - f_F1;
                     Ng++;
                 }
-                if (eta * eta_b <= 0.0) {
+                if (eta * eta_b < 0.0) {
                     double v_dot_n = vx * n1 + vy * n2;
                     double f_F1    = f(i, j - 1, iv, jv);
                     double f_F2    = f(i, j - 2, iv, jv);
@@ -264,7 +264,7 @@ class Vlasolver {
                     extrapolated_value += 2 * f_I - f_F1;
                     Ng++;
                 }
-                if (eta * eta_t <= 0.0) {
+                if (eta * eta_t < 0.0) {
                     double v_dot_n = vx * n1 + vy * n2;
                     double f_F1    = f(i, j + 1, iv, jv);
                     double f_F2    = f(i, j + 2, iv, jv);
@@ -274,12 +274,14 @@ class Vlasolver {
                 }
 
                 if (Ng > 0)
-                    // set lower bound to 0 to preserve positivity
-                    // then divide by Ng to get the average value
-                    f(i, j, iv, jv) = Kokkos::max(extrapolated_value, 0.0) / Ng;
+                    f(i, j, iv, jv) = extrapolated_value / Ng;
+                // set lower bound to 0 to preserve positivity
+                // then divide by Ng to get the average value
+                // f(i, j, iv, jv) = Kokkos::max(extrapolated_value, 0.0) / Ng;
             });
     }
     void compute_charge_density() const {
+        auto& phi               = world.phi;
         auto& rho               = world.rho;
         auto& f                 = world.f;
         auto& n                 = world.n;
@@ -300,8 +302,10 @@ class Vlasolver {
                 for (int iv = ngc; iv < nvx - ngc; ++iv)
                     for (int jv = ngc; jv < nvy - ngc; ++jv)
                         number_density += f(i, j, iv, jv) * dvx * dvy;
-                n(i, j)   = number_density;
-                rho(i, j) = number_density; // only count ions, electrons follow Boltzmann distribution
+                n(i, j) = number_density;
+                // rho(i, j) = number_density; // only count ions, electrons follow Boltzmann distribution
+                // rho(i, j) = number_density - Kokkos::exp((phi(i, j) - 0.3) / 1.5);
+                rho(i, j) = number_density - Kokkos::exp(phi(i, j));
             });
     }
     void compute_poisson_jump_conditions() const {

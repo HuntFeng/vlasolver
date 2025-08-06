@@ -202,7 +202,8 @@ class Vlasolver {
                 auto [dx, dy, dvx, dvy]               = grid.spacing;
                 auto [x, y, vx, vy]                   = grid.center({i, j, iv, jv});
                 if (i < ngc) {
-                    f(i, j, iv, jv) = (vx > 0.0) ? exp(-pow((vx - 5), 2)) / 30 : 0.0; // left boundary, injection
+                    f(i, j, iv, jv) =
+                        (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
                 } else if (i >= nx - ngc) {
                     if (vx < 0.0)
                         f(i, j, iv, jv) = 0.0; // right boundary, zero-inflow
@@ -321,11 +322,8 @@ class Vlasolver {
                 a(i, j)             = 0.0;
                 b(i, j)             = 0.0;
                 auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
-                if (world.surface(x, y) < 0.0) {
-                    eps(i, j) = 1000.0;
-                } else {
-                    eps(i, j) = 1.0;
-                }
+                // the immersed cylinder is a conductor, set a high permittivity
+                eps(i, j) = (world.surface(x, y) < 0.0) ? 1000.0 : 1.0;
             });
     }
     void compute_electric_field() const {
@@ -560,8 +558,8 @@ class Vlasolver {
                     }
                 }
             });
-        auto flux_1st_l_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), flux_1st_l);
-        auto flux_1st_r_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), flux_1st_r);
+        // auto flux_1st_l_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), flux_1st_l);
+        // auto flux_1st_r_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), flux_1st_r);
         // Kokkos::printf("j=18, iv=31, jv=7\n");
         // Kokkos::printf("\nleft\n");
         // for (int i = 0; i <= 4; ++i) {
@@ -654,6 +652,7 @@ class Vlasolver {
                 // }
                 // udpate distribution function
                 f(i, j, iv, jv) += flux_hat_l - flux_hat_r;
+                // f(i, j, iv, jv) += flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
 
                 // if (f(i, j, iv, jv) < 0.0 && f(i, j, iv, jv) > -1e-16) {
                 //     f(i, j, iv, jv) = 0.0;
@@ -667,38 +666,33 @@ class Vlasolver {
     }
     void advance(double dt) {
         Kokkos::printf("start pfc update along space by dt/2------------------------------------------\n");
-        // pfc_update_along_space(dt / 2.0);
-        pfc_update(dt / 2.0, 0);
+        // pfc_update(dt / 2.0, 0);
+        // pfc_update(dt / 2.0, 1);
+        pfc_update(dt / 4.0, 0);
         pfc_update(dt / 2.0, 1);
-        Kokkos::fence();
+        pfc_update(dt / 4.0, 0);
+        // solve electric field
         apply_particle_boundary_conditions();
-        Kokkos::fence();
         extrapolate_distribution_function();
-        Kokkos::fence();
         compute_charge_density();
-        Kokkos::fence();
         compute_poisson_jump_conditions();
-        Kokkos::fence();
         poisson_solver.solve();
-        Kokkos::fence();
         compute_electric_field();
-        Kokkos::fence();
         Kokkos::printf("start pfc update along velocity by dt------------------------------------------\n");
-        // pfc_update_along_velocity(dt);
-        pfc_update(dt, 2);
+        // pfc_update(dt, 2);
+        // pfc_update(dt, 3);
+        pfc_update(dt / 2.0, 2);
         pfc_update(dt, 3);
-        Kokkos::fence();
+        pfc_update(dt / 2.0, 2);
         apply_particle_boundary_conditions();
-        Kokkos::fence();
         extrapolate_distribution_function();
-        Kokkos::fence();
         Kokkos::printf("start pfc update along space by dt/2------------------------------------------\n");
-        // pfc_update_along_space(dt / 2.0);
-        pfc_update(dt / 2.0, 0);
+        // pfc_update(dt / 2.0, 0);
+        // pfc_update(dt / 2.0, 1);
+        pfc_update(dt / 4.0, 0);
         pfc_update(dt / 2.0, 1);
-        Kokkos::fence();
+        pfc_update(dt / 4.0, 0);
         apply_particle_boundary_conditions();
-        Kokkos::fence();
         extrapolate_distribution_function();
     }
 

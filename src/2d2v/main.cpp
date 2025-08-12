@@ -13,11 +13,14 @@ struct ImmersedWorld : World<ImmersedWorld> {
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
         return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+        // return Kokkos::pow((x - 0.375) / 0.08, 2) + Kokkos::pow(y / 0.125, 2) - 1;
     }
 
     KOKKOS_INLINE_FUNCTION Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
         double norm = Kokkos::sqrt(Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2));
         return {(x - 0.375) / norm, y / norm};
+        // double norm = Kokkos::sqrt(Kokkos::pow((x - 0.375) / 0.08 * 0.08, 2) + Kokkos::pow(y / 0.125 * 0.125, 2));
+        // return {(x - 0.375) / 0.08 * 0.08 / norm, y / 0.125 * 0.125 / norm};
     }
 };
 
@@ -75,7 +78,7 @@ int main(int argc, char* argv[]) {
 
     PoissonSolver poisson_solver(world, 1e-6, 1e6);
     // poisson_solver.enable_debug();
-    Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex", "Ey"});
+    Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 
     Kokkos::Timer timer;

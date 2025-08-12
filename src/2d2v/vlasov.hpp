@@ -431,8 +431,8 @@ class Vlasolver {
             Kokkos::MDRangePolicy({ngc - 1, ngc - 1, ngc - 1, ngc - 1}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-                if (world.surface(x, y) < 0.0)
-                    return; // skip interior of immersed object
+                // if (world.surface(x, y) < 0.0)
+                //     return; // skip interior of immersed object
 
                 double f0 = 0.0, fp1 = 0.0, fm1 = 0.0;
                 double advection_velocity = 0;
@@ -573,9 +573,9 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-                if (world.surface(x, y) < 0.0)
-                    return; // skip interior of immersed object
+                // auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                // if (world.surface(x, y) < 0.0)
+                return; // skip interior of immersed object
                 double d_r = flux_r(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
                 double d_l = flux_l(i, j, iv, jv) - flux_1st_l(i, j, iv, jv);
                 // double delta = -f(i, j, iv, jv) + flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
@@ -619,9 +619,9 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-                if (world.surface(x, y) < 0.0)
-                    return; // skip interior of immersed object
+                // auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                // if (world.surface(x, y) < 0.0)
+                //     return; // skip interior of immersed object
 
                 // modified flux
                 double ep_left = 0.0, ep_right = 0.0;

@@ -1,22 +1,6 @@
 #pragma once
 #include <Kokkos_Core.hpp>
 
-// /**
-//  * Normalized electron charge density, f(phi) = -exp(phi).
-//  *
-//  * @param phi: Potential field value.
-//  */
-// KOKKOS_INLINE_FUNCTION
-// double f(double u) {
-//     double u0       = 0.3;                                          // reference potential value, eV
-//     double Te       = 1.5;                                          // electron temperature, eV
-//     double Ld       = 0.288;                                        // Debye length, m
-//     double Lx       = 0.4;                                          // domain length, m
-//     double lambda_D = Ld / Lx;                                      // normalized Debye length
-//     return -Kokkos::exp((u - u0) / Te) / (2 * lambda_D * lambda_D); // normalized electron charge density
-//     // return 0;
-// };
-
 /**
  * PoissonSolver class implements the red-black Gauss-Seidel method to solve Poisson's equation
  *
@@ -226,7 +210,8 @@ class PoissonSolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {rho.extent(0), rho.extent(1)}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j) / (2 * lambda_D * lambda_D); });
-        apply_boundary(world.phi);
+        // apply_boundary(world.phi);
+        world.potential_boundary_conditions();
         for (int iter = 0; iter < max_iter; ++iter) {
             Kokkos::deep_copy(phi_old, world.phi);
             // v_cycle(world.phi, g, world.eps, world.a, world.b, 0);
@@ -279,53 +264,54 @@ class PoissonSolver {
         for (int iter = 0; iter < iters; ++iter) {
             red_black_update(u, g, eps, a, b, 0); // red update
             red_black_update(u, g, eps, a, b, 1); // black update
-            apply_boundary(u);                    // apply boundary conditions after each iteration
+            // apply_boundary(u);                    // apply boundary conditions after each iteration
+            world.potential_boundary_conditions();
         }
     }
 
-    /**
-     * Apply boundary conditions to the potential field.
-     *
-     * @param u: Potential field.
-     * @return: None, modifies u in place.
-     */
-    void apply_boundary(Kokkos::View<double**>& u) {
-        using Kokkos::abs;
-        auto& grid   = world.grid;
-        int ngc      = grid.ngc;
-        int nx       = u.extent(0);
-        int ny       = u.extent(1);
-        double dx    = grid.size[0] / (nx - 2 * ngc);
-        double dy    = grid.size[1] / (ny - 2 * ngc);
-        double phi_w = -66.67; // normalized potential at the wall of the charged cylinder
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                double x   = (i - ngc + 0.5) * dx;
-                double y   = (j - ngc + 0.5) * dy;
-                double eta = world.surface(x, y);
-                if (eta < 0.0) {
-                    u(i, j) = phi_w; // inside the immersed object, set potential to a constant value
-                }
-            });
-
-        for (int k = 0; k < ngc; ++k) {
-            // left boundary, dirichlet
-            Kokkos::deep_copy(Kokkos::subview(u, k, Kokkos::ALL), 0.0);
-            // right boundary, neumann
-            // Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL),
-            //                   Kokkos::subview(u, nx - ngc - 2, Kokkos::ALL));
-            Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL),
-                              Kokkos::subview(u, nx - 2 * ngc + k, Kokkos::ALL));
-            // bottom boundary, neumann
-            // Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, ngc + 1));
-            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, 2 * ngc - k - 1));
-            // top boundary, neumann
-            // Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1),
-            //                   Kokkos::subview(u, Kokkos::ALL, ny - ngc - 2));
-            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1),
-                              Kokkos::subview(u, Kokkos::ALL, ny - 2 * ngc + k));
-        }
-    }
+    // /**
+    //  * Apply boundary conditions to the potential field.
+    //  *
+    //  * @param u: Potential field.
+    //  * @return: None, modifies u in place.
+    //  */
+    // void apply_boundary(Kokkos::View<double**>& u) {
+    //     using Kokkos::abs;
+    //     auto& grid   = world.grid;
+    //     int ngc      = grid.ngc;
+    //     int nx       = u.extent(0);
+    //     int ny       = u.extent(1);
+    //     double dx    = grid.size[0] / (nx - 2 * ngc);
+    //     double dy    = grid.size[1] / (ny - 2 * ngc);
+    //     double phi_w = -66.67; // normalized potential at the wall of the charged cylinder
+    //     Kokkos::parallel_for(
+    //         Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+    //             double x   = (i - ngc + 0.5) * dx;
+    //             double y   = (j - ngc + 0.5) * dy;
+    //             double eta = world.surface(x, y);
+    //             if (eta < 0.0) {
+    //                 u(i, j) = phi_w; // inside the immersed object, set potential to a constant value
+    //             }
+    //         });
+    //
+    //     for (int k = 0; k < ngc; ++k) {
+    //         // left boundary, dirichlet
+    //         Kokkos::deep_copy(Kokkos::subview(u, k, Kokkos::ALL), 0.0);
+    //         // right boundary, neumann
+    //         // Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL),
+    //         //                   Kokkos::subview(u, nx - ngc - 2, Kokkos::ALL));
+    //         Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL),
+    //                           Kokkos::subview(u, nx - 2 * ngc + k, Kokkos::ALL));
+    //         // bottom boundary, neumann
+    //         // Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, ngc + 1));
+    //         Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, 2 * ngc - k - 1));
+    //         // top boundary, neumann
+    //         // Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1),
+    //         //                   Kokkos::subview(u, Kokkos::ALL, ny - ngc - 2));
+    //         Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1),
+    //                           Kokkos::subview(u, Kokkos::ALL, ny - 2 * ngc + k));
+    //     }
+    // }
 
     /**
      * Construct permittivity field

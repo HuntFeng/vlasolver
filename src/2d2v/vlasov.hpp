@@ -29,7 +29,6 @@ class Vlasolver {
   public:
     bool debug = false;
 
-    // Vlasolver(World& world, PoissonSolver<World>& poisson_solver, Writer<World>& writer);
     Vlasolver(World& world, PoissonSolver<World>& poisson_solver, Writer<World>& writer)
         : world(world),
           poisson_solver(poisson_solver),
@@ -187,33 +186,34 @@ class Vlasolver {
             });
     }
 
-    void apply_particle_boundary_conditions() const {
-        using Kokkos::exp;
-        using Kokkos::pow;
-        auto& grid              = world.grid;
-        auto& f                 = world.f;
-        auto [nx, ny, nvx, nvy] = grid.ncells;
-        int ngc                 = grid.ngc;
+    // void apply_particle_boundary_conditions() const {
+    //     using Kokkos::exp;
+    //     using Kokkos::pow;
+    //     auto& f                 = world.f;
+    //     auto& grid              = world.grid;
+    //     auto [nx, ny, nvx, nvy] = grid.ncells;
+    //     int ngc                 = grid.ngc;
+    //
+    //     Kokkos::parallel_for(
+    //         Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
+    //         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+    //             auto [vx_min, vy_min, vx_max, vy_max] = grid.velocity_ranges;
+    //             auto [dx, dy, dvx, dvy]               = grid.spacing;
+    //             auto [x, y, vx, vy]                   = grid.center({i, j, iv, jv});
+    //             if (i < ngc) {
+    //                 f(i, j, iv, jv) =
+    //                     (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
+    //             } else if (i >= nx - ngc) {
+    //                 if (vx < 0.0)
+    //                     f(i, j, iv, jv) = 0.0; // right boundary, zero-inflow
+    //             } else if (j < ngc) {
+    //                 f(i, j, iv, jv) = f(i, 2 * ngc - j - 1, iv, nvy - jv - 1); // bottom boundary, reflective
+    //             } else if (j >= ny - ngc) {
+    //                 f(i, j, iv, jv) = f(i, 2 * (ny - ngc) - j - 1, iv, nvy - jv - 1); // top boundary, reflective
+    //             }
+    //         });
+    // }
 
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [vx_min, vy_min, vx_max, vy_max] = grid.velocity_ranges;
-                auto [dx, dy, dvx, dvy]               = grid.spacing;
-                auto [x, y, vx, vy]                   = grid.center({i, j, iv, jv});
-                if (i < ngc) {
-                    f(i, j, iv, jv) =
-                        (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
-                } else if (i >= nx - ngc) {
-                    if (vx < 0.0)
-                        f(i, j, iv, jv) = 0.0; // right boundary, zero-inflow
-                } else if (j < ngc) {
-                    f(i, j, iv, jv) = f(i, 2 * ngc - j - 1, iv, nvy - jv - 1); // bottom boundary, reflective
-                } else if (j >= ny - ngc) {
-                    f(i, j, iv, jv) = f(i, 2 * (ny - ngc) - j - 1, iv, nvy - jv - 1); // top boundary, reflective
-                }
-            });
-    }
     void extrapolate_distribution_function() const {
         auto& grid              = world.grid;
         auto& f                 = world.f;
@@ -276,9 +276,6 @@ class Vlasolver {
 
                 if (Ng > 0)
                     f(i, j, iv, jv) = extrapolated_value / Ng;
-                // set lower bound to 0 to preserve positivity
-                // then divide by Ng to get the average value
-                // f(i, j, iv, jv) = Kokkos::max(extrapolated_value, 0.0) / Ng;
             });
     }
     void compute_charge_density() const {
@@ -309,23 +306,25 @@ class Vlasolver {
                 rho(i, j) = number_density - Kokkos::exp(phi(i, j));
             });
     }
-    void compute_poisson_jump_conditions() const {
-        auto& grid = world.grid;
-        auto& a    = world.a;
-        auto& b    = world.b;
-        auto& eps  = world.eps;
-        int nx     = world.grid.ncells[0];
-        int ny     = world.grid.ncells[1];
 
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                a(i, j)             = 0.0;
-                b(i, j)             = 0.0;
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
-                // the immersed cylinder is a conductor, set a high permittivity
-                eps(i, j) = (world.surface(x, y) < 0.0) ? 1000.0 : 1.0;
-            });
-    }
+    // void compute_poisson_jump_conditions() const {
+    //     auto& grid = world.grid;
+    //     auto& a    = world.a;
+    //     auto& b    = world.b;
+    //     auto& eps  = world.eps;
+    //     int nx     = world.grid.ncells[0];
+    //     int ny     = world.grid.ncells[1];
+    //
+    //     Kokkos::parallel_for(
+    //         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+    //             a(i, j)             = 0.0;
+    //             b(i, j)             = 0.0;
+    //             auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+    //             // the immersed cylinder is a conductor, set a high permittivity
+    //             eps(i, j) = (world.surface(x, y) < 0.0) ? 1000.0 : 1.0;
+    //         });
+    // }
+
     void compute_electric_field() const {
         auto& b    = world.b;
         auto& E    = world.E;
@@ -672,10 +671,12 @@ class Vlasolver {
         pfc_update(dt / 2.0, 1);
         pfc_update(dt / 4.0, 0);
         // solve electric field
-        apply_particle_boundary_conditions();
+        // apply_particle_boundary_conditions();
+        world.particle_boundary_conditions();
         extrapolate_distribution_function();
         compute_charge_density();
-        compute_poisson_jump_conditions();
+        // compute_poisson_jump_conditions();
+        world.poisson_jump_conditions();
         poisson_solver.solve();
         compute_electric_field();
         Kokkos::printf("start pfc update along velocity by dt------------------------------------------\n");
@@ -684,7 +685,7 @@ class Vlasolver {
         pfc_update(dt / 2.0, 2);
         pfc_update(dt, 3);
         pfc_update(dt / 2.0, 2);
-        apply_particle_boundary_conditions();
+        world.particle_boundary_conditions();
         extrapolate_distribution_function();
         Kokkos::printf("start pfc update along space by dt/2------------------------------------------\n");
         // pfc_update(dt / 2.0, 0);
@@ -692,17 +693,18 @@ class Vlasolver {
         pfc_update(dt / 4.0, 0);
         pfc_update(dt / 2.0, 1);
         pfc_update(dt / 4.0, 0);
-        apply_particle_boundary_conditions();
+        world.particle_boundary_conditions();
         extrapolate_distribution_function();
     }
 
     void solve() {
         Kokkos::printf("Step %zu:\n", 0);
         initialize_distribution();
-        apply_particle_boundary_conditions();
+        world.particle_boundary_conditions();
         extrapolate_distribution_function();
         compute_charge_density();
-        compute_poisson_jump_conditions();
+        // compute_poisson_jump_conditions();
+        world.poisson_jump_conditions();
         poisson_solver.solve();
         compute_electric_field();
         writer.write(0);

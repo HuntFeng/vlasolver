@@ -4,6 +4,8 @@
 #include "world.hpp"
 #include "writer.hpp"
 #include <INIReader.h>
+#include <KokkosCore_Config_SetupBackend.hpp>
+#include <Kokkos_Core.hpp>
 #include <string>
 
 struct ImmersedWorld : World<ImmersedWorld> {
@@ -13,14 +15,79 @@ struct ImmersedWorld : World<ImmersedWorld> {
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
         return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
-        // return Kokkos::pow((x - 0.375) / 0.08, 2) + Kokkos::pow(y / 0.125, 2) - 1;
     }
 
     KOKKOS_INLINE_FUNCTION Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
         double norm = Kokkos::sqrt(Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2));
         return {(x - 0.375) / norm, y / norm};
-        // double norm = Kokkos::sqrt(Kokkos::pow((x - 0.375) / 0.08 * 0.08, 2) + Kokkos::pow(y / 0.125 * 0.125, 2));
-        // return {(x - 0.375) / 0.08 * 0.08 / norm, y / 0.125 * 0.125 / norm};
+    }
+
+    void particle_boundary_conditions() {
+        auto& grid              = this->grid;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        int ngc                 = grid.ngc;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                if (i < ngc) {
+                    f(i, j, iv, jv) =
+                        (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
+                } else if (i >= nx - ngc) {
+                    if (vx < 0.0)
+                        f(i, j, iv, jv) = 0.0; // right boundary, zero-inflow
+                } else if (j < ngc) {
+                    f(i, j, iv, jv) = f(i, 2 * ngc - j - 1, iv, nvy - jv - 1); // bottom boundary, reflective
+                } else if (j >= ny - ngc) {
+                    f(i, j, iv, jv) = f(i, 2 * (ny - ngc) - j - 1, iv, nvy - jv - 1); // top boundary, reflective
+                }
+            });
+    };
+
+    void poisson_jump_conditions() {
+        auto& grid = this->grid;
+        int nx     = grid.ncells[0];
+        int ny     = grid.ncells[1];
+
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                // potential and electric field are continuous
+                a(i, j) = 0.0;
+                b(i, j) = 0.0;
+
+                // the immersed cylinder is a conductor, set a high permittivity
+                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                eps(i, j)           = (surface(x, y) < 0.0) ? 1000.0 : 1.0;
+            });
+    }
+
+    void potential_boundary_conditions() {
+        using Kokkos::abs;
+        auto& grid   = this->grid;
+        int ngc      = grid.ngc;
+        int nx       = grid.ncells[0];
+        int ny       = grid.ncells[1];
+        double phi_w = -66.67; // normalized potential at the wall of the charged cylinder
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                if (surface(x, y) < 0.0) {
+                    phi(i, j) = phi_w; // inside the immersed object, set potential to a constant value
+                }
+            });
+
+        for (int k = 0; k < ngc; ++k) {
+            // left boundary, dirichlet
+            Kokkos::deep_copy(Kokkos::subview(phi, k, Kokkos::ALL), 0.0);
+            // right boundary, neumann
+            Kokkos::deep_copy(Kokkos::subview(phi, nx - k - 1, Kokkos::ALL),
+                              Kokkos::subview(phi, nx - 2 * ngc + k, Kokkos::ALL));
+            // bottom boundary, neumann
+            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, k), Kokkos::subview(phi, Kokkos::ALL, 2 * ngc - k - 1));
+            // top boundary, neumann
+            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, ny - k - 1),
+                              Kokkos::subview(phi, Kokkos::ALL, ny - 2 * ngc + k));
+        }
     }
 };
 

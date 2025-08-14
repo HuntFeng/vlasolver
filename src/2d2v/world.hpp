@@ -80,15 +80,7 @@ struct World {
      * @return The value of the surface function at x.
      */
     KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const {
-        // example 4 plasma sheath from IFE-CSL
-        // return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
-        // debug use, a square immersed object near left boundary
-        // return Kokkos::max(Kokkos::abs(x - 0.15) - 0.04, Kokkos::abs(y - 0.1) - 0.1);
-        // return x + 1;
-        // return 0.0;
-        return static_cast<WorldType*>(this)->surface(x, y);
-    }
+    double surface(double x, double y) const { return static_cast<WorldType*>(this)->surface(x, y); }
 
     /**
      * Unit normal vector at the surface.
@@ -102,11 +94,24 @@ struct World {
      */
     KOKKOS_INLINE_FUNCTION
     Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
-        // using Kokkos::abs;
-        // using Kokkos::pow;
-        // using Kokkos::sqrt;
-        // double norm = sqrt(pow(x - 0.375, 2) + pow(y, 2));
-        // return {(x - 0.375) / norm, y / norm};
         return static_cast<WorldType*>(this)->normal(x, y, dx, dy);
     }
+
+    /**
+     * Boundary conditions for the particle distribution function.
+     * This function will be called by Vlasov solver
+     */
+    void particle_boundary_conditions() { static_cast<WorldType*>(this)->particle_boundary_conditions(); };
+
+    /**
+     * Compute the Poisson jump conditions.
+     * This function will be called before Poisson solver
+     */
+    void poisson_jump_conditions() { static_cast<WorldType*>(this)->poisson_jump_conditions(); };
+
+    /**
+     * Apply boundary conditions to the potential field.
+     * This function will be called by Poisson solver
+     */
+    void potential_boundary_conditions() { static_cast<WorldType*>(this)->potential_boundary_conditions(); };
 };

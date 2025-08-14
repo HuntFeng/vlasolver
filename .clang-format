@@ -8,5 +8,6 @@ PointerAlignment: Left
 BinPackParameters: false
 PackConstructorInitializers: Never
 AlignConsecutiveAssignments: AcrossEmptyLines
+AlwaysBreakTemplateDeclarations: Yes
 ---
 

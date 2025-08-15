@@ -566,35 +566,24 @@ class Vlasolver {
             });
     }
     void advance(double dt) {
-        Kokkos::printf("start pfc update along space by dt/2------------------------------------------\n");
-        // pfc_update(dt / 2.0, 0);
-        // pfc_update(dt / 2.0, 1);
-        pfc_update(dt / 4.0, 0);
+        Kokkos::printf("(VlasovSolver) PFC update along space by dt/2\n");
+        pfc_update(dt / 2.0, 0);
         pfc_update(dt / 2.0, 1);
-        pfc_update(dt / 4.0, 0);
-        // solve electric field
-        // apply_particle_boundary_conditions();
+        Kokkos::printf("(VlasovSolver) Solving electric field\n");
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
         compute_charge_density();
-        // compute_poisson_jump_conditions();
         world.poisson_jump_conditions();
         poisson_solver.solve();
         compute_electric_field();
-        Kokkos::printf("start pfc update along velocity by dt------------------------------------------\n");
-        // pfc_update(dt, 2);
-        // pfc_update(dt, 3);
-        pfc_update(dt / 2.0, 2);
+        Kokkos::printf("(VlasovSolver) PFC update along velocity by dt\n");
+        pfc_update(dt, 2);
         pfc_update(dt, 3);
-        pfc_update(dt / 2.0, 2);
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
-        Kokkos::printf("start pfc update along space by dt/2------------------------------------------\n");
-        // pfc_update(dt / 2.0, 0);
-        // pfc_update(dt / 2.0, 1);
-        pfc_update(dt / 4.0, 0);
+        Kokkos::printf("(VlasovSolver) PFC update along space by dt/2\n");
+        pfc_update(dt / 2.0, 0);
         pfc_update(dt / 2.0, 1);
-        pfc_update(dt / 4.0, 0);
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
     }

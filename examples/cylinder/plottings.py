@@ -1,3 +1,5 @@
+import os
+
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,8 +20,11 @@ plt.rcParams.update(
 nx, ny = 160, 50
 Lx, Ly = 1, 0.5
 G = 3
-step = 300
-with h5py.File(f"data/plasma_past_charged_cylinder/output_{step:03d}.h5", "r") as f:
+step = 0
+with h5py.File(
+    f"{os.path.dirname(os.path.realpath(__file__))}/../../data/plasma_past_charged_cylinder/output_{step:03d}.h5",
+    "r",
+) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
     Ex = f["VTKHDF/CellData/Ex"][:].reshape(nx + 2 * G, ny + 2 * G)
     phi = f["VTKHDF/CellData/phi"][:].reshape(nx + 2 * G, ny + 2 * G)

@@ -1,10 +1,11 @@
-#include "grid.hpp"
-#include "poisson.hpp"
-#include "vlasov.hpp"
-#include "world.hpp"
-#include "writer.hpp"
+#include "vlasolver/grid.hpp"
+#include "vlasolver/poisson.hpp"
+#include "vlasolver/vlasov.hpp"
+#include "vlasolver/world.hpp"
+#include "vlasolver/writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
+#include <iostream>
 #include <string>
 
 struct ImmersedWorld : World<ImmersedWorld> {
@@ -92,36 +93,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
                               Kokkos::subview(u, Kokkos::ALL, ny - 2 * ngc + k));
         }
     }
-
-    // void potential_boundary_conditions() {
-    //     using Kokkos::abs;
-    //     auto& grid   = this->grid;
-    //     int ngc      = grid.ngc;
-    //     int nx       = grid.ncells[0];
-    //     int ny       = grid.ncells[1];
-    //     double phi_w = -66.67; // normalized potential at the wall of the charged cylinder
-    //     Kokkos::parallel_for(
-    //         Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-    //             auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
-    //             if (surface(x, y) < 0.0) {
-    //                 phi(i, j) = phi_w; // inside the immersed object, set potential to a constant value
-    //             }
-    //         });
-    //
-    //     for (int k = 0; k < ngc; ++k) {
-    //         // left boundary, dirichlet
-    //         Kokkos::deep_copy(Kokkos::subview(phi, k, Kokkos::ALL), 0.0);
-    //         // right boundary, neumann
-    //         Kokkos::deep_copy(Kokkos::subview(phi, nx - k - 1, Kokkos::ALL),
-    //                           Kokkos::subview(phi, nx - 2 * ngc + k, Kokkos::ALL));
-    //         // bottom boundary, neumann
-    //         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, k), Kokkos::subview(phi, Kokkos::ALL, 2 * ngc - k -
-    //         1));
-    //         // top boundary, neumann
-    //         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, ny - k - 1),
-    //                           Kokkos::subview(phi, Kokkos::ALL, ny - 2 * ngc + k));
-    //     }
-    // }
 };
 
 int main(int argc, char* argv[]) {

@@ -36,6 +36,9 @@ class PoissonSolver {
         // For mixed boundary conditions, a lower value is needed or it won't converge
         // If using Gauss-Seidel as a smoother for multigrid method, omega needs to be <= 1.0 it does under-relaxation
         omega = 1.9;
+
+        // If using multigrid method, omega should be set to 1.0 or less
+        // omega = 1.0;
     }
 
     /**
@@ -172,8 +175,8 @@ class PoissonSolver {
                 double Fy = F_b + F_t;
 
                 // relaxation update
-                u(i, j) = (1 - omega) * u(i, j) + omega * (average - g(i, j) - Fx - Fy) / denom;
-                // u(i, j) = (1 - omega) * u(i, j) + omega * (average - g(i, j) + f(u(i, j)) - Fx - Fy) / denom;
+                double omega = 1.0;
+                u(i, j)      = (1 - omega) * u(i, j) + omega * (average - g(i, j) - Fx - Fy) / denom;
             });
     }
 
@@ -214,8 +217,8 @@ class PoissonSolver {
         world.potential_boundary_conditions(world.phi);
         for (int iter = 0; iter < max_iter; ++iter) {
             Kokkos::deep_copy(phi_old, world.phi);
-            // v_cycle(world.phi, g, world.eps, world.a, world.b, 0);
-            gauss_seidel(world.phi, g, world.eps, world.a, world.b, 1);
+            v_cycle(world.phi, g, world.eps, world.a, world.b, 0);
+            // gauss_seidel(world.phi, g, world.eps, world.a, world.b, 1);
             double err = compute_error();
             if (iter % 1000 == 0 || iter == max_iter - 1) {
                 Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
@@ -243,10 +246,10 @@ class PoissonSolver {
                  const Kokkos::View<double**>& a,
                  const Kokkos::View<double**>& b,
                  int level) {
-        gauss_seidel(u, g, eps, a, b, 10);
+        gauss_seidel(u, g, eps, a, b, 5);
         if (level == levels - 1) {
             // on coarsest grid, do more smoothing (solving using gauss-seidel)
-            gauss_seidel(u, g, eps, a, b, 30);
+            gauss_seidel(u, g, eps, a, b, 10);
             return;
         }
 
@@ -304,7 +307,7 @@ class PoissonSolver {
         world.potential_boundary_conditions(u);
 
         // post-smoothing
-        gauss_seidel(u, g, eps, a, b, 10);
+        gauss_seidel(u, g, eps, a, b, 5);
     };
 
     /**

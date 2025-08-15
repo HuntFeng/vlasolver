@@ -4,7 +4,6 @@
 #include "world.hpp"
 #include "writer.hpp"
 #include <INIReader.h>
-#include <KokkosCore_Config_SetupBackend.hpp>
 #include <Kokkos_Core.hpp>
 #include <string>
 

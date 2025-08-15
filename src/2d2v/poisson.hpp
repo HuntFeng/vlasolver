@@ -18,7 +18,6 @@ class PoissonSolver {
     Kokkos::View<double**> b;
     int max_iter; // max iterations for the solver
     int levels;   // default multigrid levels
-    bool debug = false;
 
   public:
     // PoissonSolver(World& world, double tol = 1e-6, int max_iter = 1e5, int levels = 4);
@@ -40,11 +39,6 @@ class PoissonSolver {
         // If using multigrid method, omega should be set to 1.0 or less
         // omega = 1.0;
     }
-
-    /**
-     * Enable debug mode for additional output.
-     */
-    void enable_debug() { debug = true; }
 
     /**
      * Update the potential field using the red-black Gauss-Seidel method.
@@ -175,8 +169,7 @@ class PoissonSolver {
                 double Fy = F_b + F_t;
 
                 // relaxation update
-                double omega = 1.0;
-                u(i, j)      = (1 - omega) * u(i, j) + omega * (average - g(i, j) - Fx - Fy) / denom;
+                u(i, j) = (1 - omega) * u(i, j) + omega * (average - g(i, j) - Fx - Fy) / denom;
             });
     }
 
@@ -217,8 +210,8 @@ class PoissonSolver {
         world.potential_boundary_conditions(world.phi);
         for (int iter = 0; iter < max_iter; ++iter) {
             Kokkos::deep_copy(phi_old, world.phi);
-            v_cycle(world.phi, g, world.eps, world.a, world.b, 0);
-            // gauss_seidel(world.phi, g, world.eps, world.a, world.b, 1);
+            // v_cycle(world.phi, g, world.eps, world.a, world.b, 0);
+            gauss_seidel(world.phi, g, world.eps, world.a, world.b, 1);
             double err = compute_error();
             if (iter % 1000 == 0 || iter == max_iter - 1) {
                 Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
@@ -334,48 +327,6 @@ class PoissonSolver {
             world.potential_boundary_conditions(u);
         }
     }
-
-    // /**
-    //  * Apply boundary conditions to the potential field.
-    //  *
-    //  * @param u: Potential field.
-    //  * @return: None, modifies u in place.
-    //  */
-    // void apply_boundary(Kokkos::View<double**>& u) {
-    //     int ngc      = grid.ngc;
-    //     int nx       = u.extent(0);
-    //     int ny       = u.extent(1);
-    //     double dx    = grid.size[0] / (nx - 2 * ngc);
-    //     double dy    = grid.size[1] / (ny - 2 * ngc);
-    //     double phi_w = -66.67; // normalized potential at the wall of the charged cylinder
-    //     Kokkos::parallel_for(
-    //         Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-    //             double x   = (i - ngc + 0.5) * dx;
-    //             double y   = (j - ngc + 0.5) * dy;
-    //             double eta = world.surface(x, y);
-    //             if (eta < 0.0) {
-    //                 u(i, j) = phi_w; // inside the immersed object, set potential to a constant value
-    //             }
-    //         });
-    //
-    //     for (int k = 0; k < ngc; ++k) {
-    //         // left boundary, dirichlet
-    //         Kokkos::deep_copy(Kokkos::subview(u, k, Kokkos::ALL), 0.0);
-    //         // right boundary, neumann
-    //         // Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL),
-    //         //                   Kokkos::subview(u, nx - ngc - 2, Kokkos::ALL));
-    //         Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL),
-    //                           Kokkos::subview(u, nx - 2 * ngc + k, Kokkos::ALL));
-    //         // bottom boundary, neumann
-    //         // Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, ngc + 1));
-    //         Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, 2 * ngc - k - 1));
-    //         // top boundary, neumann
-    //         // Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1),
-    //         //                   Kokkos::subview(u, Kokkos::ALL, ny - ngc - 2));
-    //         Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1),
-    //                           Kokkos::subview(u, Kokkos::ALL, ny - 2 * ngc + k));
-    //     }
-    // }
 
     /**
      * Construct permittivity field

@@ -27,8 +27,6 @@ class Vlasolver {
     Writer<World>& writer;
 
   public:
-    bool debug = false;
-
     Vlasolver(World& world, PoissonSolver<World>& poisson_solver, Writer<World>& writer)
         : world(world),
           poisson_solver(poisson_solver),
@@ -186,34 +184,6 @@ class Vlasolver {
             });
     }
 
-    // void apply_particle_boundary_conditions() const {
-    //     using Kokkos::exp;
-    //     using Kokkos::pow;
-    //     auto& f                 = world.f;
-    //     auto& grid              = world.grid;
-    //     auto [nx, ny, nvx, nvy] = grid.ncells;
-    //     int ngc                 = grid.ngc;
-    //
-    //     Kokkos::parallel_for(
-    //         Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
-    //         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-    //             auto [vx_min, vy_min, vx_max, vy_max] = grid.velocity_ranges;
-    //             auto [dx, dy, dvx, dvy]               = grid.spacing;
-    //             auto [x, y, vx, vy]                   = grid.center({i, j, iv, jv});
-    //             if (i < ngc) {
-    //                 f(i, j, iv, jv) =
-    //                     (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
-    //             } else if (i >= nx - ngc) {
-    //                 if (vx < 0.0)
-    //                     f(i, j, iv, jv) = 0.0; // right boundary, zero-inflow
-    //             } else if (j < ngc) {
-    //                 f(i, j, iv, jv) = f(i, 2 * ngc - j - 1, iv, nvy - jv - 1); // bottom boundary, reflective
-    //             } else if (j >= ny - ngc) {
-    //                 f(i, j, iv, jv) = f(i, 2 * (ny - ngc) - j - 1, iv, nvy - jv - 1); // top boundary, reflective
-    //             }
-    //         });
-    // }
-
     void extrapolate_distribution_function() const {
         auto& grid              = world.grid;
         auto& f                 = world.f;
@@ -306,25 +276,6 @@ class Vlasolver {
                 rho(i, j) = number_density - Kokkos::exp(phi(i, j));
             });
     }
-
-    // void compute_poisson_jump_conditions() const {
-    //     auto& grid = world.grid;
-    //     auto& a    = world.a;
-    //     auto& b    = world.b;
-    //     auto& eps  = world.eps;
-    //     int nx     = world.grid.ncells[0];
-    //     int ny     = world.grid.ncells[1];
-    //
-    //     Kokkos::parallel_for(
-    //         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-    //             a(i, j)             = 0.0;
-    //             b(i, j)             = 0.0;
-    //             auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
-    //             // the immersed cylinder is a conductor, set a high permittivity
-    //
-    //             eps(i, j) = (world.surface(x, y) < 0.0) ? 1000.0 : 1.0;
-    //         });
-    // }
 
     void compute_electric_field() const {
         auto& b    = world.b;
@@ -431,9 +382,6 @@ class Vlasolver {
             Kokkos::MDRangePolicy({ngc - 1, ngc - 1, ngc - 1, ngc - 1}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-                // if (world.surface(x, y) < 0.0)
-                //     return; // skip interior of immersed object
-
                 double f0 = 0.0, fp1 = 0.0, fm1 = 0.0;
                 double advection_velocity = 0;
                 int floor_v               = 0;
@@ -558,24 +506,10 @@ class Vlasolver {
                     }
                 }
             });
-        // auto flux_1st_l_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), flux_1st_l);
-        // auto flux_1st_r_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), flux_1st_r);
-        // Kokkos::printf("j=18, iv=31, jv=7\n");
-        // Kokkos::printf("\nleft\n");
-        // for (int i = 0; i <= 4; ++i) {
-        //     Kokkos::printf("f_1st_l(%d) = %e", i, flux_1st_l_host(i, 18, 31, 7));
-        // }
-        // Kokkos::printf("\nright\n");
-        // for (int i = 0; i <= 4; ++i) {
-        //     Kokkos::printf("f_1st_r(%d) = %e", i, flux_1st_r_host(i, 18, 31, 7));
-        // }
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                // auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-                // if (world.surface(x, y) < 0.0)
-                return; // skip interior of immersed object
                 double d_r = flux_r(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
                 double d_l = flux_l(i, j, iv, jv) - flux_1st_l(i, j, iv, jv);
                 // double delta = -f(i, j, iv, jv) + flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
@@ -598,31 +532,11 @@ class Vlasolver {
                 } else {
                     ep_r(i, j, iv, jv) = 1.0;
                 }
-
-                // if (i == 3 && j == 3 && iv == 11 && jv == 5 && axis == 2) {
-                //     Kokkos::printf("center(i=%d, j=%d, iv=%d, jv=%d) = [%f,%f,%f,%f]\n d_l=%e, d_r=%e, delta=%e,
-                //     p=%e, "
-                //                    "ep_l=%e, ep_r=%e\n",
-                //                    i, j, iv, jv, x, y, vx, vy, d_l, d_r, delta, p, ep_l(i, j, iv, jv),
-                //                    ep_r(i, j, iv, jv));
-                // }
-                // ep_r = -0.00000 seems a bit strange
-                // if (i == 3 && j == 3 && iv == 10 && jv == 5 && axis == 2) {
-                //     Kokkos::printf("center(i=%d, j=%d, iv=%d, jv=%d) = [%f,%f,%f,%f]\n d_l=%e, d_r=%e, delta=%e,
-                //     p=%e, "
-                //                    "ep_l=%e, ep_r=%e\n",
-                //                    i, j, iv, jv, x, y, vx, vy, d_l, d_r, delta, p, ep_l(i, j, iv, jv),
-                //                    ep_r(i, j, iv, jv));
-                // }
             });
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                // auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-                // if (world.surface(x, y) < 0.0)
-                //     return; // skip interior of immersed object
-
                 // modified flux
                 double ep_left = 0.0, ep_right = 0.0;
                 if (axis == 0) {
@@ -643,24 +557,11 @@ class Vlasolver {
                 double flux_hat_r =
                     ep_right * (flux_r(i, j, iv, jv) - flux_1st_r(i, j, iv, jv)) + flux_1st_r(i, j, iv, jv);
 
-                // if (i == 3 && j == 3 && iv == 11 && jv == 5 && axis == 2) {
-                //     Kokkos::printf("flux_hat_l=%e, flux_hat_r=%e\n", flux_hat_l, flux_hat_r);
-                //     Kokkos::printf("flux_l=%e, flux_r=%e, flux_1st_l=%e, flux_1st_r=%e\n", flux_l(i, j, iv, jv),
-                //                    flux_r(i, j, iv, jv), flux_1st_l(i, j, iv, jv), flux_1st_r(i, j, iv, jv));
-                //     Kokkos::printf("ep_left=%e, ep_right=%e\n", ep_left, ep_right);
-                //     Kokkos::printf("f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
-                // }
                 // udpate distribution function
                 f(i, j, iv, jv) += flux_hat_l - flux_hat_r;
-                // f(i, j, iv, jv) += flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
-
-                // if (f(i, j, iv, jv) < 0.0 && f(i, j, iv, jv) > -1e-16) {
-                //     f(i, j, iv, jv) = 0.0;
-                // }
-                // if (f(i, j, iv, jv) < -1e-20) {
+                // fix any negative value due to numerical error
                 if (f(i, j, iv, jv) < 0.0) {
                     f(i, j, iv, jv) = 0.0;
-                    // Kokkos::printf("Negative f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
                 }
             });
     }
@@ -704,13 +605,11 @@ class Vlasolver {
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
         compute_charge_density();
-        // compute_poisson_jump_conditions();
         world.poisson_jump_conditions();
         poisson_solver.solve();
         compute_electric_field();
         writer.write(0);
 
-        debug = true;
         for (world.current_step = 1; world.current_step <= world.total_steps; ++world.current_step) {
             Kokkos::printf("Step %zu:\n", world.current_step);
             advance(world.dt);

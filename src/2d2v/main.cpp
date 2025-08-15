@@ -61,34 +61,68 @@ struct ImmersedWorld : World<ImmersedWorld> {
             });
     }
 
-    void potential_boundary_conditions() {
+    void potential_boundary_conditions(Kokkos::View<double**>& u) {
         using Kokkos::abs;
         auto& grid   = this->grid;
         int ngc      = grid.ngc;
-        int nx       = grid.ncells[0];
-        int ny       = grid.ncells[1];
+        int nx       = u.extent(0);
+        int ny       = u.extent(1);
+        double dx    = grid.size[0] / (nx - 2 * ngc);
+        double dy    = grid.size[1] / (ny - 2 * ngc);
         double phi_w = -66.67; // normalized potential at the wall of the charged cylinder
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
-                if (surface(x, y) < 0.0) {
-                    phi(i, j) = phi_w; // inside the immersed object, set potential to a constant value
+                double x   = (i - ngc + 0.5) * dx;
+                double y   = (j - ngc + 0.5) * dy;
+                double eta = surface(x, y);
+                if (eta < 0.0) {
+                    u(i, j) = phi_w; // inside the immersed object, set potential to a constant value
                 }
             });
 
         for (int k = 0; k < ngc; ++k) {
             // left boundary, dirichlet
-            Kokkos::deep_copy(Kokkos::subview(phi, k, Kokkos::ALL), 0.0);
+            Kokkos::deep_copy(Kokkos::subview(u, k, Kokkos::ALL), 0.0);
             // right boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(phi, nx - k - 1, Kokkos::ALL),
-                              Kokkos::subview(phi, nx - 2 * ngc + k, Kokkos::ALL));
+            Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL),
+                              Kokkos::subview(u, nx - 2 * ngc + k, Kokkos::ALL));
             // bottom boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, k), Kokkos::subview(phi, Kokkos::ALL, 2 * ngc - k - 1));
+            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, 2 * ngc - k - 1));
             // top boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, ny - k - 1),
-                              Kokkos::subview(phi, Kokkos::ALL, ny - 2 * ngc + k));
+            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1),
+                              Kokkos::subview(u, Kokkos::ALL, ny - 2 * ngc + k));
         }
     }
+
+    // void potential_boundary_conditions() {
+    //     using Kokkos::abs;
+    //     auto& grid   = this->grid;
+    //     int ngc      = grid.ngc;
+    //     int nx       = grid.ncells[0];
+    //     int ny       = grid.ncells[1];
+    //     double phi_w = -66.67; // normalized potential at the wall of the charged cylinder
+    //     Kokkos::parallel_for(
+    //         Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+    //             auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+    //             if (surface(x, y) < 0.0) {
+    //                 phi(i, j) = phi_w; // inside the immersed object, set potential to a constant value
+    //             }
+    //         });
+    //
+    //     for (int k = 0; k < ngc; ++k) {
+    //         // left boundary, dirichlet
+    //         Kokkos::deep_copy(Kokkos::subview(phi, k, Kokkos::ALL), 0.0);
+    //         // right boundary, neumann
+    //         Kokkos::deep_copy(Kokkos::subview(phi, nx - k - 1, Kokkos::ALL),
+    //                           Kokkos::subview(phi, nx - 2 * ngc + k, Kokkos::ALL));
+    //         // bottom boundary, neumann
+    //         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, k), Kokkos::subview(phi, Kokkos::ALL, 2 * ngc - k -
+    //         1));
+    //         // top boundary, neumann
+    //         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, ny - k - 1),
+    //                           Kokkos::subview(phi, Kokkos::ALL, ny - 2 * ngc + k));
+    //     }
+    // }
 };
 
 int main(int argc, char* argv[]) {

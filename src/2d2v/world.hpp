@@ -114,4 +114,14 @@ struct World {
      * This function will be called by Poisson solver
      */
     void potential_boundary_conditions() { static_cast<WorldType*>(this)->potential_boundary_conditions(); };
+
+    /**
+     * Apply boundary conditions to the potential field.
+     * This function will be called by Poisson solver, used in multigrid method
+     *
+     * @param u: Potential field.
+     */
+    void potential_boundary_conditions(Kokkos::View<double**>& u) {
+        static_cast<WorldType*>(this)->potential_boundary_conditions(u);
+    };
 };

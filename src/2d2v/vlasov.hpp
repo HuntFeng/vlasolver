@@ -321,6 +321,7 @@ class Vlasolver {
     //             b(i, j)             = 0.0;
     //             auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
     //             // the immersed cylinder is a conductor, set a high permittivity
+    //
     //             eps(i, j) = (world.surface(x, y) < 0.0) ? 1000.0 : 1.0;
     //         });
     // }

@@ -1,8 +1,8 @@
-#include "vlasolver/grid.hpp"
-#include "vlasolver/poisson.hpp"
-#include "vlasolver/vlasov.hpp"
-#include "vlasolver/world.hpp"
-#include "vlasolver/writer.hpp"
+#include "reduced/grid.hpp"
+#include "reduced/poisson.hpp"
+#include "reduced/vlasov.hpp"
+#include "reduced/world.hpp"
+#include "reduced/writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
 #include <iostream>
@@ -148,7 +148,8 @@ int main(int argc, char* argv[]) {
     world.diag_steps  = diag_steps;  // number of steps between diagnostics
 
     PoissonSolver poisson_solver(world, 1e-6, 1e6);
-    Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
+    // Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
+    Writer writer(world, output_folder, output_prefix, {});
     Vlasolver vlasolver(world, poisson_solver, writer);
 
     Kokkos::Timer timer;

@@ -20,7 +20,7 @@ nx, ny, nvx, nvy = 10, 125, 30, 110
 Lx, Ly, Lvx, Lvy = 20, 20, 8, 9
 x_min, y_min, vx_min, vy_min = 0, 0, -4, -8
 G = 3
-step = 0
+step = 300
 with h5py.File(
     f"{os.path.dirname(os.path.realpath(__file__))}/../../data/plasma_sheath/output_{step:03d}.h5",
     "r",

@@ -1,8 +1,8 @@
-#include "vlasolver/grid.hpp"
-#include "vlasolver/poisson.hpp"
-#include "vlasolver/vlasov.hpp"
-#include "vlasolver/world.hpp"
-#include "vlasolver/writer.hpp"
+#include "full/grid.hpp"
+#include "full/poisson.hpp"
+#include "full/vlasov.hpp"
+#include "full/world.hpp"
+#include "full/writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
 #include <iostream>

@@ -20,9 +20,9 @@ plt.rcParams.update(
 nx, ny = 160, 50
 Lx, Ly = 1, 0.5
 G = 3
-step = 0
+step = 300
 with h5py.File(
-    f"{os.path.dirname(os.path.realpath(__file__))}/../../data/plasma_past_charged_cylinder/output_{step:03d}.h5",
+    f"{os.path.dirname(os.path.realpath(__file__))}/../../data/cylinder/output_{step:03d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -40,7 +40,7 @@ y = np.arange(dy / 2, Ly, dy)
 Y, X = np.meshgrid(y, x)
 
 fig, ax = plt.subplots(figsize=(6, 3))
-c = ax.contourf(X, Y, ni / ni.max(), cmap="jet", levels=50)
+c = ax.contourf(X, Y, ni, cmap="jet", levels=50)
 plt.colorbar(c, label="$n_i$")
 circle = Wedge(
     center=(0.375, 0),

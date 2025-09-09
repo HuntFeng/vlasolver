@@ -1,8 +1,8 @@
-#include "full/grid.hpp"
-#include "full/poisson.hpp"
-#include "full/vlasov.hpp"
-#include "full/world.hpp"
-#include "full/writer.hpp"
+#include "reduced/grid.hpp"
+#include "reduced/poisson.hpp"
+#include "reduced/vlasov.hpp"
+#include "reduced/world.hpp"
+#include "reduced/writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
 #include <iostream>
@@ -18,7 +18,27 @@ struct ImmersedWorld : World<ImmersedWorld> {
     KOKKOS_INLINE_FUNCTION
     Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const { return {1.0, 0.0}; }
 
+    void initialize_distribution() {
+        // using Kokkos::exp;
+        // using Kokkos::pow;
+        //
+        // // must assign grid and f here, otherwise, using world.grid.xxx in device region causes illegal memory access
+        // auto& grid              = this->grid;
+        // auto& f                 = this->f;
+        // auto [nx, ny, nvx, nvy] = grid.ncells;
+        //
+        // Kokkos::parallel_for(
+        //     Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
+        //     KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+        //         auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+        //         if (y > 0.3)
+        //             f(i, j, iv, jv) = (vy < 0.0) ? exp(-pow(vx, 2)) * exp(-pow(vy + 2, 2)) / 3.17 : 0.0;
+        //     });
+    };
+
     void particle_boundary_conditions() {
+        using Kokkos::exp;
+        using Kokkos::pow;
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
@@ -32,7 +52,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                         f(i, j, iv, jv) = 0.0; // bottom boundary, zero-inflow
                 } else if (j >= ny - ngc) {
                     f(i, j, iv, jv) =
-                        (vy < 0.0) ? exp(-pow(vx, 2)) * exp(-pow(vy + 5, 2)) : 0.0; // top boundary, injection
+                        (vy < 0.0) ? exp(-pow(vx, 2)) * exp(-pow(vy + 2, 2)) / 3.0 : 0.0; // top boundary, injection
                 }
             });
 
@@ -45,22 +65,40 @@ struct ImmersedWorld : World<ImmersedWorld> {
     };
 
     void poisson_jump_conditions() {
-        // no need to do anything here, since there are no jumps
+        // skip, since no jump conditions for immersed boundary
     }
 
     void potential_boundary_conditions(Kokkos::View<double**>& u) {
         using Kokkos::abs;
-        auto& grid   = this->grid;
-        int ngc      = grid.ngc;
-        int nx       = u.extent(0);
-        int ny       = u.extent(1);
-        double dx    = grid.size[0] / (nx - 2 * ngc);
-        double dy    = grid.size[1] / (ny - 2 * ngc);
-        double phi_w = -15.0;
+        auto& grid              = this->grid;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        auto [dx, dy, dvx, dvy] = grid.spacing;
+        int ngc                 = grid.ngc;
+        // double phi_w            = -Kokkos::log(Kokkos::sqrt(1836 / Kokkos::numbers::pi)); // wall potential
+        double phi_w = -15.0; // wall potential
+
         // top boundary, dirichlet
         Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
         // bottom boundary, dirichlet
-        Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, Kokkos::make_pair(0, ngc)), phi_w);
+        // Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, Kokkos::make_pair(0, ngc)), phi_w);
+
+        // bottom boundary, floating potential
+        Kokkos::parallel_for(
+            Kokkos::RangePolicy(0, nx), KOKKOS_CLASS_LAMBDA(const int i) {
+                phi(i, ngc - 1) = 2 * phi_w - phi(i, ngc + 1);
+                // double flux_e = Kokkos::exp(phi_w);
+                // double flux_i = 0.0;
+                // for (int iv = ngc; iv < nvx - ngc; ++iv) {
+                //     for (int jv = ngc; jv < nvy - ngc; ++jv) {
+                //         auto [x, y, vx, vy] = grid.center({i, ngc, iv, jv});
+                //         if (vy >= 0.0)
+                //             continue;
+                //         flux_i += Kokkos::abs(vy) * f(i, ngc, iv, jv) * dvx * dvy;
+                //     }
+                // }
+                // // Ey = (flux_i - flux_e) = -dphi/dy
+                // phi(i, ngc - 1) = phi(i, ngc + 1) + (flux_i - flux_e) * dt * 2 * dy;
+            });
         // left and right boundary, periodic
         Kokkos::deep_copy(Kokkos::subview(u, Kokkos::make_pair(0, ngc), Kokkos::ALL),
                           Kokkos::subview(u, Kokkos::make_pair(nx - 2 * ngc, nx - ngc), Kokkos::ALL));

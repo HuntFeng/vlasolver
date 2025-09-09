@@ -16,7 +16,9 @@ class Writer {
 
     // host arrays to temporary store the data for writing
     std::vector<double> fi;
+    std::vector<double> fe;
     std::vector<double> ni;
+    std::vector<double> ne;
     std::vector<double> phi;
     std::vector<double> Ex;
     std::vector<double> Ey;
@@ -40,7 +42,9 @@ class Writer {
 
         // host arrays for temporary holding the data
         fi  = std::vector<double>(nx * ny * nvx * nvy);
+        fe  = std::vector<double>(nx * ny * nvx * nvy);
         ni  = std::vector<double>(nx * ny);
+        ne  = std::vector<double>(nx * ny);
         phi = std::vector<double>(nx * ny);
         Ex  = std::vector<double>(nx * ny);
         Ey  = std::vector<double>(nx * ny);
@@ -55,13 +59,27 @@ class Writer {
         HighFive::File file(folder + "/" + prefix + "_" + oss.str() + ".h5", HighFive::File::Overwrite);
         auto [nx, ny, nvx, nvy] = world.grid.ncells;
 
+        if (diag_fields.contains("fe")) {
+            auto f_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.f);
+            for (int i = 0; i < nx; ++i) {
+                for (int j = 0; j < ny; ++j) {
+                    for (int iv = 0; iv < nvx; ++iv) {
+                        for (int jv = 0; jv < nvy; ++jv) {
+                            fe[i * ny * nvx * nvy + j * nvx * nvy + iv * nvy + jv] = f_host(i, j, iv, jv, 0);
+                        }
+                    }
+                }
+            }
+            file.createDataSet("VTKHDF/CellData/fe", fe);
+        }
+
         if (diag_fields.contains("fi")) {
             auto f_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.f);
             for (int i = 0; i < nx; ++i) {
                 for (int j = 0; j < ny; ++j) {
                     for (int iv = 0; iv < nvx; ++iv) {
                         for (int jv = 0; jv < nvy; ++jv) {
-                            fi[i * ny * nvx * nvy + j * nvx * nvy + iv * nvy + jv] = f_host(i, j, iv, jv);
+                            fi[i * ny * nvx * nvy + j * nvx * nvy + iv * nvy + jv] = f_host(i, j, iv, jv, 1);
                         }
                     }
                 }
@@ -69,11 +87,21 @@ class Writer {
             file.createDataSet("VTKHDF/CellData/fi", fi);
         }
 
+        if (diag_fields.contains("ne")) {
+            auto n_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.n);
+            for (int i = 0; i < nx; ++i) {
+                for (int j = 0; j < ny; ++j) {
+                    ne[i * ny + j] = n_host(i, j, 0);
+                }
+            }
+            file.createDataSet("VTKHDF/CellData/ne", ne);
+        }
+
         if (diag_fields.contains("ni")) {
             auto n_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.n);
             for (int i = 0; i < nx; ++i) {
                 for (int j = 0; j < ny; ++j) {
-                    ni[i * ny + j] = n_host(i, j);
+                    ni[i * ny + j] = n_host(i, j, 1);
                 }
             }
             file.createDataSet("VTKHDF/CellData/ni", ni);

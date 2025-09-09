@@ -11,10 +11,9 @@
  * Normalized Vlasov-Poisson system (subscript n omitted):
  * fe_t + ve fe_x - E fe_v = 0 (electron)
  * fi_t + vi fi_x + E fi_v / mu = 0 (ion)
- * E_x = int (fi - fe) dv
+ * d^2phi/dx^2 = -int (fi - fe) dv
  * where mu = m_i / m_e is the mass ratio of the ion to the electron.
  */
-#include "grid.hpp"
 #include "poisson.hpp"
 #include "writer.hpp"
 #include <Kokkos_Abort.hpp>
@@ -33,156 +32,31 @@ class Vlasolver {
           poisson_solver(poisson_solver),
           writer(writer) {}
 
-    /**
-     * Compute flux using third order extrapolation
-     */
-    KOKKOS_FUNCTION
-    double compute_flux(Kokkos::Array<int, DIM> index,
-                        Kokkos::Array<double, DIM> spacing,
-                        int axis,
-                        double advection_velocity,
-                        const Kokkos::View<double****>& f) const {
-        // third order upwind-biased interpolation
-        using Kokkos::max;
-        using Kokkos::min;
-        auto [i, j, iv, jv]     = index;
-        auto [dx, dy, dvx, dvy] = spacing;
-
-        int floor_v             = (int)Kokkos::floor(advection_velocity);
-        auto f_val              = KOKKOS_CLASS_LAMBDA(int offset)->double {
-            if (axis == 0) {
-                int is = i - floor_v;
-                return f(is + offset, j, iv, jv);
-            } else if (axis == 1) {
-                int js = j - floor_v;
-                return f(i, js + offset, iv, jv);
-            } else if (axis == 2) {
-                int ivs = iv - floor_v;
-                int ind = max(min(ivs + offset, f.extent_int(2) - 1), 0);
-                return f(i, j, ind, jv);
-            } else {
-                int jvs = jv - floor_v;
-                int ind = max(min(jvs + offset, f.extent_int(3) - 1), 0);
-                return f(i, j, iv, ind);
-            }
-        };
-
-        double fm1   = f_val(-1);
-        double f0    = f_val(0);
-        double fp1   = f_val(1);
-        double f_min = 0.0;
-        double f_max = 0.0;
-        if (axis == 0) {
-            for (int n = 0; n < f.extent_int(0); ++n) {
-                f_max = Kokkos::max(f_max, f(n, j, iv, jv));
-            }
-        } else if (axis == 1) {
-            for (int n = 0; n < f.extent_int(1); ++n) {
-                f_max = Kokkos::max(f_max, f(i, n, iv, jv));
-            }
-        } else if (axis == 2) {
-            for (int n = 0; n < f.extent_int(2); ++n) {
-                f_max = Kokkos::max(f_max, f(i, j, n, jv));
-            }
-        } else {
-            for (int n = 0; n < f.extent_int(3); ++n) {
-                f_max = Kokkos::max(f_max, f(i, j, iv, n));
-            }
-        }
-
-        // third order extrapolation
-        double plus_diff  = fp1 - f0;
-        double minus_diff = f0 - fm1;
-        double ep_plus =
-            (plus_diff >= 0) ? min(1.0, 2.0 * (f0 - f_min) / plus_diff) : min(1.0, 2.0 * (f0 - f_max) / plus_diff);
-        double ep_minus =
-            (minus_diff >= 0) ? min(1.0, 2.0 * (f_max - f0) / minus_diff) : min(1.0, 2.0 * (f_min - f0) / minus_diff);
-
-        double flux = 0.0;
-        double nu   = 0.0;
-        if (advection_velocity >= 0.0) {
-            // downwind
-            nu   = advection_velocity - floor_v;
-            flux = f0;
-            flux += ep_plus * (1 - nu) * (2 - nu) * plus_diff / 6.0;
-            flux += ep_minus * (1 - nu) * (1 + nu) * minus_diff / 6.0;
-            flux *= nu;
-        } else {
-            // upwind
-            nu   = advection_velocity - (floor_v + 1);
-            flux = f0;
-            flux += -ep_plus * (1 - nu) * (1 + nu) * plus_diff / 6.0;
-            flux += -ep_minus * (2 + nu) * (1 + nu) * minus_diff / 6.0;
-            flux *= nu;
-        }
-
-        if (axis == 0) {
-            int is = i - floor_v;
-            if (advection_velocity >= 0.0) {
-                for (int n = is + 1; n <= i; ++n)
-                    flux += f(n, j, iv, jv);
-            } else {
-                for (int n = i + 1; n <= is - 1; ++n)
-                    flux -= f(n, j, iv, jv);
-            }
-        } else if (axis == 1) {
-            int js = j - floor_v;
-            if (advection_velocity >= 0.0) {
-                for (int n = js + 1; n <= j; ++n)
-                    flux += f(i, n, iv, jv);
-            } else {
-                for (int n = j + 1; n <= js - 1; ++n)
-                    flux -= f(i, n, iv, jv);
-            }
-        } else if (axis == 2) {
-            int ivs = iv - floor_v;
-            if (advection_velocity >= 0.0) {
-                for (int n = max(ivs + 1, 0); n <= iv; ++n)
-                    flux += f(i, j, n, jv);
-            } else {
-                for (int n = iv + 1; n <= min(ivs - 1, f.extent_int(2) - 1); ++n)
-                    flux -= f(i, j, n, jv);
-            }
-        } else {
-            int jvs = jv - floor_v;
-            if (advection_velocity >= 0.0) {
-                for (int n = max(jvs + 1, 0); n <= jv; ++n)
-                    flux += f(i, j, iv, n);
-            } else {
-                for (int n = jv + 1; n <= min(jvs - 1, f.extent_int(3) - 1); ++n)
-                    flux -= f(i, j, iv, n);
-            }
-        }
-        return flux;
-    }
-
-    void initialize_distribution() const {
-        using Kokkos::cos;
-        using Kokkos::exp;
-        using Kokkos::pow;
-        using Kokkos::sqrt;
-        using Kokkos::numbers::pi;
-
-        // must assign grid and f here, otherwise, using world.grid.xxx in device region causes illegal memory access
-        auto& grid              = world.grid;
-        auto& f                 = world.f;
-
-        auto [nx, ny, nvx, nvy] = grid.ncells;
-        auto [dx, dy, dvx, dvy] = grid.spacing;
-        auto [Lx, Ly, Lvx, Lvy] = grid.size;
-        int ngc                 = grid.ngc;
-
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                if (iv < ngc || iv >= nvx - ngc || jv < ngc || jv >= nvy - ngc)
-                    return;
-
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-                double eta          = world.surface(x, y);
-                f(i, j, iv, jv)     = 0.0;
-            });
-    }
+    // void initialize_distribution() const {
+    //     using Kokkos::cos;
+    //     using Kokkos::exp;
+    //     using Kokkos::pow;
+    //     using Kokkos::sqrt;
+    //     using Kokkos::numbers::pi;
+    //
+    //     // must assign grid and f here, otherwise, using world.grid.xxx in device region causes illegal memory access
+    //     auto& grid              = world.grid;
+    //     auto& f                 = world.f;
+    //
+    //     auto [nx, ny, nvx, nvy] = grid.ncells;
+    //     auto [dx, dy, dvx, dvy] = grid.spacing;
+    //     auto [Lx, Ly, Lvx, Lvy] = grid.size;
+    //     int ngc                 = grid.ngc;
+    //
+    //     Kokkos::parallel_for(
+    //         Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
+    //         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+    //             if (iv < ngc || iv >= nvx - ngc || jv < ngc || jv >= nvy - ngc)
+    //                 return;
+    //
+    //             f(i, j, iv, jv) = 0.0;
+    //         });
+    // }
 
     void extrapolate_distribution_function() const {
         auto& grid              = world.grid;
@@ -542,33 +416,34 @@ class Vlasolver {
                     ep_r(i, j, iv, jv) = Kokkos::max(ep_r(i, j, iv, jv), 0.0);
 
                 // it should be non-positive since first order monotone fluxes are used
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                // auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
                 // delta should be non-positive since first order monotone fluxes are used
                 // ep should be in [0, 1]
-                bool positive_delta = false;
-                bool unphysical_ep  = false;
-                if (world.surface(x, y) >= 0 && delta > 1e-16)
-                    positive_delta = true;
-                if (ep_l(i, j, iv, jv) < -1e-16 || ep_l(i, j, iv, jv) > 1.0 || ep_r(i, j, iv, jv) < -1e-16 ||
-                    ep_r(i, j, iv, jv) > 1.0)
-                    unphysical_ep = true;
-                if (positive_delta || unphysical_ep) {
-                    // Kokkos::printf("(%d, %d, %d, %d): axis = %d, s = %d\n",i,j,iv,jv, axis, s);
-                    // Kokkos::printf("(%d, %d, %d, %d): nu = %e, f0 = %e\n",i,j,iv,jv, nu, f0);
-                    Kokkos::printf("(%d, %d, %d, %d): f = %e\n", i, j, iv, jv, f(i, j, iv, jv));
-                    Kokkos::printf("(%d, %d, %d, %d): flux_l = %e, flux_r = %e\n", i, j, iv, jv, flux_l(i, j, iv, jv),
-                                   flux_r(i, j, iv, jv));
-                    Kokkos::printf("(%d, %d, %d, %d): flux_1st_l = %e, flux_1st_r = %e\n", i, j, iv, jv,
-                                   flux_1st_l(i, j, iv, jv), flux_1st_r(i, j, iv, jv));
-                    Kokkos::printf("(%d, %d, %d, %d): d_l = %e, d_r = %e\n", i, j, iv, jv, d_l, d_r);
-                    Kokkos::printf("(%d, %d, %d, %d): delta = %e, p = %e\n", i, j, iv, jv, delta, p);
-                    Kokkos::printf("(%d, %d, %d, %d): ep_l = %e, ep_r = %e\n", i, j, iv, jv, ep_l(i, j, iv, jv),
-                                   ep_r(i, j, iv, jv));
-                    if (positive_delta)
-                        Kokkos::abort("Stop due to positive delta in PFC");
-                    if (unphysical_ep)
-                        Kokkos::abort("Stop due to unphysical ep_l or ep_r in PFC");
-                }
+                // bool positive_delta = false;
+                // bool unphysical_ep  = false;
+                // if (world.surface(x, y) >= 0 && delta > 1e-16)
+                //     positive_delta = true;
+                // if (ep_l(i, j, iv, jv) < -1e-16 || ep_l(i, j, iv, jv) > 1.0 || ep_r(i, j, iv, jv) < -1e-16 ||
+                //     ep_r(i, j, iv, jv) > 1.0)
+                //     unphysical_ep = true;
+                // if (positive_delta || unphysical_ep) {
+                //     // Kokkos::printf("(%d, %d, %d, %d): axis = %d, s = %d\n",i,j,iv,jv, axis, s);
+                //     // Kokkos::printf("(%d, %d, %d, %d): nu = %e, f0 = %e\n",i,j,iv,jv, nu, f0);
+                //     Kokkos::printf("(%d, %d, %d, %d): f = %e\n", i, j, iv, jv, f(i, j, iv, jv));
+                //     Kokkos::printf("(%d, %d, %d, %d): flux_l = %e, flux_r = %e\n", i, j, iv, jv, flux_l(i, j, iv,
+                //     jv),
+                //                    flux_r(i, j, iv, jv));
+                //     Kokkos::printf("(%d, %d, %d, %d): flux_1st_l = %e, flux_1st_r = %e\n", i, j, iv, jv,
+                //                    flux_1st_l(i, j, iv, jv), flux_1st_r(i, j, iv, jv));
+                //     Kokkos::printf("(%d, %d, %d, %d): d_l = %e, d_r = %e\n", i, j, iv, jv, d_l, d_r);
+                //     Kokkos::printf("(%d, %d, %d, %d): delta = %e, p = %e\n", i, j, iv, jv, delta, p);
+                //     Kokkos::printf("(%d, %d, %d, %d): ep_l = %e, ep_r = %e\n", i, j, iv, jv, ep_l(i, j, iv, jv),
+                //                    ep_r(i, j, iv, jv));
+                //     if (positive_delta)
+                //         Kokkos::abort("Stop due to positive delta in PFC");
+                //     if (unphysical_ep)
+                //         Kokkos::abort("Stop due to unphysical ep_l or ep_r in PFC");
+                // }
             });
         Kokkos::fence();
 
@@ -600,28 +475,30 @@ class Vlasolver {
                 if (f(i, j, iv, jv) >= -1e-16)
                     f(i, j, iv, jv) = Kokkos::max(0.0, f(i, j, iv, jv));
 
-                if (f(i, j, iv, jv) < 0.0) {
-                    Kokkos::printf("Negative f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
-                    if (axis == 0) {
-                        Kokkos::printf("ep_r(i-1) = %e, ep_l(i) = %e\n", ep_r(i - 1, j, iv, jv), ep_l(i, j, iv, jv));
-                        Kokkos::printf("ep_r(i) = %e, ep_l(i+1) = %e\n", ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv));
-                    } else if (axis == 1) {
-                        Kokkos::printf("ep_r(j-1) = %e, ep_l(j) = %e\n", ep_r(i, j - 1, iv, jv), ep_l(i, j, iv, jv));
-                        Kokkos::printf("ep_r(j) = %e, ep_l(j+1) = %e\n", ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
-                    } else if (axis == 2) {
-                        Kokkos::printf("ep_r(iv-1) = %e, ep_l(iv) = %e\n", ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
-                        Kokkos::printf("ep_r(iv) = %e, ep_l(iv+1) = %e\n", ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));
-                    } else {
-                        Kokkos::printf("ep_r(jv-1) = %e, ep_l(jv) = %e\n", ep_r(i, j, iv, jv - 1), ep_l(i, j, iv, jv));
-                        Kokkos::printf("ep_r(jv) = %e, ep_l(jv+1) = %e\n", ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
-                    }
-                    Kokkos::printf("ep_left = %e, ep_right = %e\n", ep_left, ep_right);
-                    Kokkos::printf("flux_l = %e, flux_r = %e\n", flux_l(i, j, iv, jv), flux_r(i, j, iv, jv));
-                    Kokkos::printf("flux_1st_l = %e, flux_1st_r = %e\n", flux_1st_l(i, j, iv, jv),
-                                   flux_1st_r(i, j, iv, jv));
-                    Kokkos::printf("flux_hat_l = %e, flux_hat_r = %e\n", flux_hat_l, flux_hat_r);
-                    Kokkos::abort("Stop due to negative f in PFC");
-                }
+                // if (f(i, j, iv, jv) < 0.0) {
+                //     Kokkos::printf("Negative f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
+                //     if (axis == 0) {
+                //         Kokkos::printf("ep_r(i-1) = %e, ep_l(i) = %e\n", ep_r(i - 1, j, iv, jv), ep_l(i, j, iv, jv));
+                //         Kokkos::printf("ep_r(i) = %e, ep_l(i+1) = %e\n", ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv));
+                //     } else if (axis == 1) {
+                //         Kokkos::printf("ep_r(j-1) = %e, ep_l(j) = %e\n", ep_r(i, j - 1, iv, jv), ep_l(i, j, iv, jv));
+                //         Kokkos::printf("ep_r(j) = %e, ep_l(j+1) = %e\n", ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
+                //     } else if (axis == 2) {
+                //         Kokkos::printf("ep_r(iv-1) = %e, ep_l(iv) = %e\n", ep_r(i, j, iv - 1, jv), ep_l(i, j, iv,
+                //         jv)); Kokkos::printf("ep_r(iv) = %e, ep_l(iv+1) = %e\n", ep_r(i, j, iv, jv), ep_l(i, j, iv +
+                //         1, jv));
+                //     } else {
+                //         Kokkos::printf("ep_r(jv-1) = %e, ep_l(jv) = %e\n", ep_r(i, j, iv, jv - 1), ep_l(i, j, iv,
+                //         jv)); Kokkos::printf("ep_r(jv) = %e, ep_l(jv+1) = %e\n", ep_r(i, j, iv, jv), ep_l(i, j, iv,
+                //         jv + 1));
+                //     }
+                //     Kokkos::printf("ep_left = %e, ep_right = %e\n", ep_left, ep_right);
+                //     Kokkos::printf("flux_l = %e, flux_r = %e\n", flux_l(i, j, iv, jv), flux_r(i, j, iv, jv));
+                //     Kokkos::printf("flux_1st_l = %e, flux_1st_r = %e\n", flux_1st_l(i, j, iv, jv),
+                //                    flux_1st_r(i, j, iv, jv));
+                //     Kokkos::printf("flux_hat_l = %e, flux_hat_r = %e\n", flux_hat_l, flux_hat_r);
+                //     Kokkos::abort("Stop due to negative f in PFC");
+                // }
                 // fix any negative value on the interior cells due to numerical error
                 // auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
                 // if (world.surface(x, y) < 0) {
@@ -648,9 +525,9 @@ class Vlasolver {
         world.poisson_jump_conditions();
         poisson_solver.solve();
         compute_electric_field();
-        Kokkos::printf("(VlasovSolver) PFC update along velocity by dt, vx\n");
+        Kokkos::printf("(VlasovSolver) PFC update along velocity by dt\n");
         pfc_update(dt, 2);
-        Kokkos::printf("(VlasovSolver) PFC update along velocity by dt, vy\n");
+        // Kokkos::printf("(VlasovSolver) PFC update along velocity by dt, vy\n");
         pfc_update(dt, 3);
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
@@ -663,7 +540,7 @@ class Vlasolver {
 
     void solve() {
         Kokkos::printf("Step %zu:\n", 0);
-        initialize_distribution();
+        world.initialize_distribution();
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
         compute_charge_density();

@@ -200,11 +200,14 @@ class PoissonSolver {
         auto& rho = world.rho;
         Kokkos::View<double**> g("g", rho.extent(0), rho.extent(1));
 
+        double Ld       = 0.288;   // Debye length, m
+        double Lx       = 0.4;     // domain length, m
+        double lambda_D = Ld / Lx; // normalized Debye length
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {rho.extent(0), rho.extent(1)}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j); });
+            KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j) / (2 * lambda_D * lambda_D); });
         // apply_boundary(world.phi);
-        world.potential_boundary_conditions(world.phi);
+        world.potential_boundary_conditions();
         for (int iter = 0; iter < max_iter; ++iter) {
             Kokkos::deep_copy(phi_old, world.phi);
             // v_cycle(world.phi, g, world.eps, world.a, world.b, 0);
@@ -321,7 +324,7 @@ class PoissonSolver {
             red_black_update(u, g, eps, a, b, 0); // red update
             red_black_update(u, g, eps, a, b, 1); // black update
             // apply_boundary(u);                    // apply boundary conditions after each iteration
-            world.potential_boundary_conditions(u);
+            world.potential_boundary_conditions();
         }
     }
 

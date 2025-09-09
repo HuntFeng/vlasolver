@@ -101,6 +101,12 @@ struct World {
      * Boundary conditions for the particle distribution function.
      * This function will be called by Vlasov solver
      */
+    void initialize_distribution() { static_cast<WorldType*>(this)->initialize_distribution(); };
+
+    /**
+     * Boundary conditions for the particle distribution function.
+     * This function will be called by Vlasov solver
+     */
     void particle_boundary_conditions() { static_cast<WorldType*>(this)->particle_boundary_conditions(); };
 
     /**

@@ -36,8 +36,8 @@ class Vlasolver {
         auto& f                 = world.f;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dx               = grid.spacing[0][0]; // species doesn't matter here
-        double dy               = grid.spacing[0][1];
+        double dx               = grid.spacing[0];
+        double dy               = grid.spacing[1];
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
@@ -103,6 +103,7 @@ class Vlasolver {
         auto& f                 = world.f;
         auto& n                 = world.n;
         auto& grid              = world.grid;
+        auto [dx, dy, dvx, dvy] = grid.spacing;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         auto& q                 = world.q;
@@ -112,8 +113,7 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
-                    auto [dx, dy, dvx, dvy] = grid.spacing[sp];
-                    auto [x, y, vx, vy]     = grid.center({i, j, 0, 0}, sp);
+                    auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, sp);
                     if (world.surface(x, y) < 0.0)
                         return;
 
@@ -132,8 +132,8 @@ class Vlasolver {
         auto& phi  = world.phi;
         auto& eps  = world.eps;
         auto& grid = world.grid;
-        double dx  = grid.spacing[0][0]; // species does not matter here
-        double dy  = grid.spacing[0][1];
+        double dx  = grid.spacing[0];
+        double dy  = grid.spacing[1];
         int nx     = grid.ncells[0];
         int ny     = grid.ncells[1];
         int ngc    = grid.ngc;
@@ -216,9 +216,10 @@ class Vlasolver {
         auto& flux_1st_r        = world.flux_1st_r;
         auto& ep_l              = world.ep_l;
         auto& ep_r              = world.ep_r;
-        auto& m                 = world.m;
+        auto& mu                = world.mu;
         auto& q                 = world.q;
 
+        auto [dx, dy, dvx, dvy] = grid.spacing;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
@@ -231,8 +232,7 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc - 1, ngc - 1, ngc - 1, ngc - 1}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy]     = grid.center({i, j, iv, jv}, sp);
-                auto [dx, dy, dvx, dvy] = grid.spacing[sp];
+                auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, sp);
                 double f0 = 0.0, fp1 = 0.0, fm1 = 0.0;
                 double advection_velocity = 0;
                 int floor_v               = 0;
@@ -252,14 +252,14 @@ class Vlasolver {
                     fp1                = f(i, s + 1, iv, jv, sp);
                     fm1                = f(i, s - 1, iv, jv, sp);
                 } else if (axis == 2) {
-                    advection_velocity = q[sp] / m[sp] * E(i, j, 0) * dt / dvx;
+                    advection_velocity = q[sp] / mu[sp] * E(i, j, 0) * dt / dvx;
                     floor_v            = (int)Kokkos::floor(advection_velocity);
                     s                  = iv - floor_v;
                     f0                 = f(i, j, s, jv, sp);
                     fp1                = f(i, j, s + 1, jv, sp);
                     fm1                = f(i, j, s - 1, jv, sp);
                 } else if (axis == 3) {
-                    advection_velocity = q[sp] / m[sp] * E(i, j, 1) * dt / dvy;
+                    advection_velocity = q[sp] / mu[sp] * E(i, j, 1) * dt / dvy;
                     floor_v            = (int)Kokkos::floor(advection_velocity);
                     s                  = jv - floor_v;
                     f0                 = f(i, j, iv, s, sp);

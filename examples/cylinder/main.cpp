@@ -22,6 +22,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
         return {(x - 0.375) / norm, y / norm};
     }
 
+    void initialize_distribution() {
+        // no particles initially
+    };
+
     void particle_boundary_conditions() {
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
@@ -148,8 +152,7 @@ int main(int argc, char* argv[]) {
     world.diag_steps  = diag_steps;  // number of steps between diagnostics
 
     PoissonSolver poisson_solver(world, 1e-6, 1e6);
-    // Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
-    Writer writer(world, output_folder, output_prefix, {});
+    Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 
     Kokkos::Timer timer;

@@ -26,7 +26,7 @@ Lvx_e, Lvy_e = 8, 10
 vx_min_i, vy_min_i = -4, -8
 Lvx_i, Lvy_i = 8, 9
 G = 3
-step = 8000
+step = 0
 with h5py.File(
     f"{os.path.dirname(os.path.realpath(__file__))}/../../data/sheath_full/output_{step:04d}.h5",
     "r",

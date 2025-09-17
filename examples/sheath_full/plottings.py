@@ -18,7 +18,7 @@ plt.rcParams.update(
 
 nx, ny, nvx, nvy = 10, 125, 30, 110
 x_min, y_min = 0, 0
-Lx, Ly = 1, 1
+Lx, Ly = 1, 20.0
 
 vx_min_e, vy_min_e = -4, -5
 Lvx_e, Lvy_e = 8, 10

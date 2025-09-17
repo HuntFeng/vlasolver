@@ -34,7 +34,10 @@ class PoissonSolver {
         // omega     = 2.0 / (1.0 + (sin(pi / (nx - 2 * ngc))));
         // For mixed boundary conditions, a lower value is needed or it won't converge
         // If using Gauss-Seidel as a smoother for multigrid method, omega needs to be <= 1.0 it does under-relaxation
-        omega = 1.9;
+        // omega = 1.9;
+
+        // For plasma sheath problem, set a lower value to ensure convergence
+        omega = 1.4;
 
         // If using multigrid method, omega should be set to 1.0 or less
         // omega = 1.0;

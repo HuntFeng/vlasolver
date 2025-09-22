@@ -25,7 +25,7 @@ start_step = 0  # Starting step
 # Grid parameters
 nx, ny, nvx, nvy = 10, 125, 30, 110
 x_min, y_min = 0, 0
-Lx, Ly = 1, 1
+Lx, Ly = 1, 20
 
 vx_min_e, vy_min_e = -4, -5
 Lvx_e, Lvy_e = 8, 10
@@ -110,7 +110,7 @@ ax2.grid(True, alpha=0.3)
 ni_init, ne_init, phi_init = load_data(start_step)
 if ni_init is not None and phi_init is not None:
     ax1.set_xlim(y.min(), y.max())
-    ax1.set_ylim(-16.0, 1.0)
+    ax1.set_ylim(-5.0, 1.0)
 
     ne_init = np.exp(phi_init[phi_init.shape[0] // 2, :])
     ni_slice_init = ni_init[ni_init.shape[0] // 2, :]
@@ -152,9 +152,7 @@ anim = animation.FuncAnimation(
     fig, animate, frames=num_frames, interval=100, repeat=True
 )
 
-# Save animation (uncomment desired format)
-# anim.save('sheath_evolution.mp4', writer='ffmpeg', fps=10)
-# anim.save('sheath_evolution.gif', writer='pillow', fps=5)
+# anim.save("sheath_steady_state.mp4")
 
 plt.tight_layout()
 plt.show()

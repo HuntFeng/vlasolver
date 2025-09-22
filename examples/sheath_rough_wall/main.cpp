@@ -66,9 +66,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
         // initialize potential profile to a linear function from phi_w at the bottom to 0 at the top
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                // linear profile
-                // phi(i, j) = phi_w - phi_w * (j - ngc) / (ny - ngc);
-
                 // exponential profile
                 double y  = grid.center({i, j, 0, 0}, 0)[1];
                 phi(i, j) = phi_w * exp(-y / 0.125);

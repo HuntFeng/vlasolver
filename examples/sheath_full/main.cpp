@@ -20,7 +20,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         : World<ImmersedWorld>(grid) {}
 
     KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const { return x - 0.01; }
+    double surface(double x, double y) const { return x + 1.0; }
 
     KOKKOS_INLINE_FUNCTION
     Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const { return {1.0, 0.0}; }
@@ -37,12 +37,12 @@ struct ImmersedWorld : World<ImmersedWorld> {
         int ngc                 = grid.ngc;
 
         // initialize potential profile to a linear function from phi_w at the bottom to 0 at the top
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                // exponential profile
-                double y  = grid.center({i, j, 0, 0}, 0)[1];
-                phi(i, j) = phi_w * exp(-y / 2.5);
-            });
+        // Kokkos::parallel_for(
+        //     Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+        //         // exponential profile
+        //         double y  = grid.center({i, j, 0, 0}, 0)[1];
+        //         phi(i, j) = phi_w * exp(-y / 2.5);
+        //     });
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
@@ -261,12 +261,12 @@ int main(int argc, char* argv[]) {
     grid.set_grid({x_min_i, y_min_i, vx_min_i, vy_min_i}, {Lx_i, Ly_i, Lvx_i, Lvy_i}, 1); // electrons
     ImmersedWorld world(grid);
 
-    world.dt          = dt;                                    // time step size
-    world.total_time  = total_time;                            // total simulation time
-    world.total_steps = total_steps;                           // number of total_steps
-    world.diag_steps  = diag_steps;                            // number of steps between diagnostics
-    world.m           = Kokkos::Array<double, 2>{1.0, 1836.0}; // relative mass of electrons and ions
-    // world.m = Kokkos::Array<double, 2>{1.0, 100.0};      // relative mass of electrons and ions
+    world.dt          = dt;          // time step size
+    world.total_time  = total_time;  // total simulation time
+    world.total_steps = total_steps; // number of total_steps
+    world.diag_steps  = diag_steps;  // number of steps between diagnostics
+    // world.m           = Kokkos::Array<double, 2>{1.0, 1836.0}; // relative mass of electrons and ions
+    world.m = Kokkos::Array<double, 2>{1.0, 2 * 1836.0}; // relative mass of electrons and ions
     world.q = Kokkos::Array<double, 2>{-1.0, 1.0};       // charge number of electrons and ions
     world.T = Kokkos::Array<double, 2>{1.0, 1.0 / 10.0}; // relative temperature of electrons and ions
 

@@ -30,8 +30,10 @@ Lx, Ly = 1, 20
 vx_min_e, vy_min_e = -4, -5
 Lvx_e, Lvy_e = 8, 10
 # in calculation, the ranges are devided by vr
-vx_min_i, vy_min_i = -4, -8
-Lvx_i, Lvy_i = 8, 9
+# vx_min_i, vy_min_i = -4, -8
+# Lvx_i, Lvy_i = 8, 9
+vx_min_i, vy_min_i = -4, -20
+Lvx_i, Lvy_i = 8, 21
 G = 3
 is_include_ghost = False
 
@@ -152,7 +154,7 @@ anim = animation.FuncAnimation(
     fig, animate, frames=num_frames, interval=100, repeat=True
 )
 
-# anim.save("sheath_steady_state.mp4")
+anim.save("sheath_floating_wall.mp4")
 
 plt.tight_layout()
 plt.show()

@@ -20,10 +20,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
         : World<ImmersedWorld>(grid) {}
 
     KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const { return x + 1.0; }
+    double surface(double x, double y) const { return y; }
 
     KOKKOS_INLINE_FUNCTION
-    Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const { return {1.0, 0.0}; }
+    Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const { return {0.0, 1.0}; }
 
     void initialize_distribution() {
         using Kokkos::abs;
@@ -45,7 +45,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         //     });
 
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
+            Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // electron
                 {

@@ -23,10 +23,12 @@ Lx, Ly = 1, 20.0
 vx_min_e, vy_min_e = -4, -5
 Lvx_e, Lvy_e = 8, 10
 # in calculation, the ranges are devided by vr
-vx_min_i, vy_min_i = -4, -8
-Lvx_i, Lvy_i = 8, 9
+# vx_min_i, vy_min_i = -4, -8
+# Lvx_i, Lvy_i = 8, 9
+vx_min_i, vy_min_i = -4, -20
+Lvx_i, Lvy_i = 8, 21
 G = 3
-step = 0
+step = 8000
 with h5py.File(
     f"{os.path.dirname(os.path.realpath(__file__))}/../../data/sheath_full/output_{step:04d}.h5",
     "r",
@@ -104,11 +106,13 @@ ax[1].set_xlabel("$y$")
 ax[1].set_ylabel("$v_y$")
 ax[1].set_title("$f_i$")
 fig.tight_layout()
+plt.savefig("distribution.png")
 
 plt.figure()
 plt.plot(y, phi[phi.shape[0] // 2, :])
 plt.xlabel("$y$")
 plt.ylabel("$\\phi$")
+plt.savefig("potential.png")
 
 plt.figure()
 plt.plot(y, ne[ne.shape[0] // 2, :], label="$n_e$")
@@ -116,5 +120,6 @@ plt.plot(y, ni[ni.shape[0] // 2, :], label="$n_i$")
 plt.legend()
 plt.xlabel("$y$")
 plt.ylabel("$n$")
+plt.savefig("number_density.png")
 
 plt.show()

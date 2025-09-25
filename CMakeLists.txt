@@ -24,10 +24,8 @@ target_compile_features(vlasolver INTERFACE cxx_std_20)
 # Build provided examples
 add_executable(cylinder examples/cylinder/main.cpp)
 target_link_libraries(cylinder PRIVATE vlasolver)
-add_executable(sheath_reduced examples/sheath_reduced/main.cpp)
-target_link_libraries(sheath_reduced PRIVATE vlasolver)
-add_executable(sheath_full examples/sheath_full/main.cpp)
-target_link_libraries(sheath_full PRIVATE vlasolver)
+add_executable(sheath examples/sheath/main.cpp)
+target_link_libraries(sheath PRIVATE vlasolver)
 add_executable(sheath_rough_wall examples/sheath_rough_wall/main.cpp)
 target_link_libraries(sheath_rough_wall PRIVATE vlasolver)
 

@@ -36,13 +36,14 @@ vx_min_i, vy_min_i = -4, -20
 Lvx_i, Lvy_i = 8, 21
 G = 3
 is_include_ghost = False
+file_path = os.path.dirname(os.path.realpath(__file__))
 
 
 def load_data(step):
     """Load data for a given step"""
     try:
         with h5py.File(
-            f"{os.path.dirname(os.path.realpath(__file__))}/../../data/sheath_full/output_{step:04d}.h5",
+            f"{file_path}/../../data/sheath_full/output_{step:04d}.h5",
             "r",
         ) as f:
             ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -154,7 +155,7 @@ anim = animation.FuncAnimation(
     fig, animate, frames=num_frames, interval=100, repeat=True
 )
 
-anim.save("sheath.mp4")
+anim.save(f"{file_path}/sheath.mp4")
 
 plt.tight_layout()
 plt.show()

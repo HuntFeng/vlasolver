@@ -29,8 +29,9 @@ vx_min_i, vy_min_i = -4, -20
 Lvx_i, Lvy_i = 8, 21
 G = 3
 step = 8000
+file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{os.path.dirname(os.path.realpath(__file__))}/../../data/sheath_full/output_{step:04d}.h5",
+    f"{file_path}/../../data/sheath_full/output_{step:04d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -106,13 +107,13 @@ ax[1].set_xlabel("$y$")
 ax[1].set_ylabel("$v_y$")
 ax[1].set_title("$f_i$")
 fig.tight_layout()
-plt.savefig("distribution.png")
+plt.savefig(f"{file_path}/distribution.png")
 
 plt.figure()
 plt.plot(y, phi[phi.shape[0] // 2, :])
 plt.xlabel("$y$")
 plt.ylabel("$\\phi$")
-plt.savefig("potential.png")
+plt.savefig(f"{file_path}/potential.png")
 
 plt.figure()
 plt.plot(y, ne[ne.shape[0] // 2, :], label="$n_e$")
@@ -120,6 +121,6 @@ plt.plot(y, ni[ni.shape[0] // 2, :], label="$n_i$")
 plt.legend()
 plt.xlabel("$y$")
 plt.ylabel("$n$")
-plt.savefig("number_density.png")
+plt.savefig(f"{file_path}/number_density.png")
 
 plt.show()

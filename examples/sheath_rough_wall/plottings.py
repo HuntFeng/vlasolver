@@ -20,9 +20,10 @@ nx, ny = 50, 100
 x_min, y_min = 0, 0
 Lx, Ly = 1, 1
 G = 3
-step = 0
+step = 8000
+file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{os.path.dirname(os.path.realpath(__file__))}/../../data/sheath_rough_wall/output_{step:04d}.h5",
+    f"{file_path}/../../data/sheath_rough_wall/output_{step:04d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -68,6 +69,7 @@ ax[1].set_xlabel("$x$")
 ax[1].set_ylabel("$y$")
 ax[1].set_title("$n_i$")
 fig.tight_layout()
+plt.savefig(f"{file_path}/number_density.png")
 
 plt.figure()
 plt.contourf(X, Y, phi, levels=15, cmap="jet")
@@ -76,5 +78,6 @@ plt.contour(X, Y, phi, levels=15, colors="black", linestyles="solid")
 plt.xlabel("$x$")
 plt.ylabel("$y$")
 plt.title("$\\phi$")
+plt.savefig(f"{file_path}/potential.png")
 
 plt.show()

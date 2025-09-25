@@ -136,8 +136,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
         // top boundary, dirichlet
         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
-        // bottom boundary, dirichlet
-        // Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(0, ngc)), phi_w);
         // bottom boundary, floating potential
         int nx_mid    = nx / 2;
         auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), phi);

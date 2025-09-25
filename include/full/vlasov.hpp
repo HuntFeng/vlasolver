@@ -409,7 +409,13 @@ class Vlasolver {
                     ep_right * (flux_r(i, j, iv, jv) - flux_1st_r(i, j, iv, jv)) + flux_1st_r(i, j, iv, jv);
 
                 // udpate distribution function
-                f(i, j, iv, jv, sp) += flux_hat_l - flux_hat_r;
+                if (j == ngc || i == ngc) {
+                    // TODO: 3rd order flux creates oscillation near left/bottom edge, do 1st flux as work around
+                    // can we do 3rd order flux without oscillation?
+                    f(i, j, iv, jv, sp) += flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
+                } else {
+                    f(i, j, iv, jv, sp) += flux_hat_l - flux_hat_r;
+                }
                 // fix any negative value due to numerical error
                 if (f(i, j, iv, jv, sp) < 0.0) {
                     f(i, j, iv, jv, sp) = 0.0;

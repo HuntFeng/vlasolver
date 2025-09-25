@@ -154,7 +154,7 @@ anim = animation.FuncAnimation(
     fig, animate, frames=num_frames, interval=100, repeat=True
 )
 
-anim.save("sheath_floating_wall.mp4")
+anim.save("sheath.mp4")
 
 plt.tight_layout()
 plt.show()

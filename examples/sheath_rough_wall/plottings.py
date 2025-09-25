@@ -17,10 +17,11 @@ plt.rcParams.update(
 )
 
 nx, ny = 50, 100
+nvx, nvy = 50, 50
 x_min, y_min = 0, 0
-Lx, Ly = 1, 1
+Lx, Ly = 20, 20
 G = 3
-step = 8000
+step = 0
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
     f"{file_path}/../../data/sheath_rough_wall/output_{step:04d}.h5",
@@ -29,6 +30,9 @@ with h5py.File(
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
     ne = f["VTKHDF/CellData/ne"][:].reshape(nx + 2 * G, ny + 2 * G)
     phi = f["VTKHDF/CellData/phi"][:].reshape(nx + 2 * G, ny + 2 * G)
+    # fi = f["VTKHDF/CellData/fi"][:].reshape(
+    #     nx + 2 * G, ny + 2 * G, nvx + 2 * G, nvy + 2 * G
+    # )
 
 is_include_ghost = True
 if is_include_ghost:
@@ -45,8 +49,9 @@ else:
     y = np.arange(y_min + dy / 2, y_min + Ly, dy)
 
 Y, X = np.meshgrid(y, x)
-fig, ax = plt.subplots(1, 2)
-ax[0].contourf(
+plt.figure()
+plt.subplot(1, 2, 1)
+plt.contourf(
     X,
     Y,
     ne,
@@ -54,10 +59,12 @@ ax[0].contourf(
     levels=50,
     vmin=0,
 )
-ax[0].set_xlabel("$x$")
-ax[0].set_ylabel("$y$")
-ax[0].set_title("$n_e$")
-ax[1].contourf(
+plt.xlabel("$x$")
+plt.ylabel("$y$")
+plt.title("$n_e$")
+plt.colorbar()
+plt.subplot(1, 2, 2)
+plt.contourf(
     X,
     Y,
     ni,
@@ -65,10 +72,11 @@ ax[1].contourf(
     levels=50,
     vmin=0,
 )
-ax[1].set_xlabel("$x$")
-ax[1].set_ylabel("$y$")
-ax[1].set_title("$n_i$")
-fig.tight_layout()
+plt.xlabel("$x$")
+plt.ylabel("$y$")
+plt.title("$n_i$")
+plt.tight_layout()
+plt.colorbar()
 plt.savefig(f"{file_path}/number_density.png")
 
 plt.figure()

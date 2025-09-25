@@ -10,10 +10,12 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     // all quantities are normalized by electron parameters
-    double phi_w  = -20;
-    double v_th_e = Kokkos::sqrt(T[0] / m[0]); // electron thermal velocity
-    double v_th_i = Kokkos::sqrt(T[1] / m[1]); // ion thermal velocity
-    double u0     = Kokkos::sqrt(T[0] / m[1]); // Bohm velocity
+    double phi_w  = -5;                                                       // rough spikes potential
+    double v_th_e = Kokkos::sqrt(T[0] / m[0]);                                // electron thermal velocity
+    double v_th_i = Kokkos::sqrt(T[1] / m[1]);                                // ion thermal velocity
+    double u0     = Kokkos::sqrt(T[0] / m[1]);                                // Bohm velocity
+                                                                              //
+    Kokkos::View<double*> E_w = Kokkos::View<double*>("E_w", grid.ncells[0]); // wall electric field
 
     ImmersedWorld(Grid& grid)
         : World<ImmersedWorld>(grid) {}
@@ -23,13 +25,14 @@ struct ImmersedWorld : World<ImmersedWorld> {
         using Kokkos::abs;
         using Kokkos::pow;
         using Kokkos::sqrt;
-        double x0 = 0.13; // x center of the first wedget
-        double xc = x0;   // x center of the closest wedget
-        double xs = 0.24; // spacing between wedget
-        double R  = 0.05; // radius of the wedget
+        double Lx = 20.0;      // manually set domain width since KOKKOS_INLINE_FUNCTION can't access class member
+        double x0 = 0.13 * Lx; // x center of the first wedget
+        double xs = 0.24 * Lx; // spacing between wedget
+        double R  = 0.06 * Lx; // radius of the wedget
+        double xc = x0;        // x center of the closest wedget
         for (int n = 0; n < 4; ++n) {
             xc = x0 + n * xs;
-            if (abs(x - xc) < xs / 2)
+            if (abs(x - xc) <= xs / 2)
                 break;
         }
         return pow(x - xc, 2) + y * y - R * R;
@@ -40,9 +43,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
         using Kokkos::abs;
         using Kokkos::pow;
         using Kokkos::sqrt;
-        double x0 = 0.13; // x center of the first wedget
-        double xc = x0;   // x center of the closest wedget
-        double xs = 0.24; // spacing between wedget
+        double Lx = 20.0;      // manually set domain width since KOKKOS_INLINE_FUNCTION can't access class member
+        double x0 = 0.13 * Lx; // x center of the first wedget
+        double xs = 0.24 * Lx; // spacing between wedget
+        double xc = x0;        // x center of the closest wedget
         for (int n = 0; n < 4; ++n) {
             xc = x0 + n * xs;
             if (abs(x - xc) < xs / 2)
@@ -63,6 +67,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
+        Kokkos::deep_copy(f, 0.0);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
@@ -176,13 +181,19 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
         // top boundary, dirichlet
         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
-        // bottom boundary, dirichlet
+        // bottom boundary, dirichlet at the rough spikes, floating otherwise
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            Kokkos::MDRangePolicy({ngc - 1, ngc - 1}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, sp);
-                    if (j < ngc || surface(x, y) < 0.0)
+                    if (j < ngc) {
+                        double flux_e = exp(phi(i, ngc)) * v_th_e / sqrt(2 * Kokkos::numbers::pi);
+                        double flux_i = 1.0 / sqrt(1 - 2.0 * phi(i, ngc)) * u0;
+                        E_w(i) += (flux_i - flux_e) * dt;
+                        phi(i, j) = phi(i, ngc + 1) + E_w(i) * 2 * dy;
+                    } else if (surface(x, y) < 0.0) {
                         phi(i, j) = phi_w;
+                    }
                 }
             });
 
@@ -234,7 +245,7 @@ int main(int argc, char* argv[]) {
     double total_time         = reader.GetReal("world", "total_time", 1.0);
     int total_steps           = reader.GetInteger("world", "total_steps", 1000);
     int diag_steps            = reader.GetInteger("world", "diag_steps", 10);
-    std::string output_folder = reader.Get("output", "folder", "data/plasma_past_charged_cylinder");
+    std::string output_folder = reader.Get("output", "folder", "data/sheath_rough_wall");
     std::string output_prefix = reader.Get("output", "prefix", "output");
 
     Kokkos::printf("Input parameters:\n");
@@ -249,7 +260,7 @@ int main(int argc, char* argv[]) {
 
     Grid grid({nx_intr, ny_intr, nvx_intr, nvy_intr}, ngc);
     grid.set_grid({x_min_e, y_min_e, vx_min_e, vy_min_e}, {Lx_e, Ly_e, Lvx_e, Lvy_e}, 0); // electrons
-    grid.set_grid({x_min_i, y_min_i, vx_min_i, vy_min_i}, {Lx_i, Ly_i, Lvx_i, Lvy_i}, 1); // electrons
+    grid.set_grid({x_min_i, y_min_i, vx_min_i, vy_min_i}, {Lx_i, Ly_i, Lvx_i, Lvy_i}, 1); // ions
     ImmersedWorld world(grid);
 
     world.dt          = dt;                                        // time step size

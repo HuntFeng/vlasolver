@@ -4,7 +4,7 @@ from scipy.integrate import solve_bvp
 
 Te = 1.0  # electron temperature (normalized)
 Ti = 0.1  # ion temperature (normalized)
-mi = 1836.0  # ion mass (normalized)
+mi = 2 * 1836.0  # ion mass (normalized)
 me = 1.0  # electron mass (normalized)
 vr = np.sqrt((Ti / Te) / (mi / me))
 L = 20.0  # domain length (normalized)
@@ -29,7 +29,7 @@ def boundary_conditions(ya, yb):
     # return np.array([ya[0] - phi_w, yb[1]])
 
 
-x = np.linspace(0, L, 100)
+x = np.linspace(0, L, 125)
 y_guess = np.zeros((2, x.size))
 y_guess[0] = phi_w * np.exp(-x / 2.5)  # Initial guess for potential
 solution = solve_bvp(
@@ -41,8 +41,7 @@ else:
     print("Warning: Solution did not converge!")
 
 phi = solution.sol(x)[0]
-np.savetxt("initial_potential.csv", np.vstack((x, phi)).T)
-
+x /= L
 plt.figure()
 plt.subplot(2, 1, 1)
 plt.plot(x, phi, label="solution")

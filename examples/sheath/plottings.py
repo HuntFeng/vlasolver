@@ -28,10 +28,10 @@ Lvx_e, Lvy_e = 8, 10
 vx_min_i, vy_min_i = -4, -20
 Lvx_i, Lvy_i = 8, 21
 G = 3
-step = 8000
+step = 15000
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/../../data/sheath/output_{step:04d}.h5",
+    f"{file_path}/../../data/sheath/output_{step:05d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)

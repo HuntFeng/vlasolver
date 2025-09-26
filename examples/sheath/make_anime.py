@@ -18,8 +18,8 @@ plt.rcParams.update(
 )
 
 # Animation parameters
-total_steps = 8000  # User can modify this
-frame_interval = 80  # User can modify this (step interval between frames)
+total_steps = 15000  # User can modify this
+frame_interval = 150  # User can modify this (step interval between frames)
 start_step = 0  # Starting step
 
 # Grid parameters
@@ -43,7 +43,7 @@ def load_data(step):
     """Load data for a given step"""
     try:
         with h5py.File(
-            f"{file_path}/../../data/sheath/output_{step:04d}.h5",
+            f"{file_path}/../../data/sheath/output_{step:05d}.h5",
             "r",
         ) as f:
             ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -92,7 +92,7 @@ else:
     vy_i = np.arange(vy_min_i + dvy_i / 2, vy_min_i + Lvy_i, dvy_i)
 
 # Set up the figure and subplots
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(10, 8))
 
 # Initialize empty line objects
 (line_phi,) = ax1.plot([], [], "b-", linewidth=2)
@@ -100,7 +100,6 @@ fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
 (line_ne,) = ax2.plot([], [], "b-", label="$n_e$", linewidth=2)
 
 # Set up the axes
-ax1.set_xlabel("$y$")
 ax1.set_ylabel("$\\phi$")
 ax1.grid(True, alpha=0.3)
 
@@ -108,6 +107,7 @@ ax2.set_xlabel("$y$")
 ax2.set_ylabel("$n$")
 ax2.legend()
 ax2.grid(True, alpha=0.3)
+fig.tight_layout()
 
 # Initialize with first frame to set axis limits
 ni_init, ne_init, phi_init = load_data(start_step)
@@ -157,5 +157,4 @@ anim = animation.FuncAnimation(
 
 anim.save(f"{file_path}/sheath.mp4")
 
-plt.tight_layout()
 plt.show()

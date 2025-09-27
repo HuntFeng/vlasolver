@@ -261,6 +261,13 @@ int main(int argc, char* argv[]) {
 
     Kokkos::Timer timer;
     double start_time = timer.seconds();
+    // solve the potential first
+    world.initialize_distribution();
+    world.particle_boundary_conditions();
+    vlasolver.compute_charge_density();
+    poisson_solver.solve();
+
+    // initialize distribution using the solved potential
     vlasolver.solve();
     double end_time = timer.seconds();
     Kokkos::printf("Total time taken: %f seconds\n", end_time - start_time);

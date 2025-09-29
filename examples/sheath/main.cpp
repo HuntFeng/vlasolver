@@ -5,6 +5,7 @@
 #include "full/writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -17,13 +18,32 @@ struct ImmersedWorld : World<ImmersedWorld> {
     double u0     = Kokkos::sqrt(T[0] / m[1]);                                           // Bohm velocity
 
     ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+        : World<ImmersedWorld>(grid) {
+        load_initial_potential();
+    }
 
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const { return y + 1.0; }
 
     KOKKOS_INLINE_FUNCTION
     Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const { return {0.0, 1.0}; }
+
+    void load_initial_potential() {
+        Kokkos::printf("Loading initial potential from initial_potential.csv\n");
+        std::ifstream file("examples/sheath/initial_potential.csv");
+        std::string line;
+        int j = 0;
+        while (std::getline(file, line)) {
+            try {
+                double value = std::stod(line);
+                Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, j), value);
+                j++;
+            } catch (const std::invalid_argument& e) {
+                // Handle the case where conversion fails
+                Kokkos::printf("Invalid line in initial_potential.csv: %s\n", line.c_str());
+            }
+        }
+    }
 
     void initialize_distribution() {
         using Kokkos::abs;
@@ -37,7 +57,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         int ngc                 = grid.ngc;
 
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
+            Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // electron
                 {
@@ -71,6 +91,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
     };
 
     void particle_boundary_conditions() {
+        using Kokkos::abs;
         using Kokkos::exp;
         using Kokkos::log;
         using Kokkos::pow;
@@ -88,7 +109,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 0);
                     double v_ce         = sqrt(2 * (phi(i, j) - phi_w) / m[0]); // electron cutoff velocity
                     if (j < ngc && vy > 0.0) {
-                        // f(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
+                        f(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
                         f(i, j, iv, jv, 0) =
                             (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
@@ -101,7 +122,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 1);
                     double v_ci         = -sqrt(2 * abs(phi(i, j)) / m[1]); // ion cutoff velocity
                     if (j < ngc && vy > 0.0) {
-                        // f(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
+                        f(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
                         f(i, j, iv, jv, 1) = (vy <= v_ci)
                                                  ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
@@ -241,34 +262,53 @@ int main(int argc, char* argv[]) {
     Kokkos::printf("Simulation control: dt: %f, total_time: %f, total_steps: %d, diag_steps: %d\n", dt, total_time,
                    total_steps, diag_steps);
 
+    double Te     = 1.0;                   // electron temperature
+    double Ti     = 0.1;                   // ion temperature normalized to Te
+    double me     = 1.0;                   // electron mass
+    double mi     = 2 * 1836.0;            // ion mass, normalized to me
+    double v_th_e = Kokkos::sqrt(Te / me); // electron thermal velocity
+    double v_th_i = Kokkos::sqrt(Ti / mi); // ion thermal velocity, normalized to v_th_e
+    double u0     = Kokkos::sqrt(Te / mi); // Bohm velocity, normalized to v_th_e
+
     Grid grid({nx_intr, ny_intr, nvx_intr, nvy_intr}, ngc);
     grid.set_grid({x_min_e, y_min_e, vx_min_e, vy_min_e}, {Lx_e, Ly_e, Lvx_e, Lvy_e}, 0); // electrons
-    grid.set_grid({x_min_i, y_min_i, vx_min_i, vy_min_i}, {Lx_i, Ly_i, Lvx_i, Lvy_i}, 1); // electrons
-    ImmersedWorld world(grid);
+    grid.set_grid({x_min_i * v_th_i, y_min_i * v_th_i, vx_min_i * v_th_i, vy_min_i * v_th_i},
+                  {Lx_i * v_th_i, Ly_i * v_th_i, Lvx_i * v_th_i, Lvy_i * v_th_i}, 1); // ions
 
-    world.dt          = dt;          // time step size
-    world.total_time  = total_time;  // total simulation time
-    world.total_steps = total_steps; // number of total_steps
-    world.diag_steps  = diag_steps;  // number of steps between diagnostics
-    // world.m           = Kokkos::Array<double, 2>{1.0, 1836.0}; // relative mass of electrons and ions
-    world.m = Kokkos::Array<double, 2>{1.0, 2 * 1836.0}; // relative mass of electrons and ions
-    world.q = Kokkos::Array<double, 2>{-1.0, 1.0};       // charge number of electrons and ions
-    world.T = Kokkos::Array<double, 2>{1.0, 1.0 / 10.0}; // relative temperature of electrons and ions
+    ImmersedWorld world(grid);
+    world.dt          = dt;                                  // time step size
+    world.total_time  = total_time;                          // total simulation time
+    world.total_steps = total_steps;                         // number of total_steps
+    world.diag_steps  = diag_steps;                          // number of steps between diagnostics
+    world.m           = Kokkos::Array<double, 2>{me, mi};    // relative mass of electrons and ions
+    world.q           = Kokkos::Array<double, 2>{-1.0, 1.0}; // charge number of electrons and ions
+    world.T           = Kokkos::Array<double, 2>{Te, Ti};    // relative temperature of electrons and ions
+    world.v_th_e      = v_th_e;
+    world.v_th_i      = v_th_i;
+    world.u0          = u0;
 
     PoissonSolver poisson_solver(world, 1e-6, 5e3);
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi", "fi", "fe"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 
-    Kokkos::Timer timer;
-    double start_time = timer.seconds();
-    // solve the potential first
+    // Kokkos::Timer timer;
+    // double start_time = timer.seconds();
+    // // solve the potential first
+    // auto& phi    = world.phi;
+    // double phi_w = world.phi_w;
+    // Kokkos::parallel_for(
+    //     Kokkos::MDRangePolicy({0, 0}, {grid.ncells[0], grid.ncells[1]}), KOKKOS_LAMBDA(const int i, const int j) {
+    //         auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, 0); // species does not matter here
+    //         phi(i, j)           = phi_w * Kokkos::exp(-y / 2.5);
+    //     });
     world.initialize_distribution();
     world.particle_boundary_conditions();
     vlasolver.compute_charge_density();
-    poisson_solver.solve();
-
-    // initialize distribution using the solved potential
-    vlasolver.solve();
-    double end_time = timer.seconds();
-    Kokkos::printf("Total time taken: %f seconds\n", end_time - start_time);
+    writer.write(0);
+    // poisson_solver.solve();
+    //
+    // // initialize distribution using the solved potential
+    // vlasolver.solve();
+    // double end_time = timer.seconds();
+    // Kokkos::printf("Total time taken: %f seconds\n", end_time - start_time);
 }

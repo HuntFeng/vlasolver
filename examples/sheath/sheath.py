@@ -29,7 +29,8 @@ def boundary_conditions(ya, yb):
     # return np.array([ya[0] - phi_w, yb[1]])
 
 
-x = np.linspace(0, L, 125)
+dx = L / 125
+x = np.arange(dx / 2, L, dx)
 y_guess = np.zeros((2, x.size))
 y_guess[0] = phi_w * np.exp(-x / 2.5)  # Initial guess for potential
 solution = solve_bvp(
@@ -61,7 +62,7 @@ plt.tight_layout()
 # electron distribution function
 phi = y_guess[0]
 plt.figure()
-v = np.linspace(-5, 5, 100)
+v = np.linspace(-5, 5, 110)
 X, V = np.meshgrid(x, v, indexing="ij")
 fe = np.exp(phi[:, None] - V**2 / 2) / np.sqrt(2 * np.pi)
 v_ce = np.sqrt(2 * (phi - phi_w)[:, None] / me)  # cutoff velocity
@@ -73,7 +74,7 @@ plt.xlabel("$x$")
 plt.ylabel("$v$")
 
 # ion distribution function
-v = np.linspace(-8, 1, 100) * vr
+v = np.linspace(-15, 1, 110) * vr
 X, V = np.meshgrid(x, v, indexing="ij")
 u0 = np.sqrt(Te / mi)
 v_ci = -np.sqrt(2 * np.abs(phi)[:, None] / mi)  # cutoff velocity
@@ -90,3 +91,8 @@ plt.xlabel("$x$")
 plt.ylabel("$v$")
 plt.tight_layout()
 plt.show()
+
+# save initial potential to csv file
+G = 3
+phi_padded = np.pad(phi, (G, G), "edge")
+np.savetxt("initial_potential.csv", phi_padded.T)

@@ -19,7 +19,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     ImmersedWorld(Grid& grid)
         : World<ImmersedWorld>(grid) {
-        load_initial_potential();
+        // load_initial_potential();
     }
 
     KOKKOS_INLINE_FUNCTION
@@ -28,22 +28,22 @@ struct ImmersedWorld : World<ImmersedWorld> {
     KOKKOS_INLINE_FUNCTION
     Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const { return {0.0, 1.0}; }
 
-    void load_initial_potential() {
-        Kokkos::printf("Loading initial potential from initial_potential.csv\n");
-        std::ifstream file("examples/sheath/initial_potential.csv");
-        std::string line;
-        int j = 0;
-        while (std::getline(file, line)) {
-            try {
-                double value = std::stod(line);
-                Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, j), value);
-                j++;
-            } catch (const std::invalid_argument& e) {
-                // Handle the case where conversion fails
-                Kokkos::printf("Invalid line in initial_potential.csv: %s\n", line.c_str());
-            }
-        }
-    }
+    // void load_initial_potential() {
+    //     Kokkos::printf("Loading initial potential from initial_potential.csv\n");
+    //     std::ifstream file("examples/sheath/initial_potential.csv");
+    //     std::string line;
+    //     int j = 0;
+    //     while (std::getline(file, line)) {
+    //         try {
+    //             double value = std::stod(line);
+    //             Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, j), value);
+    //             j++;
+    //         } catch (const std::invalid_argument& e) {
+    //             // Handle the case where conversion fails
+    //             Kokkos::printf("Invalid line in initial_potential.csv: %s\n", line.c_str());
+    //         }
+    //     }
+    // }
 
     void initialize_distribution() {
         using Kokkos::abs;
@@ -158,12 +158,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         // top boundary, dirichlet
         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
         // bottom boundary, floating potential
-        int nx_mid = nx / 2;
-        // auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), phi);
-        // double flux_e = exp(phi_host(nx_mid, ngc)) * v_th_e / sqrt(2 * Kokkos::numbers::pi);
-        // double flux_i = 1.0 / sqrt(1 - 2.0 * phi_host(nx_mid, ngc)) * u0;
-        // E_w += (flux_i - flux_e) * dt;
-
+        int nx_mid  = nx / 2;
         double dE_w = 0.0;
         Kokkos::parallel_reduce(
             Kokkos::MDRangePolicy({ngc, ngc}, {nvx - ngc, nvy - ngc}),
@@ -291,24 +286,9 @@ int main(int argc, char* argv[]) {
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi", "fi", "fe"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 
-    // Kokkos::Timer timer;
-    // double start_time = timer.seconds();
-    // // solve the potential first
-    // auto& phi    = world.phi;
-    // double phi_w = world.phi_w;
-    // Kokkos::parallel_for(
-    //     Kokkos::MDRangePolicy({0, 0}, {grid.ncells[0], grid.ncells[1]}), KOKKOS_LAMBDA(const int i, const int j) {
-    //         auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, 0); // species does not matter here
-    //         phi(i, j)           = phi_w * Kokkos::exp(-y / 2.5);
-    //     });
-    world.initialize_distribution();
-    world.particle_boundary_conditions();
-    vlasolver.compute_charge_density();
-    writer.write(0);
-    // poisson_solver.solve();
-    //
-    // // initialize distribution using the solved potential
-    // vlasolver.solve();
-    // double end_time = timer.seconds();
-    // Kokkos::printf("Total time taken: %f seconds\n", end_time - start_time);
+    Kokkos::Timer timer;
+    double start_time = timer.seconds();
+    vlasolver.solve();
+    double end_time = timer.seconds();
+    Kokkos::printf("Total time taken: %f seconds\n", end_time - start_time);
 }

@@ -22,13 +22,12 @@ Lx, Ly = 1.0, 1.0  # normalized to 1
 
 vx_min_e, vy_min_e = -4, -5
 Lvx_e, Lvy_e = 8, 10
-# in simulation, the ranges are multiplied by vr
-vx_min_i, vy_min_i = -4, -20
-Lvx_i, Lvy_i = 8, 21
+# in simulation, the ion velocity ranges are multiplied by vr
+vx_min_i, vy_min_i = -4, -15
+Lvx_i, Lvy_i = 8, 16
 G = 3
-step = 15000
+step = 0
 is_include_ghost = True
-is_normalized_to_ion = True
 Te = 1.0  # eV
 Ti = 0.1  # eV
 me = 1.0
@@ -41,7 +40,7 @@ u0 = np.sqrt(Te / mi)
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/../../data/sheath/output_{step:05d}.h5",
+    f"{file_path}/../../data/sheath/output_{step:04d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -98,14 +97,15 @@ dvy_i = dvy_i * vr
 vy_i = vy_i * vr
 f_ea = np.zeros((fi.shape[1], fi.shape[3]))
 f_ia = np.zeros((fi.shape[1], fi.shape[3]))
+phi_a = np.tile(np.loadtxt(f"{file_path}/initial_potential.csv"), (phi.shape[0], 1))
 for j in range(ne.shape[1]):
-    v_ce = np.sqrt(2 * (phi[nx // 2, j] - phi_w))
+    v_ce = np.sqrt(2 * (phi_a[nx // 2, j] - phi_w))
     for jv, vy in enumerate(vy_e):
         if vy <= v_ce:
-            f_ea[j, jv] = np.exp(-(vy**2) / 2 + phi[nx // 2, j]) / np.sqrt(2 * np.pi)
+            f_ea[j, jv] = np.exp(-(vy**2) / 2 + phi_a[nx // 2, j]) / np.sqrt(2 * np.pi)
             n_ea[j] += f_ea[j, jv] * dvy_e
 
-    v_ci = -np.sqrt(2 * np.abs(phi[nx // 2, j]) / mr)
+    v_ci = -np.sqrt(2 * np.abs(phi_a[nx // 2, j]) / mr)
     for jv, vy in enumerate(vy_i):
         if vy <= v_ci:
             f_ia[j, jv] = (
@@ -117,20 +117,23 @@ for j in range(ne.shape[1]):
 
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
-if is_normalized_to_ion:
-    phi_norm = phi[phi.shape[0] // 2, :] / (2 * Tr)
-    plt.plot(y, phi_norm)
-    plt.ylabel("$e\\phi/2k_BT_i$")
-else:
-    phi_norm = phi[phi.shape[0] // 2, :]
-    plt.plot(y, phi_norm)
-    plt.ylabel("$e\\phi/k_BT_e$")
+phi_norm = phi[phi.shape[0] // 2, :] / (2 * Tr)
+plt.plot(y, phi_norm, label="$\\phi$")
+plt.plot(
+    y[G:-G:3],
+    phi_a[phi_a.shape[0] // 2, G:-G:3] / (2 * Tr),
+    "o",
+    alpha=0.5,
+    label="$\\phi_a$",
+)
+plt.legend()
+plt.ylabel("$e\\phi/2k_BT_i$")
 plt.xlabel("$y/L_y$")
 plt.subplot(1, 2, 2)
 plt.plot(y, ne[ne.shape[0] // 2, :], label="$n_e$")
 plt.plot(y, ni[ni.shape[0] // 2, :], label="$n_i$")
-plt.plot(y[::3], n_ea[::3], "o", alpha=0.5, label="$n_{ea}$")
-plt.plot(y[::3], n_ia[::3], "^", alpha=0.5, label="$n_{ia}$")
+plt.plot(y[G:-G:3], n_ea[G:-G:3], "o", alpha=0.5, label="$n_{ea}$")
+plt.plot(y[G:-G:3], n_ia[G:-G:3], "^", alpha=0.5, label="$n_{ia}$")
 plt.legend()
 plt.xlabel("$y/L_y$")
 plt.ylabel("$n/n_0$")
@@ -143,7 +146,7 @@ VY_e, Y = np.meshgrid(vy_e, y)
 plt.contourf(
     Y,
     VY_e,
-    fe[fe.shape[0] // 2, :, fe.shape[2] // 2, :],
+    fe.sum(axis=2)[fe.shape[0] // 2, :, :] * dvx_e,
     cmap="jet",
     levels=50,
     vmin=0,
@@ -175,7 +178,7 @@ plt.contourf(
     levels=50,
     vmin=0,
 )
-plt.ylim(-15, 1)
+plt.ylim(vy_min_i, vy_min_i + Lvy_i)
 plt.xlabel("$y/L_y$")
 plt.ylabel("$v_y/v_{th,i}$")
 plt.title("$f_i$")
@@ -189,7 +192,7 @@ plt.contourf(
     levels=50,
     vmin=0,
 )
-plt.ylim(-10, 1)
+plt.ylim(vy_min_i, vy_min_i + Lvy_i)
 plt.xlabel("$y/L_y$")
 plt.ylabel("$v_y/v_{th,i}$")
 plt.title("$f_{ia}$")

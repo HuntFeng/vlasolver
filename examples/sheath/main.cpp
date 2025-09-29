@@ -267,8 +267,8 @@ int main(int argc, char* argv[]) {
 
     Grid grid({nx_intr, ny_intr, nvx_intr, nvy_intr}, ngc);
     grid.set_grid({x_min_e, y_min_e, vx_min_e, vy_min_e}, {Lx_e, Ly_e, Lvx_e, Lvy_e}, 0); // electrons
-    grid.set_grid({x_min_i * v_th_i, y_min_i * v_th_i, vx_min_i * v_th_i, vy_min_i * v_th_i},
-                  {Lx_i * v_th_i, Ly_i * v_th_i, Lvx_i * v_th_i, Lvy_i * v_th_i}, 1); // ions
+    grid.set_grid({x_min_i, y_min_i, vx_min_i * v_th_i, vy_min_i * v_th_i},
+                  {Lx_i, Ly_i, Lvx_i * v_th_i, Lvy_i * v_th_i}, 1); // ions
 
     ImmersedWorld world(grid);
     world.dt          = dt;                                  // time step size

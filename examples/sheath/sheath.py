@@ -50,7 +50,7 @@ def poisson_equation(x, y):
 # phi(0) = phi_w, phi'(L) = 0
 def boundary_conditions(ya, yb):
     # return np.array([ya[0] - phi_w, yb[0]])
-    return np.array([ya[0] - phi_w, yb[1]])
+    return np.array([yb[0], yb[1]])
 
 
 dx = L / 125

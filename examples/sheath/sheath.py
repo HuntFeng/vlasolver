@@ -19,6 +19,28 @@ def poisson_equation(x, y):
     dphi_dx = y[1]
     n_e = np.exp(phi)
     n_i = 1.0 / np.sqrt(1 - 2 * phi)
+
+    # ve = np.linspace(-5, 5, 110)
+    # X, V = np.meshgrid(x, ve, indexing="ij")
+    # fe = np.exp(phi[:, None] - V**2 / 2) / np.sqrt(2 * np.pi)
+    # v_ce = np.sqrt(2 * (phi - phi_w)[:, None] / me)  # cutoff velocity
+    # fe[V > v_ce] = 0.0
+    # vi = np.linspace(-15, 1, 110) * vr
+    # X, V = np.meshgrid(x, vi, indexing="ij")
+    # u0 = np.sqrt(Te / mi)
+    # v_ci = -np.sqrt(2 * np.abs(phi)[:, None] / mi)  # cutoff velocity
+    # fi = (
+    #     np.exp(-((np.sqrt(V**2 - v_ci**2) - u0) ** 2) / (2 * vr**2))
+    #     / np.sqrt(2 * np.pi)
+    #     / vr
+    # )
+    # fi[V > v_ci] = 0.0
+    #
+    # n_e = np.zeros(phi.shape)
+    # n_i = np.zeros(phi.shape)
+    # for i in range(len(phi)):
+    #     n_e[i] = np.trapezoid(fe[i, :], ve)
+    #     n_i[i] = np.trapezoid(fi[i, :], vi)
     d2phi_dx2 = -(n_i - n_e)
     return np.vstack((dphi_dx, d2phi_dx2))
 
@@ -27,7 +49,8 @@ def poisson_equation(x, y):
 # phi(0) = phi_w, phi(L) = 0
 # phi(0) = phi_w, phi'(L) = 0
 def boundary_conditions(ya, yb):
-    return np.array([ya[0] - phi_w, yb[0]])
+    # return np.array([ya[0] - phi_w, yb[0]])
+    return np.array([ya[0] - phi_w, yb[1]])
 
 
 dx = L / 125

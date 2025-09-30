@@ -1,3 +1,5 @@
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import solve_bvp
@@ -42,27 +44,12 @@ else:
 
 phi = solution.sol(x)[0]
 x /= L
-plt.figure()
-plt.subplot(2, 1, 1)
-plt.plot(x, phi, label="solution")
-plt.plot(x, y_guess[0], "--", label="initial guess")
-plt.legend()
-plt.xlabel("$x$")
-plt.ylabel("$\\phi$")
-
-plt.subplot(2, 1, 2)
-plt.plot(x, np.exp(phi), label="$n_e$")
-plt.plot(x, 1.0 / np.sqrt(1 - 2 * phi), label="$n_i$")
-plt.legend()
-plt.xlabel("$x$")
-plt.ylabel("$n$")
-plt.tight_layout()
 
 # electron distribution function
-phi = y_guess[0]
+# phi = y_guess[0]
 plt.figure()
-v = np.linspace(-5, 5, 110)
-X, V = np.meshgrid(x, v, indexing="ij")
+ve = np.linspace(-5, 5, 110)
+X, V = np.meshgrid(x, ve, indexing="ij")
 fe = np.exp(phi[:, None] - V**2 / 2) / np.sqrt(2 * np.pi)
 v_ce = np.sqrt(2 * (phi - phi_w)[:, None] / me)  # cutoff velocity
 fe[V > v_ce] = 0.0
@@ -73,8 +60,8 @@ plt.xlabel("$x$")
 plt.ylabel("$v$")
 
 # ion distribution function
-v = np.linspace(-15, 1, 110) * vr
-X, V = np.meshgrid(x, v, indexing="ij")
+vi = np.linspace(-15, 1, 110) * vr
+X, V = np.meshgrid(x, vi, indexing="ij")
 u0 = np.sqrt(Te / mi)
 v_ci = -np.sqrt(2 * np.abs(phi)[:, None] / mi)  # cutoff velocity
 fi = (
@@ -89,9 +76,35 @@ plt.colorbar(label="$f_i$")
 plt.xlabel("$x$")
 plt.ylabel("$v$")
 plt.tight_layout()
+
+plt.figure()
+plt.subplot(2, 1, 1)
+plt.plot(x, phi, label="solution")
+plt.plot(x, y_guess[0], "--", label="initial guess")
+plt.legend()
+plt.xlabel("$x$")
+plt.ylabel("$\\phi$")
+
+
+ne = np.zeros(phi.shape)
+ni = np.zeros(phi.shape)
+for i in range(len(phi)):
+    ne[i] = np.trapezoid(fe[i, :], ve)
+    ni[i] = np.trapezoid(fi[i, :], vi)
+plt.subplot(2, 1, 2)
+# plt.plot(x, np.exp(phi), label="$n_e$")
+# plt.plot(x, 1.0 / np.sqrt(1 - 2 * phi), label="$n_i$")
+plt.plot(x, ne, label="$n_e$")
+plt.plot(x, ni, label="$n_i$")
+plt.legend()
+plt.xlabel("$x$")
+plt.ylabel("$n$")
+plt.tight_layout()
+
 plt.show()
+
 
 # save initial potential to csv file
 G = 3
 phi_padded = np.pad(phi, (G, G), "edge")
-np.savetxt("initial_potential.csv", phi_padded.T)
+np.savetxt(f"{os.path.dirname(__file__)}/potential.csv", phi_padded.T)

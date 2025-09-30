@@ -5,7 +5,7 @@
 #include "full/writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
-#include <fstream>
+// #include <fstream>
 #include <iostream>
 #include <string>
 
@@ -55,6 +55,12 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
+
+        // Kokkos::parallel_for(
+        //     Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+        //         auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, 0); // species does not matter here
+        //         phi(i, j)           = phi_w * Kokkos::exp(-y / 2.5);
+        //     });
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
@@ -158,36 +164,43 @@ struct ImmersedWorld : World<ImmersedWorld> {
         // top boundary, dirichlet
         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
         // bottom boundary, floating potential
-        int nx_mid  = nx / 2;
-        double dE_w = 0.0;
-        Kokkos::parallel_reduce(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nvx - ngc, nvy - ngc}),
-            KOKKOS_CLASS_LAMBDA(const int iv, const int jv, double& local_E_w) {
-                {
-                    // electron
-                    auto [x, y, vx, vy]     = grid.center({nx_mid, ngc, iv, jv}, 0);
-                    auto [dx, dy, dvx, dvy] = grid.spacing[0];
-                    double v_ce             = sqrt(2 * (phi(nx_mid, ngc) - phi_w) / m[0]);
-                    double f_e              = (vy <= v_ce)
-                                                  ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(nx_mid, ngc)) /
-                                           (2.0 * pi * pow(v_th_e, 2))
-                                                  : 0.0;
-                    local_E_w += (vy < 0.0) ? -abs(vy) * f_e * dvx * dvy * dt : 0.0;
-                };
-                {
-                    // ion
-                    auto [x, y, vx, vy]     = grid.center({nx_mid, ngc, iv, jv}, 1);
-                    auto [dx, dy, dvx, dvy] = grid.spacing[1];
-                    double v_ci             = -sqrt(2 * abs(phi(nx_mid, ngc)) / m[1]); // ion cutoff velocity
-                    double f_i = (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
-                                                    (2.0 * pow(v_th_i, 2))) /
-                                                    (2.0 * pi * pow(v_th_i, 2))
-                                              : 0.0;
-                    local_E_w += (vy < 0.0) ? abs(vy) * f_i * dvx * dvy * dt : 0.0;
-                };
-            },
-            dE_w);
-        E_w += dE_w;
+        int nx_mid    = nx / 2;
+        auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), phi);
+        double flux_e = exp(phi_host(nx_mid, ngc)) * v_th_e / sqrt(2 * Kokkos::numbers::pi);
+        // double flux_i = 1.0 / sqrt(1 - 2.0 * phi_host(nx_mid, ngc)) * u0;
+        double flux_i = 1 * u0; // n0 * u0 (const)
+        E_w += (flux_i - flux_e) * dt;
+        // double dE_w = 0.0;
+        // Kokkos::parallel_reduce(
+        //     Kokkos::MDRangePolicy({ngc, ngc}, {nvx - ngc, nvy - ngc}),
+        //     KOKKOS_CLASS_LAMBDA(const int iv, const int jv, double& local_E_w) {
+        //         {
+        //             // electron
+        //             auto [x, y, vx, vy]     = grid.center({nx_mid, ngc, iv, jv}, 0);
+        //             auto [dx, dy, dvx, dvy] = grid.spacing[0];
+        //             double v_ce             = sqrt(2 * (phi(nx_mid, ngc) - phi_w) / m[0]);
+        //             double f_e              = (vy <= v_ce)
+        //                                           ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) +
+        //                                           phi(nx_mid, ngc)) /
+        //                                    (2.0 * pi * pow(v_th_e, 2))
+        //                                           : 0.0;
+        //             local_E_w += (vy < 0.0) ? -abs(vy) * f_e * dvx * dvy * dt : 0.0;
+        //         };
+        //         {
+        //             // ion
+        //             auto [x, y, vx, vy]     = grid.center({nx_mid, ngc, iv, jv}, 1);
+        //             auto [dx, dy, dvx, dvy] = grid.spacing[1];
+        //             double v_ci             = -sqrt(2 * abs(phi(nx_mid, ngc)) / m[1]); // ion cutoff velocity
+        //             double f_i = (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
+        //                                             (2.0 * pow(v_th_i, 2))) /
+        //                                             (2.0 * pi * pow(v_th_i, 2))
+        //                                       : 0.0;
+        //             local_E_w += (vy < 0.0) ? abs(vy) * f_i * dvx * dvy * dt : 0.0;
+        //         };
+        //     },
+        //     dE_w);
+        // E_w += dE_w;
+        // E_w += dE_w - flux_e * dt;
         Kokkos::parallel_for(
             Kokkos::RangePolicy(0, nx), KOKKOS_CLASS_LAMBDA(const int i) {
                 // Ey = (flux_i - flux_e) = -dphi/dy

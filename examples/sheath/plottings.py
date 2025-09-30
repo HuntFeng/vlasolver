@@ -26,7 +26,7 @@ Lvx_e, Lvy_e = 8, 10
 vx_min_i, vy_min_i = -4, -15
 Lvx_i, Lvy_i = 8, 16
 G = 3
-step = 0
+step = 8000
 is_include_ghost = True
 Te = 1.0  # eV
 Ti = 0.1  # eV
@@ -98,6 +98,7 @@ vy_i = vy_i * vr
 f_ea = np.zeros((fi.shape[1], fi.shape[3]))
 f_ia = np.zeros((fi.shape[1], fi.shape[3]))
 phi_a = np.tile(np.loadtxt(f"{file_path}/initial_potential.csv"), (phi.shape[0], 1))
+# phi_a = phi.copy()
 for j in range(ne.shape[1]):
     v_ce = np.sqrt(2 * (phi_a[nx // 2, j] - phi_w))
     for jv, vy in enumerate(vy_e):

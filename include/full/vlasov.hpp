@@ -11,10 +11,9 @@
  * Normalized Vlasov-Poisson system (subscript n omitted):
  * fe_t + ve fe_x - E fe_v = 0 (electron)
  * fi_t + vi fi_x + E fi_v / mu = 0 (ion)
- * E_x = int (fi - fe) dv
+ * d^2phi/dx^2 = -int (fi - fe) dv
  * where mu = m_i / m_e is the mass ratio of the ion to the electron.
  */
-#include "grid.hpp"
 #include "poisson.hpp"
 #include "writer.hpp"
 #include <Kokkos_Core.hpp>
@@ -32,220 +31,70 @@ class Vlasolver {
           poisson_solver(poisson_solver),
           writer(writer) {}
 
-    /**
-     * Compute flux using third order extrapolation
-     */
-    KOKKOS_FUNCTION
-    double compute_flux(Kokkos::Array<int, DIM> index,
-                        Kokkos::Array<double, DIM> spacing,
-                        int axis,
-                        double advection_velocity,
-                        const Kokkos::View<double****>& f) const {
-        // third order upwind-biased interpolation
-        using Kokkos::max;
-        using Kokkos::min;
-        auto [i, j, iv, jv]     = index;
-        auto [dx, dy, dvx, dvy] = spacing;
-
-        int floor_v             = (int)Kokkos::floor(advection_velocity);
-        auto f_val              = KOKKOS_CLASS_LAMBDA(int offset)->double {
-            if (axis == 0) {
-                int is = i - floor_v;
-                return f(is + offset, j, iv, jv);
-            } else if (axis == 1) {
-                int js = j - floor_v;
-                return f(i, js + offset, iv, jv);
-            } else if (axis == 2) {
-                int ivs = iv - floor_v;
-                int ind = max(min(ivs + offset, f.extent_int(2) - 1), 0);
-                return f(i, j, ind, jv);
-            } else {
-                int jvs = jv - floor_v;
-                int ind = max(min(jvs + offset, f.extent_int(3) - 1), 0);
-                return f(i, j, iv, ind);
-            }
-        };
-
-        double fm1   = f_val(-1);
-        double f0    = f_val(0);
-        double fp1   = f_val(1);
-        double f_min = 0.0;
-        double f_max = 0.0;
-        if (axis == 0) {
-            for (int n = 0; n < f.extent_int(0); ++n) {
-                f_max = Kokkos::max(f_max, f(n, j, iv, jv));
-            }
-        } else if (axis == 1) {
-            for (int n = 0; n < f.extent_int(1); ++n) {
-                f_max = Kokkos::max(f_max, f(i, n, iv, jv));
-            }
-        } else if (axis == 2) {
-            for (int n = 0; n < f.extent_int(2); ++n) {
-                f_max = Kokkos::max(f_max, f(i, j, n, jv));
-            }
-        } else {
-            for (int n = 0; n < f.extent_int(3); ++n) {
-                f_max = Kokkos::max(f_max, f(i, j, iv, n));
-            }
-        }
-
-        // third order extrapolation
-        double plus_diff  = fp1 - f0;
-        double minus_diff = f0 - fm1;
-        double ep_plus =
-            (plus_diff >= 0) ? min(1.0, 2.0 * (f0 - f_min) / plus_diff) : min(1.0, 2.0 * (f0 - f_max) / plus_diff);
-        double ep_minus =
-            (minus_diff >= 0) ? min(1.0, 2.0 * (f_max - f0) / minus_diff) : min(1.0, 2.0 * (f_min - f0) / minus_diff);
-
-        double flux = 0.0;
-        double nu   = 0.0;
-        if (advection_velocity >= 0.0) {
-            // downwind
-            nu   = advection_velocity - floor_v;
-            flux = f0;
-            flux += ep_plus * (1 - nu) * (2 - nu) * plus_diff / 6.0;
-            flux += ep_minus * (1 - nu) * (1 + nu) * minus_diff / 6.0;
-            flux *= nu;
-        } else {
-            // upwind
-            nu   = advection_velocity - (floor_v + 1);
-            flux = f0;
-            flux += -ep_plus * (1 - nu) * (1 + nu) * plus_diff / 6.0;
-            flux += -ep_minus * (2 + nu) * (1 + nu) * minus_diff / 6.0;
-            flux *= nu;
-        }
-
-        if (axis == 0) {
-            int is = i - floor_v;
-            if (advection_velocity >= 0.0) {
-                for (int n = is + 1; n <= i; ++n)
-                    flux += f(n, j, iv, jv);
-            } else {
-                for (int n = i + 1; n <= is - 1; ++n)
-                    flux -= f(n, j, iv, jv);
-            }
-        } else if (axis == 1) {
-            int js = j - floor_v;
-            if (advection_velocity >= 0.0) {
-                for (int n = js + 1; n <= j; ++n)
-                    flux += f(i, n, iv, jv);
-            } else {
-                for (int n = j + 1; n <= js - 1; ++n)
-                    flux -= f(i, n, iv, jv);
-            }
-        } else if (axis == 2) {
-            int ivs = iv - floor_v;
-            if (advection_velocity >= 0.0) {
-                for (int n = max(ivs + 1, 0); n <= iv; ++n)
-                    flux += f(i, j, n, jv);
-            } else {
-                for (int n = iv + 1; n <= min(ivs - 1, f.extent_int(2) - 1); ++n)
-                    flux -= f(i, j, n, jv);
-            }
-        } else {
-            int jvs = jv - floor_v;
-            if (advection_velocity >= 0.0) {
-                for (int n = max(jvs + 1, 0); n <= jv; ++n)
-                    flux += f(i, j, iv, n);
-            } else {
-                for (int n = jv + 1; n <= min(jvs - 1, f.extent_int(3) - 1); ++n)
-                    flux -= f(i, j, iv, n);
-            }
-        }
-        return flux;
-    }
-
-    void initialize_distribution() const {
-        using Kokkos::cos;
-        using Kokkos::exp;
-        using Kokkos::pow;
-        using Kokkos::sqrt;
-        using Kokkos::numbers::pi;
-
-        // must assign grid and f here, otherwise, using world.grid.xxx in device region causes illegal memory access
-        auto& grid              = world.grid;
-        auto& f                 = world.f;
-
-        auto [nx, ny, nvx, nvy] = grid.ncells;
-        auto [dx, dy, dvx, dvy] = grid.spacing;
-        auto [Lx, Ly, Lvx, Lvy] = grid.size;
-        int ngc                 = grid.ngc;
-
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                if (iv < ngc || iv >= nvx - ngc || jv < ngc || jv >= nvy - ngc)
-                    return;
-
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-                double eta          = world.surface(x, y);
-                // example 4 plasma past charged cylinder from IFE-CSL, no ions and electrons initially
-                f(i, j, iv, jv) = 0.0;
-            });
-    }
-
     void extrapolate_distribution_function() const {
         auto& grid              = world.grid;
         auto& f                 = world.f;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dx               = grid.spacing[0];
-        double dy               = grid.spacing[1];
+        double dx               = grid.spacing[0][0]; // species doesn't matter here
+        double dy               = grid.spacing[0][1];
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                for (int sp = 0; sp < 2; ++sp) {
+                    auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, sp);
 
-                // always extrapolate dist function from the interior of the immersed object
-                double eta = world.surface(x, y);
-                if (eta >= 0.0)
-                    return;
+                    // always extrapolate dist function from the interior of the immersed object
+                    double eta = world.surface(x, y);
+                    if (eta >= 0.0)
+                        return;
 
-                // now (x,y) is the interior of the immersed object
-                double eta_l  = world.surface(x - dx, y);
-                double eta_r  = world.surface(x + dx, y);
-                double eta_b  = world.surface(x, y - dy);
-                double eta_t  = world.surface(x, y + dy);
-                auto [n1, n2] = world.normal(x, y, dx, dy);
-                // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
-                int Ng                    = 0;
-                double extrapolated_value = 0.0;
-                if (eta * eta_l < 0.0) {
-                    double v_dot_n = vx * n1 + vy * n2;
-                    double f_F1    = f(i - 1, j, iv, jv);
-                    double f_F2    = f(i - 2, j, iv, jv);
-                    double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
-                    extrapolated_value += 2 * f_I - f_F1;
-                    Ng++;
-                }
-                if (eta * eta_r < 0.0) {
-                    double v_dot_n = vx * n1 + vy * n2;
-                    double f_F1    = f(i + 1, j, iv, jv);
-                    double f_F2    = f(i + 2, j, iv, jv);
-                    double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
-                    extrapolated_value += 2 * f_I - f_F1;
-                    Ng++;
-                }
-                if (eta * eta_b < 0.0) {
-                    double v_dot_n = vx * n1 + vy * n2;
-                    double f_F1    = f(i, j - 1, iv, jv);
-                    double f_F2    = f(i, j - 2, iv, jv);
-                    double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
-                    extrapolated_value += 2 * f_I - f_F1;
-                    Ng++;
-                }
-                if (eta * eta_t < 0.0) {
-                    double v_dot_n = vx * n1 + vy * n2;
-                    double f_F1    = f(i, j + 1, iv, jv);
-                    double f_F2    = f(i, j + 2, iv, jv);
-                    double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
-                    extrapolated_value += 2 * f_I - f_F1;
-                    Ng++;
-                }
+                    // now (x,y) is the interior of the immersed object
+                    double eta_l  = world.surface(x - dx, y);
+                    double eta_r  = world.surface(x + dx, y);
+                    double eta_b  = world.surface(x, y - dy);
+                    double eta_t  = world.surface(x, y + dy);
+                    auto [n1, n2] = world.normal(x, y, dx, dy);
+                    // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
+                    int Ng                    = 0;
+                    double extrapolated_value = 0.0;
+                    if (eta * eta_l < 0.0) {
+                        double v_dot_n = vx * n1 + vy * n2;
+                        double f_F1    = f(i - 1, j, iv, jv, sp);
+                        double f_F2    = f(i - 2, j, iv, jv, sp);
+                        double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
+                        extrapolated_value += 2 * f_I - f_F1;
+                        Ng++;
+                    }
+                    if (eta * eta_r < 0.0) {
+                        double v_dot_n = vx * n1 + vy * n2;
+                        double f_F1    = f(i + 1, j, iv, jv, sp);
+                        double f_F2    = f(i + 2, j, iv, jv, sp);
+                        double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
+                        extrapolated_value += 2 * f_I - f_F1;
+                        Ng++;
+                    }
+                    if (eta * eta_b < 0.0) {
+                        double v_dot_n = vx * n1 + vy * n2;
+                        double f_F1    = f(i, j - 1, iv, jv, sp);
+                        double f_F2    = f(i, j - 2, iv, jv, sp);
+                        double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
+                        extrapolated_value += 2 * f_I - f_F1;
+                        Ng++;
+                    }
+                    if (eta * eta_t < 0.0) {
+                        double v_dot_n = vx * n1 + vy * n2;
+                        double f_F1    = f(i, j + 1, iv, jv, sp);
+                        double f_F2    = f(i, j + 2, iv, jv, sp);
+                        double f_I     = (v_dot_n < 0.0) ? 1.5 * f_F1 - 0.5 * f_F2 : 0.0;
+                        extrapolated_value += 2 * f_I - f_F1;
+                        Ng++;
+                    }
 
-                if (Ng > 0)
-                    f(i, j, iv, jv) = extrapolated_value / Ng;
+                    if (Ng > 0)
+                        f(i, j, iv, jv, sp) = extrapolated_value / Ng;
+                }
             });
     }
     void compute_charge_density() const {
@@ -254,26 +103,26 @@ class Vlasolver {
         auto& f                 = world.f;
         auto& n                 = world.n;
         auto& grid              = world.grid;
-        auto [dx, dy, dvx, dvy] = grid.spacing;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
+        auto& q                 = world.q;
 
         Kokkos::deep_copy(n, 0.0);
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
-                if (world.surface(x, y) < 0.0)
-                    return;
+                for (int sp = 0; sp < 2; ++sp) {
+                    auto [dx, dy, dvx, dvy] = grid.spacing[sp];
+                    auto [x, y, vx, vy]     = grid.center({i, j, 0, 0}, sp);
+                    if (world.surface(x, y) < 0.0)
+                        return;
 
-                double number_density = 0.0;
-                for (int iv = ngc; iv < nvx - ngc; ++iv)
-                    for (int jv = ngc; jv < nvy - ngc; ++jv)
-                        number_density += f(i, j, iv, jv) * dvx * dvy;
-                n(i, j) = number_density;
-                // rho(i, j) = number_density; // only count ions, electrons follow Boltzmann distribution
-                // rho(i, j) = number_density - Kokkos::exp((phi(i, j) - 0.3) / 1.5);
-                rho(i, j) = number_density - Kokkos::exp(phi(i, j));
+                    for (int iv = ngc; iv < nvx - ngc; ++iv)
+                        for (int jv = ngc; jv < nvy - ngc; ++jv)
+                            n(i, j, sp) += f(i, j, iv, jv, sp) * dvx * dvy;
+
+                    rho(i, j) += q[sp] * n(i, j, sp);
+                }
             });
     }
 
@@ -283,8 +132,8 @@ class Vlasolver {
         auto& phi  = world.phi;
         auto& eps  = world.eps;
         auto& grid = world.grid;
-        double dx  = grid.spacing[0];
-        double dy  = grid.spacing[1];
+        double dx  = grid.spacing[0][0]; // species does not matter here
+        double dy  = grid.spacing[0][1];
         int nx     = grid.ncells[0];
         int ny     = grid.ncells[1];
         int ngc    = grid.ngc;
@@ -297,7 +146,7 @@ class Vlasolver {
                 E(i, j, 1) = -(phi(i, j + 1) - phi(i, j - 1)) / (2.0 * dy);
 
                 // for boundary cells, compute electric field using jump conditions
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, 0); // species does not matter here
                 double eta          = world.surface(x, y);
                 double eta_l        = world.surface(x - dx, y);
                 double eta_r        = world.surface(x + dx, y);
@@ -357,7 +206,7 @@ class Vlasolver {
                 }
             });
     }
-    void pfc_update(double dt, int axis) const {
+    void pfc_update(double dt, int axis, int sp) const {
         auto& grid              = world.grid;
         auto& f                 = world.f;
         auto& E                 = world.E;
@@ -367,8 +216,9 @@ class Vlasolver {
         auto& flux_1st_r        = world.flux_1st_r;
         auto& ep_l              = world.ep_l;
         auto& ep_r              = world.ep_r;
+        auto& m                 = world.m;
+        auto& q                 = world.q;
 
-        auto [dx, dy, dvx, dvy] = grid.spacing;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
@@ -381,7 +231,8 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc - 1, ngc - 1, ngc - 1, ngc - 1}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                auto [x, y, vx, vy]     = grid.center({i, j, iv, jv}, sp);
+                auto [dx, dy, dvx, dvy] = grid.spacing[sp];
                 double f0 = 0.0, fp1 = 0.0, fm1 = 0.0;
                 double advection_velocity = 0;
                 int floor_v               = 0;
@@ -390,30 +241,30 @@ class Vlasolver {
                     advection_velocity = vx * dt / dx;
                     floor_v            = (int)Kokkos::floor(advection_velocity);
                     s                  = i - floor_v;
-                    f0                 = f(s, j, iv, jv);
-                    fp1                = f(s + 1, j, iv, jv);
-                    fm1                = f(s - 1, j, iv, jv);
+                    f0                 = f(s, j, iv, jv, sp);
+                    fp1                = f(s + 1, j, iv, jv, sp);
+                    fm1                = f(s - 1, j, iv, jv, sp);
                 } else if (axis == 1) {
                     advection_velocity = vy * dt / dy;
                     floor_v            = (int)Kokkos::floor(advection_velocity);
                     s                  = j - floor_v;
-                    f0                 = f(i, s, iv, jv);
-                    fp1                = f(i, s + 1, iv, jv);
-                    fm1                = f(i, s - 1, iv, jv);
+                    f0                 = f(i, s, iv, jv, sp);
+                    fp1                = f(i, s + 1, iv, jv, sp);
+                    fm1                = f(i, s - 1, iv, jv, sp);
                 } else if (axis == 2) {
-                    advection_velocity = E(i, j, 0) * dt / dvx;
+                    advection_velocity = q[sp] / m[sp] * E(i, j, 0) * dt / dvx;
                     floor_v            = (int)Kokkos::floor(advection_velocity);
                     s                  = iv - floor_v;
-                    f0                 = f(i, j, s, jv);
-                    fp1                = f(i, j, s + 1, jv);
-                    fm1                = f(i, j, s - 1, jv);
+                    f0                 = f(i, j, s, jv, sp);
+                    fp1                = f(i, j, s + 1, jv, sp);
+                    fm1                = f(i, j, s - 1, jv, sp);
                 } else if (axis == 3) {
-                    advection_velocity = E(i, j, 1) * dt / dvy;
+                    advection_velocity = q[sp] / m[sp] * E(i, j, 1) * dt / dvy;
                     floor_v            = (int)Kokkos::floor(advection_velocity);
                     s                  = jv - floor_v;
-                    f0                 = f(i, j, iv, s);
-                    fp1                = f(i, j, iv, s + 1);
-                    fm1                = f(i, j, iv, s - 1);
+                    f0                 = f(i, j, iv, s, sp);
+                    fp1                = f(i, j, iv, s + 1, sp);
+                    fm1                = f(i, j, iv, s - 1, sp);
                 }
 
                 double plus_diff  = fp1 - f0;
@@ -439,11 +290,11 @@ class Vlasolver {
                 if (axis == 0) {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= i; ++n)
-                            flux += f(n, j, iv, jv);
+                            flux += f(n, j, iv, jv, sp);
                     } else {
                         for (int n = i + 1; n <= min(s - 1, f.extent_int(0) - 1); ++n)
-                            // flux -= f(n, j, iv, jv);
-                            flux += f(n, j, iv, jv);
+                            // flux -= f(n, j, iv, jv, sp);
+                            flux += f(n, j, iv, jv, sp);
                     }
                     if (i != nx - ngc - 1) {
                         flux_1st_l(i + 1, j, iv, jv) = nu * f0;
@@ -456,10 +307,10 @@ class Vlasolver {
                 } else if (axis == 1) {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= j; ++n)
-                            flux += f(i, n, iv, jv);
+                            flux += f(i, n, iv, jv, sp);
                     } else {
                         for (int n = j + 1; n <= min(s - 1, f.extent_int(1) - 1); ++n)
-                            flux += f(i, n, iv, jv);
+                            flux += f(i, n, iv, jv, sp);
                     }
 
                     if (j != ny - ngc - 1) {
@@ -473,10 +324,10 @@ class Vlasolver {
                 } else if (axis == 2) {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= iv; ++n)
-                            flux += f(i, j, n, jv);
+                            flux += f(i, j, n, jv, sp);
                     } else {
                         for (int n = iv + 1; n <= min(s - 1, f.extent_int(2) - 1); ++n)
-                            flux += f(i, j, n, jv);
+                            flux += f(i, j, n, jv, sp);
                     }
 
                     if (iv != nvx - ngc - 1) {
@@ -490,10 +341,10 @@ class Vlasolver {
                 } else {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= jv; ++n)
-                            flux += f(i, j, iv, n);
+                            flux += f(i, j, iv, n, sp);
                     } else {
                         for (int n = jv + 1; n <= min(s - 1, f.extent_int(3) - 1); ++n)
-                            flux += f(i, j, iv, n);
+                            flux += f(i, j, iv, n, sp);
                     }
 
                     if (jv != nvy - ngc - 1) {
@@ -514,7 +365,7 @@ class Vlasolver {
                 double d_l = flux_l(i, j, iv, jv) - flux_1st_l(i, j, iv, jv);
                 // double delta = -f(i, j, iv, jv) + flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
                 // should be left - right, I think the paper has a typo
-                double delta = -f(i, j, iv, jv) - flux_1st_l(i, j, iv, jv) + flux_1st_r(i, j, iv, jv);
+                double delta = -f(i, j, iv, jv, sp) - flux_1st_l(i, j, iv, jv) + flux_1st_r(i, j, iv, jv);
                 // if (delta > 0.0) // it should be non-positive since first order monotone fluxes are used
                 //     Kokkos::printf("Positive delta(%d, %d, %d, %d) = %e\n", i, j, iv, jv, delta);
                 double p = d_l - d_r - delta;
@@ -558,17 +409,25 @@ class Vlasolver {
                     ep_right * (flux_r(i, j, iv, jv) - flux_1st_r(i, j, iv, jv)) + flux_1st_r(i, j, iv, jv);
 
                 // udpate distribution function
-                f(i, j, iv, jv) += flux_hat_l - flux_hat_r;
+                if (j == ngc || i == ngc) {
+                    // TODO: 3rd order flux creates oscillation near left/bottom edge, do 1st flux as work around
+                    // can we do 3rd order flux without oscillation?
+                    f(i, j, iv, jv, sp) += flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
+                } else {
+                    f(i, j, iv, jv, sp) += flux_hat_l - flux_hat_r;
+                }
                 // fix any negative value due to numerical error
-                if (f(i, j, iv, jv) < 0.0) {
-                    f(i, j, iv, jv) = 0.0;
+                if (f(i, j, iv, jv, sp) < 0.0) {
+                    f(i, j, iv, jv, sp) = 0.0;
                 }
             });
     }
     void advance(double dt) {
         Kokkos::printf("(VlasovSolver) PFC update along space by dt/2\n");
-        pfc_update(dt / 2.0, 0);
-        pfc_update(dt / 2.0, 1);
+        for (int sp = 0; sp < 2; ++sp) {
+            pfc_update(dt / 2.0, 0, sp);
+            pfc_update(dt / 2.0, 1, sp);
+        }
         Kokkos::printf("(VlasovSolver) Solving electric field\n");
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
@@ -577,20 +436,24 @@ class Vlasolver {
         poisson_solver.solve();
         compute_electric_field();
         Kokkos::printf("(VlasovSolver) PFC update along velocity by dt\n");
-        pfc_update(dt, 2);
-        pfc_update(dt, 3);
+        for (int sp = 0; sp < 2; ++sp) {
+            pfc_update(dt, 2, sp);
+            pfc_update(dt, 3, sp);
+        }
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
         Kokkos::printf("(VlasovSolver) PFC update along space by dt/2\n");
-        pfc_update(dt / 2.0, 0);
-        pfc_update(dt / 2.0, 1);
+        for (int sp = 0; sp < 2; ++sp) {
+            pfc_update(dt / 2.0, 0, sp);
+            pfc_update(dt / 2.0, 1, sp);
+        }
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
     }
 
     void solve() {
         Kokkos::printf("Step %zu:\n", 0);
-        initialize_distribution();
+        world.initialize_distribution();
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
         compute_charge_density();

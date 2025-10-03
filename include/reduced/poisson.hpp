@@ -200,12 +200,9 @@ class PoissonSolver {
         auto& rho = world.rho;
         Kokkos::View<double**> g("g", rho.extent(0), rho.extent(1));
 
-        double Ld       = 0.288;   // Debye length, m
-        double Lx       = 0.4;     // domain length, m
-        double lambda_D = Ld / Lx; // normalized Debye length
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {rho.extent(0), rho.extent(1)}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j) / (2 * lambda_D * lambda_D); });
+            KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j); });
         // apply_boundary(world.phi);
         world.potential_boundary_conditions(world.phi);
         for (int iter = 0; iter < max_iter; ++iter) {

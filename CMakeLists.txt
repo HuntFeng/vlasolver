@@ -22,8 +22,12 @@ target_link_libraries(vlasolver INTERFACE Kokkos::kokkos HighFive INIReader)
 target_compile_features(vlasolver INTERFACE cxx_std_20)
 
 # Build provided examples
-add_executable(cylinder_example examples/cylinder/main.cpp)
-target_link_libraries(cylinder_example PRIVATE vlasolver)
+add_executable(cylinder examples/cylinder/main.cpp)
+target_link_libraries(cylinder PRIVATE vlasolver)
+add_executable(sheath examples/sheath/main.cpp)
+target_link_libraries(sheath PRIVATE vlasolver)
+add_executable(sheath_rough_wall examples/sheath_rough_wall/main.cpp)
+target_link_libraries(sheath_rough_wall PRIVATE vlasolver)
 
 # Print helpful information when configuration is done
 message(STATUS "")

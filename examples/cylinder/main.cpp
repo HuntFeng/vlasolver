@@ -1,8 +1,8 @@
-#include "vlasolver/grid.hpp"
-#include "vlasolver/poisson.hpp"
-#include "vlasolver/vlasov.hpp"
-#include "vlasolver/world.hpp"
-#include "vlasolver/writer.hpp"
+#include "reduced/grid.hpp"
+#include "reduced/poisson.hpp"
+#include "reduced/vlasov.hpp"
+#include "reduced/world.hpp"
+#include "reduced/writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
 #include <iostream>
@@ -21,6 +21,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
         double norm = Kokkos::sqrt(Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2));
         return {(x - 0.375) / norm, y / norm};
     }
+
+    void initialize_distribution() {
+        // no particles initially
+    };
 
     void particle_boundary_conditions() {
         auto& grid              = this->grid;

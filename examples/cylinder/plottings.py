@@ -20,9 +20,10 @@ plt.rcParams.update(
 nx, ny = 160, 50
 Lx, Ly = 1, 0.5
 G = 3
-step = 0
+step = 300
+file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{os.path.dirname(os.path.realpath(__file__))}/../../data/plasma_past_charged_cylinder/output_{step:03d}.h5",
+    f"{file_path}/../../data/cylinder/output_{step:03d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -40,7 +41,7 @@ y = np.arange(dy / 2, Ly, dy)
 Y, X = np.meshgrid(y, x)
 
 fig, ax = plt.subplots(figsize=(6, 3))
-c = ax.contourf(X, Y, ni / ni.max(), cmap="jet", levels=50)
+c = ax.contourf(X, Y, ni, cmap="jet", levels=50)
 plt.colorbar(c, label="$n_i$")
 circle = Wedge(
     center=(0.375, 0),
@@ -56,7 +57,7 @@ ax.set_xlim(dx / 2, Lx - dx / 2)
 ax.set_ylim(dy / 2, Ly - dy / 2)
 ax.set_xlabel("$x$")
 ax.set_ylabel("$y$")
-
+plt.savefig(f"{file_path}/number_density.png")
 
 fig, ax = plt.subplots(figsize=(6, 3))
 c = ax.contourf(X, Y, phi, cmap="jet", levels=50)
@@ -75,6 +76,7 @@ ax.set_xlim(dx / 2, Lx - dx / 2)
 ax.set_ylim(dy / 2, Ly - dy / 2)
 ax.set_xlabel("$x$")
 ax.set_ylabel("$y$")
+plt.savefig(f"{file_path}/potential.png")
 
 fig, ax = plt.subplots(figsize=(6, 3))
 c = ax.contourf(X, Y, Ex, cmap="jet", levels=50)
@@ -93,7 +95,7 @@ ax.set_xlim(dx / 2, Lx - dx / 2)
 ax.set_ylim(dy / 2, Ly - dy / 2)
 ax.set_xlabel("$x$")
 ax.set_ylabel("$y$")
-
+plt.savefig(f"{file_path}/electric_field.png")
 
 plt.figure()
 plt.plot(x, Ex[:, G], "o-", label="$y=0$")
@@ -101,6 +103,7 @@ plt.plot(x, Ex[:, -G], "o-", label="$y=0.5$")
 plt.xlabel("$x$")
 plt.ylabel("$E_x$")
 plt.legend()
+plt.savefig(f"{file_path}/electric_field_profiles.png")
 
 plt.figure()
 plt.plot(x, phi[:, G], "o-", label="$y=0$")
@@ -108,6 +111,6 @@ plt.plot(x, phi[:, -G], "o-", label="$y=0.5$")
 plt.xlabel("$x$")
 plt.ylabel("$\\phi$")
 plt.legend()
-
+plt.savefig(f"{file_path}/potential_profiles.png")
 
 plt.show()

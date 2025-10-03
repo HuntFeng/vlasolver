@@ -1,6 +1,5 @@
 #pragma once
 #include "grid.hpp"
-#include <KokkosCore_Config_SetupBackend.hpp>
 #include <Kokkos_Core.hpp>
 
 /**
@@ -9,7 +8,7 @@
 template <typename WorldType>
 struct World {
     Grid& grid;
-    Kokkos::View<double****> f; // distribution function f(x,y,vx,vy) of ion
+    Kokkos::View<double*****> f; // distribution function f(x,y,vx,vy) of ion and electron
     // Kokkos::View<double****> flux; // storing fluxes to update distribution function
     Kokkos::View<double****> flux_l; // storing fluxes to update distribution function
     Kokkos::View<double****> flux_r; // storing fluxes to update distribution function
@@ -17,15 +16,18 @@ struct World {
     Kokkos::View<double****> flux_1st_l; // storing first order fluxes to update distribution function
     Kokkos::View<double****> flux_1st_r; // storing first order fluxes to update distribution function
     // Kokkos::View<double****> ep; // storing first order fluxes to update distribution function
-    Kokkos::View<double****> ep_l; // storing first order fluxes to update distribution function
-    Kokkos::View<double****> ep_r; // storing first order fluxes to update distribution function
-    Kokkos::View<double**> n;      // number density of ion
-    Kokkos::View<double**> rho;    // ion charge density
-    Kokkos::View<double**> phi;    // potential field (assuming Boltzmann distribution for electron)
-    Kokkos::View<double***> E;     // Ex(x,y), E_y(x,y)
-    Kokkos::View<double**> eps;    // permittivity field
-    Kokkos::View<double**> a;      // jump condition for poisson
-    Kokkos::View<double**> b;      // jump condition for poisson
+    Kokkos::View<double****> ep_l;                   // storing first order fluxes to update distribution function
+    Kokkos::View<double****> ep_r;                   // storing first order fluxes to update distribution function
+    Kokkos::View<double***> n;                       // number density of species
+    Kokkos::View<double**> rho;                      // ion charge density
+    Kokkos::View<double**> phi;                      // potential field (assuming Boltzmann distribution for electron)
+    Kokkos::View<double***> E;                       // Ex(x,y), E_y(x,y)
+    Kokkos::View<double**> eps;                      // permittivity field
+    Kokkos::View<double**> a;                        // jump condition for poisson
+    Kokkos::View<double**> b;                        // jump condition for poisson
+    Kokkos::Array<double, 2> mu = {1.0, 1836.0};     // relative mass of electrons and ions
+    Kokkos::Array<double, 2> q  = {-1.0, 1.0};       // charge number of electrons and ions
+    Kokkos::Array<double, 2> T  = {1.0, 1.0 / 10.0}; // relative temperature of electrons and ions
 
     // simulation time control
     double dt           = 0.0; // time step size
@@ -38,7 +40,7 @@ struct World {
         : grid(grid) {
         // Initialize the views with appropriate dimensions
         auto [nx, ny, nvx, nvy] = grid.ncells;
-        f                       = Kokkos::View<double****>("f", nx, ny, nvx, nvy);
+        f                       = Kokkos::View<double*****>("f", nx, ny, nvx, nvy, 2);
         // flux                    = Kokkos::View<double****>("flux", nx, ny, nvx, nvy);
         // flux_1st                = Kokkos::View<double****>("flux_1st", nx, ny, nvx, nvy);
         // ep                      = Kokkos::View<double****>("ep", nx, ny, nvx, nvy);
@@ -48,7 +50,7 @@ struct World {
         flux_1st_r = Kokkos::View<double****>("flux_1st_r", nx, ny, nvx, nvy);
         ep_l       = Kokkos::View<double****>("ep_l", nx, ny, nvx, nvy);
         ep_r       = Kokkos::View<double****>("ep_r", nx, ny, nvx, nvy);
-        n          = Kokkos::View<double**>("n", nx, ny);
+        n          = Kokkos::View<double***>("n", nx, ny, 2);
         rho        = Kokkos::View<double**>("rho", nx, ny);
         phi        = Kokkos::View<double**>("phi", nx, ny);
         E          = Kokkos::View<double***>("E", nx, ny, 2);
@@ -63,6 +65,7 @@ struct World {
         Kokkos::deep_copy(flux_1st_r, 0.0);
         Kokkos::deep_copy(ep_l, 0.0);
         Kokkos::deep_copy(ep_r, 0.0);
+        Kokkos::deep_copy(n, 0.0);
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::deep_copy(phi, 0.0);
         Kokkos::deep_copy(E, 0.0);
@@ -96,6 +99,12 @@ struct World {
     Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
         return static_cast<WorldType*>(this)->normal(x, y, dx, dy);
     }
+
+    /**
+     * Initialize the particle distribution function.
+     * This function will be called by Vlasov solver
+     */
+    void initialize_distribution() { static_cast<WorldType*>(this)->initialize_distribution(); };
 
     /**
      * Boundary conditions for the particle distribution function.

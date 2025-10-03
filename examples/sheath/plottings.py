@@ -26,8 +26,8 @@ Lvx_e, Lvy_e = 8, 10
 vx_min_i, vy_min_i = -4, -15
 Lvx_i, Lvy_i = 8, 16
 G = 3
-step = 8000
-is_include_ghost = True
+step = 20000
+is_include_ghost = False
 Te = 1.0  # eV
 Ti = 0.1  # eV
 me = 1.0
@@ -40,7 +40,7 @@ u0 = np.sqrt(Te / mi)
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/../../data/sheath/output_{step:04d}.h5",
+    f"{file_path}/../../data/sheath/output_{step:05d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -97,14 +97,14 @@ dvy_i = dvy_i * vr
 vy_i = vy_i * vr
 f_ea = np.zeros((fi.shape[1], fi.shape[3]))
 f_ia = np.zeros((fi.shape[1], fi.shape[3]))
-phi_a = np.tile(np.loadtxt(f"{file_path}/initial_potential.csv"), (phi.shape[0], 1))
-# phi_a = phi.copy()
+# phi_a = np.tile(np.loadtxt(f"{file_path}/potential.csv"), (phi.shape[0], 1))
+phi_a = phi.copy()
 for j in range(ne.shape[1]):
     v_ce = np.sqrt(2 * (phi_a[nx // 2, j] - phi_w))
     for jv, vy in enumerate(vy_e):
         if vy <= v_ce:
             f_ea[j, jv] = np.exp(-(vy**2) / 2 + phi_a[nx // 2, j]) / np.sqrt(2 * np.pi)
-            n_ea[j] += f_ea[j, jv] * dvy_e
+            # n_ea[j] += f_ea[j, jv] * dvy_e
 
     v_ci = -np.sqrt(2 * np.abs(phi_a[nx // 2, j]) / mr)
     for jv, vy in enumerate(vy_i):
@@ -114,19 +114,23 @@ for j in range(ne.shape[1]):
                 / np.sqrt(2 * np.pi)
                 / vr
             )
-            n_ia[j] += f_ia[j, jv] * dvy_i
+            # n_ia[j] += f_ia[j, jv] * dvy_i
 
+n_ea = np.exp(phi_a[nx // 2, :])
+n_ia = 1.0 / np.sqrt(1 - 2 * phi_a[nx // 2, :])
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
 phi_norm = phi[phi.shape[0] // 2, :] / (2 * Tr)
 plt.plot(y, phi_norm, label="$\\phi$")
-plt.plot(
-    y[G:-G:3],
-    phi_a[phi_a.shape[0] // 2, G:-G:3] / (2 * Tr),
-    "o",
-    alpha=0.5,
-    label="$\\phi_a$",
-)
+# plt.plot(
+#     y[G:-G:3],
+#     phi_a[phi_a.shape[0] // 2, G:-G:3] / (2 * Tr),
+#     "o",
+#     alpha=0.5,
+#     label="$\\phi_a$",
+# )
+plt.ylim(-16, 1)
+plt.xlim(0, 1)
 plt.legend()
 plt.ylabel("$e\\phi/2k_BT_i$")
 plt.xlabel("$y/L_y$")
@@ -135,11 +139,16 @@ plt.plot(y, ne[ne.shape[0] // 2, :], label="$n_e$")
 plt.plot(y, ni[ni.shape[0] // 2, :], label="$n_i$")
 plt.plot(y[G:-G:3], n_ea[G:-G:3], "o", alpha=0.5, label="$n_{ea}$")
 plt.plot(y[G:-G:3], n_ia[G:-G:3], "^", alpha=0.5, label="$n_{ia}$")
+plt.xlim(0, 1)
 plt.legend()
 plt.xlabel("$y/L_y$")
 plt.ylabel("$n/n_0$")
 plt.tight_layout()
 plt.savefig(f"{file_path}/potential_and_density.png")
+print(
+    f"theoretical wall potential {-np.log(np.sqrt(mi / (2 * np.pi * me))) / (2 * Tr)}"
+)
+print(f"simulation wall potential {phi[phi.shape[0] // 2, 0] / (2 * Tr)}")
 
 plt.figure(figsize=(12, 8))
 plt.subplot(2, 2, 1)

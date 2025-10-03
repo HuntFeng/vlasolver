@@ -18,8 +18,8 @@ plt.rcParams.update(
 )
 
 # Animation parameters
-total_steps = 8000  # User can modify this
-frame_interval = 80  # User can modify this (step interval between frames)
+total_steps = 20000  # User can modify this
+frame_interval = 200  # User can modify this (step interval between frames)
 start_step = 0  # Starting step
 
 # Grid parameters
@@ -30,10 +30,8 @@ Lx, Ly = 1, 20
 vx_min_e, vy_min_e = -4, -5
 Lvx_e, Lvy_e = 8, 10
 # in calculation, the ranges are devided by vr
-# vx_min_i, vy_min_i = -4, -8
-# Lvx_i, Lvy_i = 8, 9
-vx_min_i, vy_min_i = -4, -20
-Lvx_i, Lvy_i = 8, 21
+vx_min_i, vy_min_i = -4, -15
+Lvx_i, Lvy_i = 8, 16
 G = 3
 is_include_ghost = False
 Te = 1.0  # eV
@@ -52,7 +50,7 @@ def load_data(step):
     """Load data for a given step"""
     try:
         with h5py.File(
-            f"{file_path}/../../data/sheath/output_{step:04d}.h5",
+            f"{file_path}/../../data/sheath/output_{step:05d}.h5",
             "r",
         ) as f:
             ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -122,7 +120,7 @@ fig.tight_layout()
 ni_init, ne_init, phi_init = load_data(start_step)
 if ni_init is not None and ne_init is not None and phi_init is not None:
     ax1.set_xlim(y.min(), y.max())
-    ax1.set_ylim(-25.0, 1.0)
+    ax1.set_ylim(-18.0, 1.0)
 
     ne_slice_init = ne_init[ne_init.shape[0] // 2, :]
     ni_slice_init = ni_init[ni_init.shape[0] // 2, :]

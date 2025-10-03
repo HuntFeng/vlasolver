@@ -18,8 +18,8 @@ plt.rcParams.update(
 )
 
 # Animation parameters
-total_steps = 20000  # User can modify this
-frame_interval = 200  # User can modify this (step interval between frames)
+total_steps = 40000  # User can modify this
+frame_interval = 400  # User can modify this (step interval between frames)
 start_step = 0  # Starting step
 
 # Grid parameters

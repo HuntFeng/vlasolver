@@ -10,7 +10,7 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     // all quantities are normalized by electron parameters
-    double phi_w  = -5;                                                       // rough spikes potential
+    double phi_w  = -4;                                                       // rough spikes potential
     double v_th_e = Kokkos::sqrt(T[0] / m[0]);                                // electron thermal velocity
     double v_th_i = Kokkos::sqrt(T[1] / m[1]);                                // ion thermal velocity
     double u0     = Kokkos::sqrt(T[0] / m[1]);                                // Bohm velocity
@@ -173,6 +173,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     void potential_boundary_conditions() {
         using Kokkos::abs;
+        using Kokkos::exp;
         using Kokkos::log;
         using Kokkos::sqrt;
         using Kokkos::numbers::pi;
@@ -185,7 +186,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
         // bottom boundary, dirichlet at the rough spikes, floating otherwise
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc - 1, ngc - 1}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            Kokkos::MDRangePolicy({ngc, ngc - 1}, {nx - ngc, ny / 3}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, sp);
                     if (j < ngc) {
@@ -194,7 +195,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
                         double flux_i = 1 * u0; // n0 * u0 (const)
                         E_w(i) += (flux_i - flux_e) * dt;
                         phi(i, j) = phi(i, ngc + 1) + E_w(i) * 2 * dy;
-                    } else if (surface(x, y) < 0.0) {
+                        // double phi_float = -log(sqrt(m[1] / (2.0 * pi * m[0])));
+                        // phi(i, j)        = phi_float;
+                    }
+                    if (surface(x, y) < 0.0) {
                         phi(i, j) = phi_w;
                     }
                 }

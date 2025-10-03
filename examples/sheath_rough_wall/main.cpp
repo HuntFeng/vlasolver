@@ -75,7 +75,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 {
                     auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 0);
                     if (surface(x, y) >= 0.0) {
-                        double v_ce = sqrt(2 * (phi(i, j) - phi_w) / m[0]);
+                        // double v_ce = sqrt(2 * (phi(i, j) - phi_w) / m[0]);
+                        double v_ce = sqrt(2 * (phi(i, j) - phi(i, ngc)) / m[0]);
                         f(i, j, iv, jv, 0) =
                             (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
                                                (2.0 * pi * pow(v_th_e, 2))
@@ -124,7 +125,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 {
                     auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 0);
                     auto [n1, n2]       = normal(x, y, grid.spacing[0][0], grid.spacing[0][1]);
-                    double v_ce         = sqrt(2 * (phi(i, j) - phi_w) / m[0]); // electron cutoff velocity
+                    // double v_ce         = sqrt(2 * (phi(i, j) - phi_w) / m[0]); // electron cutoff velocity
+                    double v_ce = sqrt(2 * (phi(i, j) - phi(i, ngc)) / m[0]);
                     if (j < ngc && vy > 0.0) {
                         f(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
                     } else if (surface(x, y) < 0.0 && vy * n2 + vx * n1 > 0.0) {
@@ -188,7 +190,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, sp);
                     if (j < ngc) {
                         double flux_e = exp(phi(i, ngc)) * v_th_e / sqrt(2 * Kokkos::numbers::pi);
-                        double flux_i = 1.0 / sqrt(1 - 2.0 * phi(i, ngc)) * u0;
+                        // double flux_i = 1.0 / sqrt(1 - 2.0 * phi(i, ngc)) * u0;
+                        double flux_i = 1 * u0; // n0 * u0 (const)
                         E_w(i) += (flux_i - flux_e) * dt;
                         phi(i, j) = phi(i, ngc + 1) + E_w(i) * 2 * dy;
                     } else if (surface(x, y) < 0.0) {
@@ -258,18 +261,30 @@ int main(int argc, char* argv[]) {
     Kokkos::printf("Simulation control: dt: %f, total_time: %f, total_steps: %d, diag_steps: %d\n", dt, total_time,
                    total_steps, diag_steps);
 
+    double Te     = 1.0;                   // electron temperature
+    double Ti     = 0.1;                   // ion temperature normalized to Te
+    double me     = 1.0;                   // electron mass
+    double mi     = 2 * 1836.0;            // ion mass, normalized to me
+    double v_th_e = Kokkos::sqrt(Te / me); // electron thermal velocity
+    double v_th_i = Kokkos::sqrt(Ti / mi); // ion thermal velocity, normalized to v_th_e
+    double u0     = Kokkos::sqrt(Te / mi); // Bohm velocity, normalized to v_th_e
+
     Grid grid({nx_intr, ny_intr, nvx_intr, nvy_intr}, ngc);
     grid.set_grid({x_min_e, y_min_e, vx_min_e, vy_min_e}, {Lx_e, Ly_e, Lvx_e, Lvy_e}, 0); // electrons
-    grid.set_grid({x_min_i, y_min_i, vx_min_i, vy_min_i}, {Lx_i, Ly_i, Lvx_i, Lvy_i}, 1); // ions
+    grid.set_grid({x_min_i, y_min_i, vx_min_i * v_th_i, vy_min_i * v_th_i},
+                  {Lx_i, Ly_i, Lvx_i * v_th_i, Lvy_i * v_th_i}, 1); // ions
     ImmersedWorld world(grid);
 
-    world.dt          = dt;                                        // time step size
-    world.total_time  = total_time;                                // total simulation time
-    world.total_steps = total_steps;                               // number of total_steps
-    world.diag_steps  = diag_steps;                                // number of steps between diagnostics
-    world.m           = Kokkos::Array<double, 2>{1.0, 2 * 1836.0}; // relative mass of electrons and ions
-    world.q           = Kokkos::Array<double, 2>{-1.0, 1.0};       // charge number of electrons and ions
-    world.T           = Kokkos::Array<double, 2>{1.0, 1.0 / 10.0}; // relative temperature of electrons and ions
+    world.dt          = dt;                                  // time step size
+    world.total_time  = total_time;                          // total simulation time
+    world.total_steps = total_steps;                         // number of total_steps
+    world.diag_steps  = diag_steps;                          // number of steps between diagnostics
+    world.m           = Kokkos::Array<double, 2>{me, mi};    // relative mass of electrons and ions
+    world.q           = Kokkos::Array<double, 2>{-1.0, 1.0}; // charge number of electrons and ions
+    world.T           = Kokkos::Array<double, 2>{Te, Ti};    // relative temperature of electrons and ions
+    world.v_th_e      = v_th_e;
+    world.v_th_i      = v_th_i;
+    world.u0          = u0;
 
     PoissonSolver poisson_solver(world, 1e-6, 5e3);
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi"});

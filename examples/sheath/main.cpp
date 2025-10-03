@@ -167,7 +167,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
         int nx_mid    = nx / 2;
         auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), phi);
         double flux_e = exp(phi_host(nx_mid, ngc)) * v_th_e / sqrt(2 * Kokkos::numbers::pi);
-        // double flux_i = 1.0 / sqrt(1 - 2.0 * phi_host(nx_mid, ngc)) * u0;
         double flux_i = 1 * u0; // n0 * u0 (const)
         E_w += (flux_i - flux_e) * dt;
         // double dE_w = 0.0;
@@ -200,7 +199,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
         //     },
         //     dE_w);
         // E_w += dE_w;
-        // E_w += dE_w - flux_e * dt;
         Kokkos::parallel_for(
             Kokkos::RangePolicy(0, nx), KOKKOS_CLASS_LAMBDA(const int i) {
                 // Ey = (flux_i - flux_e) = -dphi/dy

@@ -29,7 +29,7 @@ Tr = Ti / Te
 step = 40000
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/../../data/sheath_rough_wall/output_{step:05d}.h5",
+    f"{file_path}/../../data/sheath/output_{step:05d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)

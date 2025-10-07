@@ -73,6 +73,24 @@ plt.figure()
 plt.contourf(
     X,
     Y,
+    ni,
+    cmap="jet",
+    levels=20,
+    vmin=0,
+)
+plt.colorbar()
+plt.contour(X, Y, ni, levels=20, colors="black", linestyles="solid")
+plt.xlim(0, Lx)
+plt.ylim(0, Ly)
+plt.xlabel("$x$")
+plt.ylabel("$y$")
+plt.title("$n_i$")
+plt.savefig(f"{file_path}/number_density_ion.png")
+
+plt.figure()
+plt.contourf(
+    X,
+    Y,
     ni - ne,
     cmap="jet",
     levels=20,

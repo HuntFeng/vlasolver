@@ -132,9 +132,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     } else if (surface(x, y) < 0.0 && vy * n2 + vx * n1 > 0.0) {
                         f(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
+                        double ne = (n(i, ny - ngc - 1, 0) > 0.0) ? n(i, ny - ngc - 1, 1) / n(i, ny - ngc - 1, 0) : 1.0;
                         f(i, j, iv, jv, 0) =
                             (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
-                                               (2.0 * pi * pow(v_th_e, 2))
+                                               (2.0 * pi * pow(v_th_e, 2)) * ne
                                          : 0.0;
                     }
                 };
@@ -184,21 +185,35 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
         // top boundary, dirichlet
         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
-        // bottom boundary, dirichlet at the rough spikes, floating otherwise
+        // bottom boundary
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc - 1}, {nx - ngc, ny / 3}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, sp);
                     if (j < ngc) {
-                        double flux_e = exp(phi(i, ngc)) * v_th_e / sqrt(2 * Kokkos::numbers::pi);
-                        // double flux_i = 1.0 / sqrt(1 - 2.0 * phi(i, ngc)) * u0;
-                        double flux_i = 1 * u0; // n0 * u0 (const)
-                        E_w(i) += (flux_i - flux_e) * dt;
-                        phi(i, j) = phi(i, ngc + 1) + E_w(i) * 2 * dy;
-                        // double phi_float = -log(sqrt(m[1] / (2.0 * pi * m[0])));
-                        // phi(i, j)        = phi_float;
+                        // floating nv
+                        // double flux_e = exp(phi(i, ngc)) * v_th_e / sqrt(2 * pi);
+                        // double flux_i = 1 * u0; // n0 * u0 (const)
+                        // E_w(i) += (flux_i - flux_e) * dt;
+                        // phi(i, j) = phi(i, ngc + 1) + E_w(i) * 2 * dy;
+
+                        // floating dist
+                        // for (int sp = 0; sp < 2; ++sp) {
+                        //     auto [dx, dy, dvx, dvy] = grid.spacing[sp];
+                        //     for (int iv = 0; iv < nvx; ++iv)
+                        //         for (int jv = 0; jv < nvy; ++jv)
+                        //             E_w(i) += q[sp] * f(i, ngc, iv, jv, sp) * dvx * dvy * dt;
+                        // }
+                        // phi(i, j) = phi(i, ngc + 1) + E_w(i) * 2 * dy;
+
+                        // dirichlet
+                        // phi(i, j) = phi_w;
+
+                        // neumann
+                        phi(i, j) = phi(i, ngc + 1);
                     }
                     if (surface(x, y) < 0.0) {
+                        // dirichlet for rough spots
                         phi(i, j) = phi_w;
                     }
                 }

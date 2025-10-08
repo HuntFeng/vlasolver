@@ -117,9 +117,11 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     if (j < ngc && vy > 0.0) {
                         f(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
+                        // dynamic electron density adjustment
+                        double ne = (n(i, ny - ngc - 1, 0) > 0.0) ? n(i, ny - ngc - 1, 1) / n(i, ny - ngc - 1, 0) : 1.0;
                         f(i, j, iv, jv, 0) =
                             (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
-                                               (2.0 * pi * pow(v_th_e, 2))
+                                               (2.0 * pi * pow(v_th_e, 2)) * ne
                                          : 0.0;
                     }
                 };

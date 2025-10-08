@@ -52,16 +52,18 @@ else:
 
 X, Y = np.meshgrid(x, y, indexing="ij")
 plt.figure()
+levels = np.linspace(0, 1, 14)
 plt.contourf(
     X,
     Y,
     ne,
     cmap="jet",
-    levels=20,
+    levels=levels,
     vmin=0,
+    vmax=1,
 )
 plt.colorbar()
-plt.contour(X, Y, ne, levels=20, colors="black", linestyles="solid")
+plt.contour(X, Y, ne, levels=levels, vmin=0, vmax=1, colors="black", linestyles="solid")
 for xc in np.arange(0.13 * Lx, Lx, 0.24 * Lx, dtype=float):
     circle = Wedge(
         center=(xc, 0),
@@ -82,16 +84,17 @@ plt.title("$n_e$")
 plt.savefig(f"{file_path}/number_density_electron.png")
 
 plt.figure()
+rho = ni - ne
 plt.contourf(
     X,
     Y,
-    ni - ne,
+    rho,
     cmap="jet",
-    levels=20,
+    levels=15,
     vmin=0,
 )
 plt.colorbar()
-plt.contour(X, Y, ni - ne, levels=20, colors="black", linestyles="solid")
+plt.contour(X, Y, rho, levels=15, colors="black", linestyles="solid")
 for xc in np.arange(0.13 * Lx, Lx, 0.24 * Lx, dtype=float):
     circle = Wedge(
         center=(xc, 0),
@@ -112,9 +115,10 @@ plt.ylim(0, Ly)
 plt.savefig(f"{file_path}/charge_density.png")
 
 plt.figure()
-plt.contourf(X, Y, phi, levels=20, cmap="jet")
+levels = np.linspace(np.min(phi), np.max(phi), 19)
+plt.contourf(X, Y, phi, levels=levels, cmap="jet")
 plt.colorbar()
-plt.contour(X, Y, phi, levels=20, colors="black", linestyles="solid")
+plt.contour(X, Y, phi, levels=levels, colors="black", linestyles="solid")
 for xc in np.arange(0.13 * Lx, Lx, 0.24 * Lx, dtype=float):
     circle = Wedge(
         center=(xc, 0),

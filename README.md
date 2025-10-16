@@ -1,10 +1,24 @@
-# Discontinuous Galerkin Method for Ideal MHD
+# Noise‑Free Grid-based Vlasov Modeling of Plasma-Object Interactions via a Unified Ghost‑Fluid Immersed‑Boundary Method
 
 ## Set Up Apptainer Environment (Recommended)
 
+### Requirements
+
 - Apptainer is required for creating isolated and stable environment.
 
-1. Build container
+We can either install Apptainer on your own machine
+
+```bash
+sudo apt install apptainer
+```
+
+or load module on HPC
+
+```bash
+module load apptainer
+```
+
+### Building Container
 
 - Build the apptainer image in using the command
 
@@ -12,7 +26,7 @@
 apptainer build .devcontainer/kokkos_cuda.sif .devcontainer/Apptainer.def
 ```
 
-2. Execution code
+### Executing Code
 
 - Build and Run the code in container
 
@@ -22,7 +36,7 @@ apptainer run --nv .devcontainer/kokkos_cuda.sif cmake --build build
 apptainer run --nv .devcontainer/kokkos_cuda.sif ./build/cylinder ./examples/cylinder/input.ini
 ```
 
-## Sample Slurm Script for Running on GPU Cluster
+- A sample slurm script for running on gpu cluster
 
 ```bash
 #!/bin/bash
@@ -34,26 +48,26 @@ apptainer run --nv .devcontainer/kokkos_cuda.sif ./build/cylinder ./examples/cyl
 apptainer run --nv .devcontainer/kokkos_cuda.sif ./build/cylinder ./examples/cylinder/input.ini
 ```
 
-3. Development in container
+### Development in Container (Optional)
 
-- To install editors and other tools, we can use overlay feature of Apptainer.
+- For better coding experience, we may want to install editors and tools (such as LSP, Language-Server-Protocol) in the container.
+- Since the apptainer container is immutable once created, we need to create a writable overlay to the existing SIF image.
 
 ```bash
 mkdir -p .devcontainer/overlay
 apptainer shell --no-home --fakeroot --overlay .devcontainer/overlay .devcontainer/kokkos_cuda.sif
 ```
 
-Now we can have root previlege in the overlay container. Once tool installations is done, we can use the overlay container for development.
+Now we can have root previlege in the writable overlay and we can install system-wide tools. Once tool installation is done, we can use the overlay for development.
 
 ```bash
 apptainer shell --nv \          # --nv for GPU support
   --no-home \                   # avoid mounting home directory
   --bind ~/.ssh \               # for git access
-  --bind /usr/share/terminfo \  # for better terminal support
   --overlay .devcontainer/overlay .devcontainer/kokkos_cuda.sif
 ```
 
-## Debugging
+### Debugging
 
 - Configure CMake to build with debug symbols
 
@@ -68,6 +82,6 @@ cmake --build build
 gdb build/vlasolver
 ```
 
-## Profiling
+### Profiling
 
 - If code is built with CUDA backend, `nsys`, `ncu` can be used to profile the code.

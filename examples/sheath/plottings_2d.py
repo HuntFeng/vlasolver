@@ -17,8 +17,8 @@ plt.rcParams.update(
     }
 )
 
-nx, ny = 50, 100
-nvx, nvy = 50, 50
+nx, ny = 10, 125
+nvx, nvy = 30, 110
 x_min, y_min = 0, 0
 Lx, Ly = 1.0, 1.0  # they are 20 in simulation, but normalize them again in plots
 G = 3
@@ -29,7 +29,7 @@ Tr = Ti / Te
 step = 40000
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/../../data/sheath_rough_wall/output_{step:05d}.h5",
+    f"{file_path}/../../data/sheath/output_{step:05d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -52,30 +52,16 @@ else:
 
 X, Y = np.meshgrid(x, y, indexing="ij")
 plt.figure()
-levels = np.linspace(0, 1, 14)
 plt.contourf(
     X,
     Y,
     ne,
     cmap="jet",
-    levels=levels,
+    levels=20,
     vmin=0,
-    vmax=1,
 )
 plt.colorbar()
-plt.contour(X, Y, ne, levels=levels, vmin=0, vmax=1, colors="black", linestyles="solid")
-for xc in np.arange(0.13 * Lx, Lx, 0.24 * Lx, dtype=float):
-    circle = Wedge(
-        center=(xc, 0),
-        r=0.06 * Lx,
-        theta1=0,
-        theta2=180,
-        facecolor="white",
-        edgecolor="k",
-        linewidth=2,
-        zorder=10,  # ensure the wedge is on top of the contour
-    )
-    plt.gca().add_patch(circle)
+plt.contour(X, Y, ne, levels=20, colors="black", linestyles="solid")
 plt.xlim(0, Lx)
 plt.ylim(0, Ly)
 plt.xlabel("$x$")
@@ -84,29 +70,34 @@ plt.title("$n_e$")
 plt.savefig(f"{file_path}/number_density_electron.png")
 
 plt.figure()
-rho = ni - ne
 plt.contourf(
     X,
     Y,
-    rho,
+    ni,
     cmap="jet",
-    levels=15,
+    levels=20,
     vmin=0,
 )
 plt.colorbar()
-plt.contour(X, Y, rho, levels=15, colors="black", linestyles="solid")
-for xc in np.arange(0.13 * Lx, Lx, 0.24 * Lx, dtype=float):
-    circle = Wedge(
-        center=(xc, 0),
-        r=0.06 * Lx,
-        theta1=0,
-        theta2=180,
-        facecolor="white",
-        edgecolor="k",
-        linewidth=2,
-        zorder=10,  # ensure the wedge is on top of the contour
-    )
-    plt.gca().add_patch(circle)
+plt.contour(X, Y, ni, levels=20, colors="black", linestyles="solid")
+plt.xlim(0, Lx)
+plt.ylim(0, Ly)
+plt.xlabel("$x$")
+plt.ylabel("$y$")
+plt.title("$n_i$")
+plt.savefig(f"{file_path}/number_density_ion.png")
+
+plt.figure()
+plt.contourf(
+    X,
+    Y,
+    ni - ne,
+    cmap="jet",
+    levels=20,
+    vmin=0,
+)
+plt.colorbar()
+plt.contour(X, Y, ni - ne, levels=20, colors="black", linestyles="solid")
 plt.xlabel("$x$")
 plt.ylabel("$y$")
 plt.title("$\\rho$")
@@ -115,22 +106,9 @@ plt.ylim(0, Ly)
 plt.savefig(f"{file_path}/charge_density.png")
 
 plt.figure()
-levels = np.linspace(np.min(phi), np.max(phi), 19)
-plt.contourf(X, Y, phi, levels=levels, cmap="jet")
+plt.contourf(X, Y, phi, levels=20, cmap="jet")
 plt.colorbar()
-plt.contour(X, Y, phi, levels=levels, colors="black", linestyles="solid")
-for xc in np.arange(0.13 * Lx, Lx, 0.24 * Lx, dtype=float):
-    circle = Wedge(
-        center=(xc, 0),
-        r=0.06 * Lx,
-        theta1=0,
-        theta2=180,
-        facecolor="white",
-        edgecolor="k",
-        linewidth=2,
-        zorder=10,  # ensure the wedge is on top of the contour
-    )
-    plt.gca().add_patch(circle)
+plt.contour(X, Y, phi, levels=20, colors="black", linestyles="solid")
 plt.xlim(0, Lx)
 plt.ylim(0, Ly)
 plt.xlabel("$x$")

@@ -18,8 +18,8 @@ plt.rcParams.update(
 )
 
 # Animation parameters
-total_steps = 8000  # User can modify this
-frame_interval = 80  # User can modify this (step interval between frames)
+total_steps = 40000  # User can modify this
+frame_interval = 400  # User can modify this (step interval between frames)
 start_step = 0  # Starting step
 
 # Grid parameters
@@ -30,8 +30,8 @@ Lx, Ly = 1, 1
 vx_min_e, vy_min_e = -4, -5
 Lvx_e, Lvy_e = 8, 10
 # in calculation, the ranges are devided by vr
-vx_min_i, vy_min_i = -4, -8
-Lvx_i, Lvy_i = 8, 9
+vx_min_i, vy_min_i = -4, -15
+Lvx_i, Lvy_i = 8, 16
 G = 3
 is_include_ghost = False
 

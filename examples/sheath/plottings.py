@@ -26,7 +26,7 @@ Lvx_e, Lvy_e = 8, 10
 vx_min_i, vy_min_i = -4, -15
 Lvx_i, Lvy_i = 8, 16
 G = 3
-step = 20000
+step = 40000
 is_include_ghost = False
 Te = 1.0  # eV
 Ti = 0.1  # eV
@@ -116,27 +116,20 @@ for j in range(ne.shape[1]):
             )
             # n_ia[j] += f_ia[j, jv] * dvy_i
 
-n_ea = np.exp(phi_a[nx // 2, :])
-n_ia = 1.0 / np.sqrt(1 - 2 * phi_a[nx // 2, :])
+n_ea = np.exp(phi_a.mean(axis=0))
+n_ia = 1.0 / np.sqrt(1 - 2 * phi_a.mean(axis=0))
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
-phi_norm = phi[phi.shape[0] // 2, :] / (2 * Tr)
+phi_norm = phi.mean(axis=0) / (2 * Tr)
 plt.plot(y, phi_norm, label="$\\phi$")
-# plt.plot(
-#     y[G:-G:3],
-#     phi_a[phi_a.shape[0] // 2, G:-G:3] / (2 * Tr),
-#     "o",
-#     alpha=0.5,
-#     label="$\\phi_a$",
-# )
 plt.ylim(-16, 1)
 plt.xlim(0, 1)
 plt.legend()
 plt.ylabel("$e\\phi/2k_BT_i$")
 plt.xlabel("$y/L_y$")
 plt.subplot(1, 2, 2)
-plt.plot(y, ne[ne.shape[0] // 2, :], label="$n_e$")
-plt.plot(y, ni[ni.shape[0] // 2, :], label="$n_i$")
+plt.plot(y, ne.mean(axis=0), label="$n_e$")
+plt.plot(y, ni.mean(axis=0), label="$n_i$")
 plt.plot(y[G:-G:3], n_ea[G:-G:3], "o", alpha=0.5, label="$n_{ea}$")
 plt.plot(y[G:-G:3], n_ia[G:-G:3], "^", alpha=0.5, label="$n_{ia}$")
 plt.xlim(0, 1)

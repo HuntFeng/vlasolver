@@ -113,20 +113,22 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 0);
-                    double v_ce         = sqrt(2 * (phi(i, j) - phi_w) / m[0]); // electron cutoff velocity
+                    double v_ce         = sqrt(2 * (0.0 - phi_w) / m[0]); // electron cutoff velocity
                     if (j < ngc && vy > 0.0) {
                         f(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
+                        // dynamic electron density adjustment
+                        double ne = (n(i, ny - ngc - 1, 0) > 0.0) ? n(i, ny - ngc - 1, 1) / n(i, ny - ngc - 1, 0) : 1.0;
                         f(i, j, iv, jv, 0) =
                             (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
-                                               (2.0 * pi * pow(v_th_e, 2))
+                                               (2.0 * pi * pow(v_th_e, 2)) * ne
                                          : 0.0;
                     }
                 };
                 // ion
                 {
                     auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 1);
-                    double v_ci         = -sqrt(2 * abs(phi(i, j)) / m[1]); // ion cutoff velocity
+                    double v_ci         = 0.0; // ion cutoff velocity, since phi(y=Lx) = 0
                     if (j < ngc && vy > 0.0) {
                         f(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
@@ -153,7 +155,9 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     void potential_boundary_conditions() {
         using Kokkos::abs;
+        using Kokkos::exp;
         using Kokkos::log;
+        using Kokkos::pow;
         using Kokkos::sqrt;
         using Kokkos::numbers::pi;
         auto& grid              = this->grid;
@@ -166,7 +170,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         // bottom boundary, floating potential
         int nx_mid    = nx / 2;
         auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), phi);
-        double flux_e = exp(phi_host(nx_mid, ngc)) * v_th_e / sqrt(2 * Kokkos::numbers::pi);
+        double flux_e = exp(phi_host(nx_mid, ngc)) * v_th_e / sqrt(2 * pi);
         double flux_i = 1 * u0; // n0 * u0 (const)
         E_w += (flux_i - flux_e) * dt;
         // double dE_w = 0.0;
@@ -293,7 +297,7 @@ int main(int argc, char* argv[]) {
     world.v_th_i      = v_th_i;
     world.u0          = u0;
 
-    PoissonSolver poisson_solver(world, 1e-6, 5e3);
+    PoissonSolver poisson_solver(world, 1e-6);
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi", "fi", "fe"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

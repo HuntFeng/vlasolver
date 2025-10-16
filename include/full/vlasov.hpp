@@ -110,7 +110,7 @@ class Vlasolver {
         Kokkos::deep_copy(n, 0.0);
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [dx, dy, dvx, dvy] = grid.spacing[sp];
                     auto [x, y, vx, vy]     = grid.center({i, j, 0, 0}, sp);
@@ -409,8 +409,8 @@ class Vlasolver {
                     ep_right * (flux_r(i, j, iv, jv) - flux_1st_r(i, j, iv, jv)) + flux_1st_r(i, j, iv, jv);
 
                 // udpate distribution function
-                if (j == ngc || i == ngc) {
-                    // TODO: 3rd order flux creates oscillation near left/bottom edge, do 1st flux as work around
+                if (j == ngc || i == ngc || j == ny - ngc - 1 || i == nx - ngc - 1) {
+                    // TODO: 3rd order flux creates oscillation near edges, do 1st flux as work around
                     // can we do 3rd order flux without oscillation?
                     f(i, j, iv, jv, sp) += flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
                 } else {

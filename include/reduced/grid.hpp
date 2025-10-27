@@ -48,7 +48,7 @@ struct Grid {
     }
 
     /**
-     * Calculate the center of the cell given its coordinate indexes of cells (including ghost cells).
+     * Calculate the center of the cell given its coordinate indexes (including ghost cells).
      *
      * @param coord_idx Coordinate indexes of the cell, starts from 0 to ncells - 1.
      * @return A Kokkos::Array containing the center coordinates in the x and v directions.
@@ -61,6 +61,30 @@ struct Grid {
             origin[1] + (coord_idx[1] - ngc) * dy + dy / 2.0,   // center in the y-direction
             origin[2] + (coord_idx[2] - ngc) * dvx + dvx / 2.0, // center in the vx-direction
             origin[3] + (coord_idx[3] - ngc) * dvy + dvy / 2.0  // center in the vy-direction
+        };
+    };
+
+    /**
+     * Calculate the logical coordinate of the cell given its position (including ghost cells).
+     *
+     * @param center Position of the cell
+     * @return A Kokkos::Array containing the logical coordinates in the x and v directions.
+     **/
+    KOKKOS_INLINE_FUNCTION
+    Kokkos::Array<int, DIM> coord(const Kokkos::Array<double, DIM> center) const {
+        auto [dx, dy, dvx, dvy] = spacing;
+        // don't use {} initialization to avoid narrowing conversion warning
+        // Kokkos::Array<int, DIM> coord_idx;
+        // coord_idx[0] = static_cast<int>((center[0] - origin[0] - dx / 2.0) / dx) + ngc;   // coord in the x-direction
+        // coord_idx[1] = static_cast<int>((center[1] - origin[1] - dy / 2.0) / dy) + ngc;   // coord in the y-direction
+        // coord_idx[2] = static_cast<int>((center[2] - origin[2] - dvx / 2.0) / dvx) + ngc; // coord in the
+        // vx-direction coord_idx[3] = static_cast<int>((center[3] - origin[3] - dvy / 2.0) / dvy) + ngc; // coord in
+        // the vy-direction return coord_idx;
+        return {
+            static_cast<int>((center[0] - origin[0] - dx / 2.0) / dx) + ngc,   // coord in the x-direction
+            static_cast<int>((center[1] - origin[1] - dy / 2.0) / dy) + ngc,   // coord in the y-direction
+            static_cast<int>((center[2] - origin[2] - dvx / 2.0) / dvx) + ngc, // coord in the vx-direction
+            static_cast<int>((center[3] - origin[3] - dvy / 2.0) / dvy) + ngc, // coord in the vy-direction
         };
     };
 };

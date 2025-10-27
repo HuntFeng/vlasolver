@@ -20,6 +20,8 @@ plt.rcParams.update(
 nx, ny = 160, 50
 Lx, Ly = 1, 0.5
 G = 3
+is_include_circle = True
+
 step = 300
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
@@ -30,87 +32,92 @@ with h5py.File(
     Ex = f["VTKHDF/CellData/Ex"][:].reshape(nx + 2 * G, ny + 2 * G)
     phi = f["VTKHDF/CellData/phi"][:].reshape(nx + 2 * G, ny + 2 * G)
 
-ni = ni[G:-G, G:-G]
-Ex = Ex[G:-G, G:-G]
-phi = phi[G:-G, G:-G]
-
 dx = Lx / nx
 dy = Ly / ny
-x = np.arange(dx / 2, Lx, dx)
-y = np.arange(dy / 2, Ly, dy)
-Y, X = np.meshgrid(y, x)
+x = np.arange(dx / 2 - G * dx, Lx + G * dx, dx)
+y = np.arange(dy / 2 - G * dy, Ly + G * dy, dy)
+X, Y = np.meshgrid(x, y, indexing="ij")
 
 fig, ax = plt.subplots(figsize=(6, 3))
 c = ax.contourf(X, Y, ni, cmap="jet", levels=50)
-plt.colorbar(c, label="$n_i$")
-circle = Wedge(
-    center=(0.375, 0),
-    r=0.125,
-    theta1=0,
-    theta2=180,
-    facecolor="white",
-    edgecolor="k",
-    linewidth=2,
-)
-ax.add_patch(circle)
-ax.set_xlim(dx / 2, Lx - dx / 2)
-ax.set_ylim(dy / 2, Ly - dy / 2)
-ax.set_xlabel("$x$")
-ax.set_ylabel("$y$")
-plt.savefig(f"{file_path}/number_density.png")
+plt.colorbar(c)
+plt.title("$n_i$")
+if is_include_circle:
+    circle = Wedge(
+        center=(0.375, 0),
+        r=0.125,
+        theta1=0,
+        theta2=180,
+        facecolor="white",
+        edgecolor="k",
+        linewidth=2,
+    )
+    ax.add_patch(circle)
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 0.5)
+ax.set_xlabel("$x/L_x$")
+ax.set_ylabel("$y/L_x$")
+plt.tight_layout()
+plt.savefig(f"{file_path}/number_density.svg")
 
 fig, ax = plt.subplots(figsize=(6, 3))
 c = ax.contourf(X, Y, phi, cmap="jet", levels=50)
-plt.colorbar(c, label="$\\phi$")
-circle = Wedge(
-    center=(0.375, 0),
-    r=0.125,
-    theta1=0,
-    theta2=180,
-    facecolor="white",
-    edgecolor="k",
-    linewidth=2,
-)
-ax.add_patch(circle)
-ax.set_xlim(dx / 2, Lx - dx / 2)
-ax.set_ylim(dy / 2, Ly - dy / 2)
-ax.set_xlabel("$x$")
-ax.set_ylabel("$y$")
-plt.savefig(f"{file_path}/potential.png")
+plt.colorbar(c)
+plt.title("$e\\phi/2k_BT_i$")
+if is_include_circle:
+    circle = Wedge(
+        center=(0.375, 0),
+        r=0.125,
+        theta1=0,
+        theta2=180,
+        facecolor="white",
+        edgecolor="k",
+        linewidth=2,
+    )
+    ax.add_patch(circle)
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 0.5)
+ax.set_xlabel("$x/L_x$")
+ax.set_ylabel("$y/L_x$")
+plt.tight_layout()
+plt.savefig(f"{file_path}/potential.svg")
 
 fig, ax = plt.subplots(figsize=(6, 3))
 c = ax.contourf(X, Y, Ex, cmap="jet", levels=50)
-plt.colorbar(c, label="$E_x$")
-circle = Wedge(
-    center=(0.375, 0),
-    r=0.125,
-    theta1=0,
-    theta2=180,
-    facecolor="white",
-    edgecolor="k",
-    linewidth=2,
-)
-ax.add_patch(circle)
+plt.colorbar(c)
+plt.title("$eE_x/m_ev_{th,e}\\omega_{pe}$")
+if is_include_circle:
+    circle = Wedge(
+        center=(0.375, 0),
+        r=0.125,
+        theta1=0,
+        theta2=180,
+        facecolor="white",
+        edgecolor="k",
+        linewidth=2,
+    )
+    ax.add_patch(circle)
 ax.set_xlim(dx / 2, Lx - dx / 2)
 ax.set_ylim(dy / 2, Ly - dy / 2)
-ax.set_xlabel("$x$")
-ax.set_ylabel("$y$")
-plt.savefig(f"{file_path}/electric_field.png")
+ax.set_xlabel("$x/L_x$")
+ax.set_ylabel("$y/L_x$")
+plt.tight_layout()
+plt.savefig(f"{file_path}/electric_field.svg")
 
 plt.figure()
 plt.plot(x, Ex[:, G], "o-", label="$y=0$")
 plt.plot(x, Ex[:, -G], "o-", label="$y=0.5$")
-plt.xlabel("$x$")
+plt.xlabel("$x/L_x$")
 plt.ylabel("$E_x$")
 plt.legend()
-plt.savefig(f"{file_path}/electric_field_profiles.png")
+plt.savefig(f"{file_path}/electric_field_profiles.svg")
 
 plt.figure()
 plt.plot(x, phi[:, G], "o-", label="$y=0$")
 plt.plot(x, phi[:, -G], "o-", label="$y=0.5$")
-plt.xlabel("$x$")
+plt.xlabel("$x/L_x$")
 plt.ylabel("$\\phi$")
 plt.legend()
-plt.savefig(f"{file_path}/potential_profiles.png")
+plt.savefig(f"{file_path}/potential_profiles.svg")
 
 plt.show()

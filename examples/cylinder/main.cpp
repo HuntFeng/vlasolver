@@ -55,8 +55,9 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                // potential and electric field are continuous
+                // potential is continuous
                 a(i, j) = 0.0;
+                // electric field is not continuous but this works??
                 b(i, j) = 0.0;
 
                 // the immersed cylinder is a conductor, set a high permittivity
@@ -73,7 +74,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         int ny       = u.extent(1);
         double dx    = grid.size[0] / (nx - 2 * ngc);
         double dy    = grid.size[1] / (ny - 2 * ngc);
-        double phi_w = -66.67; // normalized potential at the wall of the charged cylinder
+        double phi_w = -20.0 / (2 * 0.15); // cylinder potential normalized to electron quantities
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 double x   = (i - ngc + 0.5) * dx;

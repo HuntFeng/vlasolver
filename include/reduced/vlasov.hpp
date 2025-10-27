@@ -32,33 +32,7 @@ class Vlasolver {
           poisson_solver(poisson_solver),
           writer(writer) {}
 
-    // void initialize_distribution() const {
-    //     using Kokkos::cos;
-    //     using Kokkos::exp;
-    //     using Kokkos::pow;
-    //     using Kokkos::sqrt;
-    //     using Kokkos::numbers::pi;
-    //
-    //     // must assign grid and f here, otherwise, using world.grid.xxx in device region causes illegal memory access
-    //     auto& grid              = world.grid;
-    //     auto& f                 = world.f;
-    //
-    //     auto [nx, ny, nvx, nvy] = grid.ncells;
-    //     auto [dx, dy, dvx, dvy] = grid.spacing;
-    //     auto [Lx, Ly, Lvx, Lvy] = grid.size;
-    //     int ngc                 = grid.ngc;
-    //
-    //     Kokkos::parallel_for(
-    //         Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
-    //         KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-    //             if (iv < ngc || iv >= nvx - ngc || jv < ngc || jv >= nvy - ngc)
-    //                 return;
-    //
-    //             f(i, j, iv, jv) = 0.0;
-    //         });
-    // }
-
-    void extrapolate_distribution_function() const {
+    void extrapolate_distribution_1st_order() const {
         auto& grid              = world.grid;
         auto& f                 = world.f;
         auto [nx, ny, nvx, nvy] = grid.ncells;
@@ -119,8 +93,119 @@ class Vlasolver {
                 }
 
                 if (Ng > 0)
-                    // f(i, j, iv, jv) = extrapolated_value / Ng;
+                    // f(i, j, iv, jv) = extrapolated_value / Ng; // this doesn't work
                     f(i, j, iv, jv) = Kokkos::max(0.0, extrapolated_value / Ng);
+            });
+    }
+
+    void extrapolate_distribution_2nd_order() const {
+        using Kokkos::abs;
+        using Kokkos::sqrt;
+        auto& grid              = world.grid;
+        auto& f                 = world.f;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        int ngc                 = grid.ngc;
+        double dx               = grid.spacing[0];
+        double dy               = grid.spacing[1];
+
+        // first point must be further enough so interpolation won't involve ghost cell
+        double s = sqrt(dx * dx + dy * dy); // cell diagonal length
+
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+
+                // always extrapolate dist function from the interior of the immersed object
+                double eta = world.surface(x, y);
+                if (eta >= 0.0)
+                    return;
+
+                // now (x,y) is the interior of the immersed object
+                double eta_l   = world.surface(x - dx, y);
+                double eta_r   = world.surface(x + dx, y);
+                double eta_b   = world.surface(x, y - dy);
+                double eta_t   = world.surface(x, y + dy);
+                auto [n1, n2]  = world.normal(x, y, dx, dy);
+                double v_dot_n = vx * n1 + vy * n2;
+                // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
+                if (eta * eta_l < 0.0 || eta * eta_r < 0.0 || eta * eta_b < 0.0 || eta * eta_t < 0.0) {
+
+                    // best fit line
+                    const size_t N = 4;
+                    Kokkos::Array<double, N> s_vals;
+                    Kokkos::Array<double, N> f_vals;
+                    for (int k = 0; k < N; ++k) {
+                        s_vals[k]                 = (k + 1) * s;
+                        double x_k                = x + s_vals[k] * n1;
+                        double y_k                = y + s_vals[k] * n2;
+                        auto [ic, jc, ivxc, ivyc] = grid.coord({x_k, y_k, vx, vy});
+                        auto [xc, yc, vxc, vyc]   = grid.center({ic, jc, ivxc, ivyc});
+                        f_vals[k] = f(ic, jc, iv, jv) * (1.0 - (x_k - xc) / dx) * (1.0 - (y_k - yc) / dy) +
+                                    f(ic + 1, jc, iv, jv) * ((x_k - xc) / dx) * (1.0 - (y_k - yc) / dy) +
+                                    f(ic, jc + 1, iv, jv) * (1.0 - (x_k - xc) / dx) * ((y_k - yc) / dy) +
+                                    f(ic + 1, jc + 1, iv, jv) * ((x_k - xc) / dx) * ((y_k - yc) / dy);
+                    }
+                    // for inflow case, we take the zero-inflow condition into account
+                    double c0 = 0.0, c1 = 0.0;
+                    if (v_dot_n >= 0.0) {
+                        s_vals[N - 1] = abs(eta);
+                        f_vals[N - 1] = 0.0;
+                        double bot = 0.0, top = 0.0;
+                        for (int k = 0; k < N; ++k) {
+                            top += s_vals[k] * f_vals[k];
+                            bot += s_vals[k] * s_vals[k];
+                        }
+                        c1 = top / bot;
+                        c0 = 0.0;
+                    } else {
+                        double f_mean = 0.0, s_mean = 0.0, bot = 0.0, top = 0.0;
+                        for (int k = 0; k < N; ++k) {
+                            if (s_mean == 0.0) {
+                                for (int m = 0; m < N; ++m) {
+                                    s_mean += s_vals[k] / N;
+                                    f_mean += f_vals[k] / N;
+                                }
+                            }
+
+                            top += (s_vals[k] - s_mean) * (f_vals[k] - f_mean);
+                            bot += (s_vals[k] - s_mean) * (s_vals[k] - s_mean);
+                        }
+
+                        c1 = top / bot;
+                        c0 = f_mean - c1 * s_mean;
+                    }
+
+                    f(i, j, iv, jv) = c0 + c1 * eta; // eta is negative
+
+                    // double f_F1 = 0.0, f_F2 = 0.0;
+                    // {
+                    //     double x1                 = x + s1 * n1;
+                    //     double y1                 = y + s1 * n2;
+                    //     auto [ic, jc, ivxc, ivyc] = grid.coord({x1, y1, vx, vy});
+                    //     auto [xc, yc, vxc, vyc]   = grid.center({ic, jc, ivxc, ivyc});
+                    //     f_F1 = f(ic, jc, iv, jv) * (1.0 - (x1 - xc) / dx) * (1.0 - (y1 - yc) / dy) +
+                    //            f(ic + 1, jc, iv, jv) * ((x1 - xc) / dx) * (1.0 - (y1 - yc) / dy) +
+                    //            f(ic, jc + 1, iv, jv) * (1.0 - (x1 - xc) / dx) * ((y1 - yc) / dy) +
+                    //            f(ic + 1, jc + 1, iv, jv) * ((x1 - xc) / dx) * ((y1 - yc) / dy);
+                    // };
+                    // {
+                    //     double x2                 = x + s2 * n1;
+                    //     double y2                 = y + s2 * n2;
+                    //     auto [ic, jc, ivxc, ivyc] = grid.coord({x2, y2, vx, vy});
+                    //     auto [xc, yc, vxc, vyc]   = grid.center({ic, jc, ivxc, ivyc});
+                    //     f_F2 = f(ic, jc, iv, jv) * (1.0 - (x2 - xc) / dx) * (1.0 - (y2 - yc) / dy) +
+                    //            f(ic + 1, jc, iv, jv) * ((x2 - xc) / dx) * (1.0 - (y2 - yc) / dy) +
+                    //            f(ic, jc + 1, iv, jv) * (1.0 - (x2 - xc) / dx) * ((y2 - yc) / dy) +
+                    //            f(ic + 1, jc + 1, iv, jv) * ((x2 - xc) / dx) * ((y2 - yc) / dy);
+                    // };
+                    //
+                    // double f_I =
+                    //     (v_dot_n < 0.0) ? (s2 - abs(eta)) / (s2 - s1) * f_F1 + (abs(eta) - s1) / (s2 - s1) * f_F2 :
+                    //     0.0;
+                    // f(i, j, iv, jv) = s1 / (s1 - abs(eta)) * f_I - abs(eta) / (s1 - abs(eta)) * f_F1;
+                    f(i, j, iv, jv) = Kokkos::max(f(i, j, iv, jv), 0.0);
+                }
             });
     }
 
@@ -520,7 +605,8 @@ class Vlasolver {
         pfc_update(dt / 2.0, 1);
         Kokkos::printf("(VlasovSolver) Solving electric field\n");
         world.particle_boundary_conditions();
-        extrapolate_distribution_function();
+        // extrapolate_distribution_1st_order();
+        extrapolate_distribution_2nd_order();
         compute_charge_density();
         world.poisson_jump_conditions();
         poisson_solver.solve();
@@ -530,19 +616,22 @@ class Vlasolver {
         // Kokkos::printf("(VlasovSolver) PFC update along velocity by dt, vy\n");
         pfc_update(dt, 3);
         world.particle_boundary_conditions();
-        extrapolate_distribution_function();
+        // extrapolate_distribution_1st_order();
+        extrapolate_distribution_2nd_order();
         Kokkos::printf("(VlasovSolver) PFC update along space by dt/2\n");
         pfc_update(dt / 2.0, 0);
         pfc_update(dt / 2.0, 1);
         world.particle_boundary_conditions();
-        extrapolate_distribution_function();
+        // extrapolate_distribution_1st_order();
+        extrapolate_distribution_2nd_order();
     }
 
     void solve() {
         Kokkos::printf("Step %zu:\n", 0);
         world.initialize_distribution();
         world.particle_boundary_conditions();
-        extrapolate_distribution_function();
+        // extrapolate_distribution_1st_order();
+        extrapolate_distribution_2nd_order();
         compute_charge_density();
         world.poisson_jump_conditions();
         poisson_solver.solve();

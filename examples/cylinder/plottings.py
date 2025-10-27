@@ -20,9 +20,6 @@ plt.rcParams.update(
 nx, ny = 160, 50
 Lx, Ly = 1, 0.5
 G = 3
-Ti = 1  # eV
-Te = 1  # eV
-Tr = Ti / Te
 is_include_circle = True
 
 step = 300

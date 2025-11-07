@@ -1,3 +1,9 @@
+/*
+ * This Poisson sovler uses the algorithm described in:
+ * A Second Order Ghost Fluid Method for an Interface Problem of the Poisson Equation
+ * by Cheng Liu 2017, Commun. Comput. Phys., doi: 10.4208/cicp.OA-2016-0155
+ *
+ **/
 #pragma once
 #include <Kokkos_Core.hpp>
 

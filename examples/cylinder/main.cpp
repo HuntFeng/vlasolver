@@ -17,7 +17,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
         return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
     }
 
-    KOKKOS_INLINE_FUNCTION Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
+    KOKKOS_INLINE_FUNCTION
+    Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
         double norm = Kokkos::sqrt(Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2));
         return {(x - 0.375) / norm, y / norm};
     }

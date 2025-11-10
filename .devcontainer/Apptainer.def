@@ -9,6 +9,7 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
       - CMake, build-essential, and other core tools for building C++ projects
       - HDF5 and HighFive for HDF5 file handling
       - Kokkos framework for parallel programming
+      - Kokkos kernels for matrix support
       - Google Test (gtest) for unit testing
 
 %post
@@ -40,7 +41,7 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
     -DHDF5_ENABLE_ZLIB_SUPPORT=Off \
     -DHDF5_ENABLE_SZIP_SUPPORT=Off \
     -DBUILD_TESTING=Off
-    cmake --build build --parallel 4
+    cmake --build build --parallel 5
     cmake --install build --prefix /usr/local
     rm -rf hdf5-${HDF5_VERSION}
 
@@ -55,12 +56,12 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
     -DHIGHFIVE_EXAMPLES=Off \
     -DHIGHFIVE_USE_BOOST=Off \
     -DHIGHFIVE_UNIT_TESTS=Off
-    cmake --build build --parallel 4
+    cmake --build build --parallel 5
     cmake --install build --prefix /usr/local
     rm -rf HighFive-${HIGHFIVE_VERSION}
 
     # kokkos framework
-    export KOKKOS_VERSION=4.5.01
+    export KOKKOS_VERSION=4.7.01
     wget https://github.com/kokkos/kokkos/releases/download/${KOKKOS_VERSION}/kokkos-${KOKKOS_VERSION}.tar.gz
     tar -xvzf kokkos-${KOKKOS_VERSION}.tar.gz
     rm kokkos-${KOKKOS_VERSION}.tar.gz
@@ -76,9 +77,23 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
     -DKokkos_ENABLE_OPENMP=On \
     -DKokkos_ENABLE_SERIAL=On \
     -DKokkos_ENABLE_DEPRECATED_CODE_4=Off
-    cmake --build build --parallel 4
+    cmake --build build --parallel 5
     cmake --install build --prefix /usr/local
     rm -rf kokkos-${KOKKOS_VERSION}
+
+    # kokkos kernels
+    export KOKKOS_KERNELS_VERSION=4.7.01
+    wget https://github.com/kokkos/kokkos-kernels/releases/download/${KOKKOS_KERNELS_VERSION}/kokkos-kernels-${KOKKOS_KERNELS_VERSION}.tar.gz
+    tar -xvzf kokkos-kernels-${KOKKOS_VERSION}.tar.gz
+    rm kokkos-kernels-${KOKKOS_KERNELS_VERSION}.tar.gz
+    cd kokkos-kernels-${KOKKOS_KERNELS_VERSION}
+    cmake -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_COMPILER=/usr/local/bin/nvcc_wrapper \
+    -DKokkos_ROOT=/usr/local
+    cmake --build build --parallel 5
+    cmake --install build --prefix /usr/local
+    rm -rf kokkos-kernels-${KOKKOS_VERSION}
 
     # gtest for unit testing
     export GTEST_VERSION=1.17.0
@@ -88,7 +103,7 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
     cd googletest-${GTEST_VERSION}
     cmake -B build \
     -DCMAKE_BUILD_TYPE=Release
-    cmake --build build --parallel 4
+    cmake --build build --parallel 5
     cmake --install build --prefix /usr/local
     rm -rf googletest-${GTEST_VERSION}
 

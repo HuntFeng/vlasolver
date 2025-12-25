@@ -1,4 +1,4 @@
-#include "../src/2d2v/grid.hpp"
+#include "../include/reduced/grid.hpp"
 #include <gtest/gtest.h>
 
 // Demonstrate some basic assertions.

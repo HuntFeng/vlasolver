@@ -15,27 +15,29 @@ class Direction(enum.IntFlag):
 
 
 def surface(x: float, y: float) -> float:
-    return (x - 0.5) ** 2 + (y - 0.5) ** 2 - 0.2**2
+    # return (x - 0.5) ** 2 + (y - 0.5) ** 2 - 0.2**2
+    return x - 0.5
 
 
 def normal(x: float, y: float) -> tuple[float, float]:
     # default should be 4th order centrl difference
-    # dx_a = (-a[i + 2, j] + 8 * a[i + 1, j] - 8 * a[i - 1, j] + a[i - 2, j]) / (12 * dx)
-    # dy_a = (-a[i, j + 2] + 8 * a[i, j + 1] - 8 * a[i, j - 1] + a[i, j - 2]) / (12 * dy)
-    dx_eta = 2 * (x - 0.5)
-    dy_eta = 2 * (y - 0.5)
-    norm = np.sqrt(dx_eta**2 + dy_eta**2)
-    return dx_eta / norm, dy_eta / norm
+
+    # dx_eta = 2 * (x - 0.5)
+    # dy_eta = 2 * (y - 0.5)
+    # norm = np.sqrt(dx_eta**2 + dy_eta**2)
+    # return dx_eta / norm, dy_eta / norm
+    return 1.0, 0.0
 
 
 def permittivity(x: float, y: float) -> float:
-    return 1000.0 if surface(x, y) < 0 else 1.0
+    # return 1000.0 if surface(x, y) < 0 else 1.0
+    return 1.0
 
 
 def index(i: int, j: int) -> int:
     """flatten index"""
-    if i * ny + j > nx * ny:
-        breakpoint()
+    # if i * ny + j > nx * ny:
+    #     breakpoint()
     return i * ny + j
 
 
@@ -45,7 +47,7 @@ def center(i: int, j: int) -> tuple[float, float]:
     return x, y
 
 
-def compute_theta(dir: int, i: int, j: int) -> float:
+def compute_theta(direction: int, i: int, j: int) -> float:
     x, y = center(i, j)
     eta = surface(x, y)
     dx_eta = (surface(x + dx, y) - surface(x - dx, y)) / 2
@@ -53,35 +55,59 @@ def compute_theta(dir: int, i: int, j: int) -> float:
     dxx_eta = (surface(x + dx, y) - 2 * surface(x, y) + surface(x - dx, y)) / 2
     dyy_eta = (surface(x, y + dy) - 2 * surface(x, y) + surface(x, y - dy)) / 2
 
-    match dir:
-        case Direction.R:
-            return (
+    if direction == Direction.R:
+        if np.isclose(dxx_eta, 0.0):
+            theta = np.abs(eta / dx_eta)
+        else:
+            theta = (
                 -dx_eta
                 - np.sign(eta) * np.sqrt(dx_eta**2 - 4 * dxx_eta * surface(x, y))
             ) / (2 * dxx_eta)
-        case Direction.T:
-            return (
+    elif direction == Direction.T:
+        if np.isclose(dyy_eta, 0.0):
+            theta = np.abs(eta / dy_eta)
+        else:
+            theta = (
                 -dy_eta
                 - np.sign(eta) * np.sqrt(dy_eta**2 - 4 * dyy_eta * surface(x, y))
             ) / (2 * dyy_eta)
-        case Direction.L:
-            return (
+    elif direction == Direction.L:
+        if np.isclose(dxx_eta, 0.0):
+            theta = np.abs(eta / dx_eta)
+        else:
+            theta = (
                 -dx_eta
                 + np.sign(eta) * np.sqrt(dx_eta**2 - 4 * dxx_eta * surface(x, y))
             ) / (2 * dxx_eta)
-        case Direction.B:
-            return (
+    elif direction == Direction.B:
+        if np.isclose(dyy_eta, 0.0):
+            theta = np.abs(eta / dy_eta)
+        else:
+            theta = (
                 -dy_eta
                 + np.sign(eta) * np.sqrt(dy_eta**2 - 4 * dyy_eta * surface(x, y))
             ) / (2 * dyy_eta)
-        case _:
-            return 1.0
+    else:
+        theta = 1.0
+
+    if theta > 1.0:
+        breakpoint()
+    return theta
 
 
 def compute_a_tau(i: int, j: int) -> float:
     """Compute tangential derivative of jump condition a at (i, j)"""
-    dx_a = (-a[i + 2, j] + 8 * a[i + 1, j] - 8 * a[i - 1, j] + a[i - 2, j]) / (12 * dx)
-    dy_a = (-a[i, j + 2] + 8 * a[i, j + 1] - 8 * a[i, j - 1] + a[i, j - 2]) / (12 * dy)
+    # TODO: if i+2 or j+2 exceeds
+    if i + 2 > nx - 1 or i - 2 < 0 or j + 2 > ny - 1 or j - 2 < 0:
+        dx_a = (a[i + 1, j] - a[i - 1, j]) / (2 * dx)
+        dy_a = (a[i, j + 1] - a[i, j - 1]) / (2 * dy)
+    else:
+        dx_a = (-a[i + 2, j] + 8 * a[i + 1, j] - 8 * a[i - 1, j] + a[i - 2, j]) / (
+            12 * dx
+        )
+        dy_a = (-a[i, j + 2] + 8 * a[i, j + 1] - 8 * a[i, j - 1] + a[i, j - 2]) / (
+            12 * dy
+        )
     n1, n2 = normal(*center(i, j))
     a_tau = -dx_a * n2 + dy_a * n1
     return a_tau
@@ -136,6 +162,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
         # common denominator in discretization
         bot_x = (theta_r + theta_l) / 2 * dx**2
         bot_y = (theta_t + theta_b) / 2 * dy**2
+
         # permittivity
         eps_r = permittivity(x + theta_r * dx / 2, y)
         eps_l = permittivity(x - dx / 2, y)
@@ -170,6 +197,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             - eps_m * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
             - eps_jump * n2**2 * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
         )
+
         Nu = [
             # u[i,j]
             -eps_jump * n1 * n2 * theta_r * dx / dy
@@ -953,6 +981,7 @@ def construct_matrix():
                 rows.append(index(i, j))
                 cols.append(index(i, j))
                 vals.append(1.0)
+                f[i, j] = u_exact[i, j]  # dirichlet bc
                 continue
 
             x, y = center(i, j)
@@ -989,13 +1018,17 @@ def construct_matrix():
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    nx, ny = 64, 64
+    # nx, ny = 64, 64
+    nx, ny = 10, 3
     dx, dy = 1.0 / nx, 1.0 / ny
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
+    print("x=", x)
     X, Y = np.meshgrid(x, y, indexing="ij")
     # source term
     f = -2 * np.pi**2 * np.sin(np.pi * X) * np.sin(np.pi * Y)
+    # exact solution
+    u_exact = np.sin(np.pi * X) * np.sin(np.pi * Y)
     # jump conditions
     a = np.zeros((nx, ny))
     b = np.zeros((nx, ny))
@@ -1004,7 +1037,6 @@ if __name__ == "__main__":
     u = spsolve(A, f.flatten())
     u = u.reshape((nx, ny))
     # u = solve_poisson_2d(f, dx, dy)
-    u_exact = np.sin(np.pi * X) * np.sin(np.pi * Y)
     error = np.max(np.abs(u - u_exact))
     print(f"Max error: {error}")
     plt.figure()
@@ -1012,12 +1044,13 @@ if __name__ == "__main__":
     plt.title("Sparsity Pattern")
     plt.figure()
     plt.subplot(1, 2, 1)
-    plt.pcolormesh(X, Y, u_exact, shading="auto")
+    plt.pcolormesh(X, Y, u_exact, shading="auto", vmin=0.0, vmax=1.0)
     plt.colorbar(label="u_exact(x,y)")
     plt.title("Exact solution")
     plt.xlabel("x")
     plt.ylabel("y")
     plt.subplot(1, 2, 2)
+    # plt.pcolormesh(X, Y, u, shading="auto", vmin=0.0, vmax=1.0)
     plt.pcolormesh(X, Y, u, shading="auto")
     plt.colorbar(label="u(x,y)")
     plt.title("Numerical solution of 2D Poisson equation")

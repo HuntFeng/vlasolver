@@ -16,6 +16,7 @@ class Direction(enum.IntFlag):
 
 def surface(x: float, y: float) -> float:
     # return (x - 0.5) ** 2 + (y - 0.5) ** 2 - 0.2**2
+    # return x - 2.0
     return x - 0.5
 
 
@@ -50,43 +51,45 @@ def center(i: int, j: int) -> tuple[float, float]:
 def compute_theta(direction: int, i: int, j: int) -> float:
     x, y = center(i, j)
     eta = surface(x, y)
-    dx_eta = (surface(x + dx, y) - surface(x - dx, y)) / 2
-    dy_eta = (surface(x, y + dy) - surface(x, y - dy)) / 2
-    dxx_eta = (surface(x + dx, y) - 2 * surface(x, y) + surface(x - dx, y)) / 2
-    dyy_eta = (surface(x, y + dy) - 2 * surface(x, y) + surface(x, y - dy)) / 2
+    eta_r = surface(x + dx, y)
+    eta_l = surface(x - dx, y)
+    eta_t = surface(x, y + dy)
+    eta_b = surface(x, y - dy)
+    dx_eta = (eta_r - eta_l) / 2
+    dy_eta = (eta_t - eta_b) / 2
+    dxx_eta = (eta_r - 2 * eta + eta_l) / 2
+    dyy_eta = (eta_t - 2 * eta + eta_b) / 2
 
-    if direction == Direction.R:
+    if direction == Direction.R or direction == Direction.L:
         if np.isclose(dxx_eta, 0.0):
             theta = np.abs(eta / dx_eta)
         else:
             theta = (
-                -dx_eta
-                - np.sign(eta) * np.sqrt(dx_eta**2 - 4 * dxx_eta * surface(x, y))
+                -dx_eta - np.sign(eta) * np.sqrt(dx_eta**2 - 4 * dxx_eta * eta)
             ) / (2 * dxx_eta)
-    elif direction == Direction.T:
+    elif direction == Direction.T or direction == Direction.B:
         if np.isclose(dyy_eta, 0.0):
             theta = np.abs(eta / dy_eta)
         else:
             theta = (
-                -dy_eta
-                - np.sign(eta) * np.sqrt(dy_eta**2 - 4 * dyy_eta * surface(x, y))
+                -dy_eta - np.sign(eta) * np.sqrt(dy_eta**2 - 4 * dyy_eta * eta)
             ) / (2 * dyy_eta)
-    elif direction == Direction.L:
-        if np.isclose(dxx_eta, 0.0):
-            theta = np.abs(eta / dx_eta)
-        else:
-            theta = (
-                -dx_eta
-                + np.sign(eta) * np.sqrt(dx_eta**2 - 4 * dxx_eta * surface(x, y))
-            ) / (2 * dxx_eta)
-    elif direction == Direction.B:
-        if np.isclose(dyy_eta, 0.0):
-            theta = np.abs(eta / dy_eta)
-        else:
-            theta = (
-                -dy_eta
-                + np.sign(eta) * np.sqrt(dy_eta**2 - 4 * dyy_eta * surface(x, y))
-            ) / (2 * dyy_eta)
+    # elif direction == Direction.L:
+    #     if np.isclose(dxx_eta, 0.0):
+    #         theta = np.abs(eta / dx_eta)
+    #     else:
+    #         theta = (
+    #             -dx_eta
+    #             + np.sign(eta) * np.sqrt(dx_eta**2 - 4 * dxx_eta * eta)
+    #         ) / (2 * dxx_eta)
+    # elif direction == Direction.B:
+    #     if np.isclose(dyy_eta, 0.0):
+    #         theta = np.abs(eta / dy_eta)
+    #     else:
+    #         theta = (
+    #             -dy_eta
+    #             + np.sign(eta) * np.sqrt(dy_eta**2 - 4 * dyy_eta * eta)
+    #         ) / (2 * dyy_eta)
     else:
         theta = 1.0
 
@@ -186,6 +189,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             + b[i, j] * n1 * dx
             + a[i, j] * eps_p * (3 - 2 * theta_r) / ((2 - theta_r) * (1 - theta_r))
         )
+        # print(f"(i,j)={(i,j)}, d={d}")
 
         if eta > 0:
             # in the following formulas, permittivity signs are also swapped
@@ -197,6 +201,8 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             - eps_m * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
             - eps_jump * n2**2 * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
         )
+        # print(f"(i,j)={(i,j)}, M={M}")
+        # print(f"(i,j)={(i,j)}, eps_p={eps_p}, eps_m={eps_m}")
 
         Nu = [
             # u[i,j]
@@ -216,6 +222,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             # u[i-1,j-1]
             -eps_jump * n1 * n2 * theta_r * dx / dy,
         ]
+        # print(f"(i,j)={(i,j)}, Nu={Nu}")
 
         f[i, j] -= (d / M) * eps_r / theta_r / bot_x
 
@@ -1034,13 +1041,15 @@ if __name__ == "__main__":
     b = np.zeros((nx, ny))
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
+    print("A = \n", A.toarray())
     u = spsolve(A, f.flatten())
     u = u.reshape((nx, ny))
-    # u = solve_poisson_2d(f, dx, dy)
     error = np.max(np.abs(u - u_exact))
     print(f"Max error: {error}")
     plt.figure()
     plt.spy(A)
+    # plt.imshow(A.toarray(), interpolation="none", cmap="binary")
+    # plt.colorbar()
     plt.title("Sparsity Pattern")
     plt.figure()
     plt.subplot(1, 2, 1)
@@ -1056,4 +1065,30 @@ if __name__ == "__main__":
     plt.title("Numerical solution of 2D Poisson equation")
     plt.xlabel("x")
     plt.ylabel("y")
+
+    # convergence test
+    n_range = 2 ** np.arange(3, 8, dtype=int)
+    errors = np.zeros(n_range.size)
+    for i, n in enumerate(n_range):
+        print(f"n = {n}")
+        nx = ny = n
+        dx, dy = 1.0 / nx, 1.0 / ny
+        x = np.arange(dx / 2, 1.0 + dx / 2, dx)
+        y = np.arange(dy / 2, 1.0 + dy / 2, dy)
+        X, Y = np.meshgrid(x, y, indexing="ij")
+        f = -2 * np.pi**2 * np.sin(np.pi * X) * np.sin(np.pi * Y)
+        u_exact = np.sin(np.pi * X) * np.sin(np.pi * Y)
+        a = np.zeros((nx, ny))
+        b = np.zeros((nx, ny))
+        rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
+        A = construct_matrix()
+        u = spsolve(A, f.flatten())
+        u = u.reshape((nx, ny))
+        errors[i] = np.max(np.abs(u - u_exact))
+    plt.figure()
+    plt.loglog(1 / n_range, errors, "o-", label="actual")
+    plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
+    plt.xlabel("h")
+    plt.ylabel("err")
+    plt.legend()
     plt.show()

@@ -3,6 +3,7 @@ import enum
 import numpy as np
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import spsolve
+np.set_printoptions(legacy='1.25') # no type info when printing
 
 M_EPS = 1e-6  # a small number
 
@@ -15,9 +16,16 @@ class Direction(enum.IntFlag):
 
 
 def surface(x: float, y: float) -> float:
-    # return (x - 0.5) ** 2 + (y - 0.5) ** 2 - 0.2**2
+    xI = 0.52
     # return x - 2.0
-    return x - 0.5
+    # return x - xI
+    # return -(x - xI)
+    # return x**2 - xI**2
+    # return -(x**2 - xI**2)
+    # return y - xI
+    # return -(y - xI)
+    # return y**2 - xI**2
+    return -(y**2 - xI**2)
 
 
 def normal(x: float, y: float) -> tuple[float, float]:
@@ -27,7 +35,8 @@ def normal(x: float, y: float) -> tuple[float, float]:
     # dy_eta = 2 * (y - 0.5)
     # norm = np.sqrt(dx_eta**2 + dy_eta**2)
     # return dx_eta / norm, dy_eta / norm
-    return 1.0, 0.0
+    # return 1.0, 0.0
+    return 0.0, 1.0
 
 
 def permittivity(x: float, y: float) -> float:
@@ -93,8 +102,6 @@ def compute_theta(direction: int, i: int, j: int) -> float:
     else:
         theta = 1.0
 
-    if theta > 1.0:
-        breakpoint()
     return theta
 
 
@@ -148,11 +155,6 @@ def coeff_case0(i: int, j: int) -> None:
 
 def coeff_case1(direction: int, i: int, j: int) -> None:
     """coeff of u_ij and its neighbors for a case 1 cell"""
-    # calculate M = xx # scalar
-    # calculate N = [xx, xx, ...] # 1xn_neighbors matrix
-    # calculate d = xx
-    # return N/M, d/M
-
     x, y = center(i, j)
     row_idx = index(i, j)  # laplacian matrix row index
     eta = surface(x, y)  # assume this is negative for now
@@ -189,7 +191,6 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             + b[i, j] * n1 * dx
             + a[i, j] * eps_p * (3 - 2 * theta_r) / ((2 - theta_r) * (1 - theta_r))
         )
-        # print(f"(i,j)={(i,j)}, d={d}")
 
         if eta > 0:
             # in the following formulas, permittivity signs are also swapped
@@ -201,13 +202,11 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             - eps_m * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
             - eps_jump * n2**2 * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
         )
-        # print(f"(i,j)={(i,j)}, M={M}")
-        # print(f"(i,j)={(i,j)}, eps_p={eps_p}, eps_m={eps_m}")
 
-        Nu = [
+        N = [
             # u[i,j]
             -eps_jump * n1 * n2 * theta_r * dx / dy
-            - (eps_jump * n2**2 + eps_m) * (1 + theta_t) / theta_t,
+            - (eps_jump * n2**2 + eps_m) * (1 + theta_r) / theta_r,
             # u[i+1,j]
             -eps_p * (theta_r - 2) / (theta_r - 1),
             # u[i+2,j]
@@ -222,11 +221,10 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             # u[i-1,j-1]
             -eps_jump * n1 * n2 * theta_r * dx / dy,
         ]
-        # print(f"(i,j)={(i,j)}, Nu={Nu}")
 
         f[i, j] -= (d / M) * eps_r / theta_r / bot_x
 
-        rows.extend([row_idx] * len(Nu))
+        rows.extend([row_idx] * len(N))
         cols.extend(
             [
                 index(i, j),
@@ -241,21 +239,21 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
         vals.extend(
             [
                 # u[i,j]
-                (Nu[0] / M) * eps_r / theta_r / bot_x
+                (N[0] / M) * eps_r / theta_r / bot_x
                 - (eps_r / theta_r + eps_l / theta_l) / bot_x
                 - (eps_t / theta_t + eps_b / theta_b) / bot_y,
                 # u[i+1,j]
-                (Nu[1] / M) * eps_r / theta_r / bot_x,
+                (N[1] / M) * eps_r / theta_r / bot_x,
                 # u[i+2,j]
-                (Nu[2] / M) * eps_r / theta_r / bot_x,
+                (N[2] / M) * eps_r / theta_r / bot_x,
                 # u[i-1,j]
-                (Nu[3] / M) * eps_r / theta_r / bot_x + eps_l / theta_l / bot_x,
+                (N[3] / M) * eps_r / theta_r / bot_x + eps_l / theta_l / bot_x,
                 # u[i,j-1]
-                (Nu[4] / M) * eps_r / theta_r / bot_x + eps_b / theta_b / bot_y,
+                (N[4] / M) * eps_r / theta_r / bot_x + eps_b / theta_b / bot_y,
                 # u[i,j+1]
-                (Nu[5] / M) * eps_r / theta_r / bot_x + eps_t / theta_t / bot_y,
+                (N[5] / M) * eps_r / theta_r / bot_x + eps_t / theta_t / bot_y,
                 # u_ext at [i-1,j-1]
-                (Nu[6] / M) * eps_r / theta_r / bot_x,
+                (N[6] / M) * eps_r / theta_r / bot_x,
             ]
         )
     elif direction == Direction.T:
@@ -294,7 +292,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             - eps_m * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
             - eps_jump * n1**2 * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
         )
-        Nu = [
+        N = [
             # u[i,j]
             -eps_jump * n1 * n2 * theta_t * dy / dx
             - (eps_jump * n1**2 + eps_m) * (1 + theta_t) / theta_t,
@@ -315,7 +313,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
 
         f[i, j] -= (d / M) * eps_t / theta_t / bot_y
 
-        rows.extend([row_idx] * len(Nu))
+        rows.extend([row_idx] * len(N))
         cols.extend(
             [
                 index(i, j),
@@ -330,24 +328,23 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
         vals.extend(
             [
                 # u[i,j]
-                (Nu[0] / M) * eps_t / theta_t / bot_y
+                (N[0] / M) * eps_t / theta_t / bot_y
                 - (eps_r / theta_r + eps_l / theta_l) / bot_x
                 - (eps_t / theta_t + eps_b / theta_b) / bot_y,
                 # u[i,j+1]
-                (Nu[1] / M) * eps_t / theta_t / bot_y,
+                (N[1] / M) * eps_t / theta_t / bot_y,
                 # u[i,j+2]
-                (Nu[2] / M) * eps_t / theta_t / bot_y,
+                (N[2] / M) * eps_t / theta_t / bot_y,
                 # u[i,j-1]
-                (Nu[3] / M) * eps_t / theta_t / bot_y + eps_b / theta_b / bot_y,
+                (N[3] / M) * eps_t / theta_t / bot_y + eps_b / theta_b / bot_y,
                 # u[i-1,j]
-                (Nu[4] / M) * eps_t / theta_t / bot_x + eps_l / theta_l / bot_x,
+                (N[4] / M) * eps_t / theta_t / bot_x + eps_l / theta_l / bot_x,
                 # u[i+1,j]
-                (Nu[5] / M) * eps_t / theta_t / bot_x + eps_r / theta_r / bot_x,
+                (N[5] / M) * eps_t / theta_t / bot_x + eps_r / theta_r / bot_x,
                 # u_ext at [i-1,j-1]
-                (Nu[6] / M) * eps_t / theta_t / bot_y,
+                (N[6] / M) * eps_t / theta_t / bot_y,
             ]
         )
-
     elif direction == Direction.L:
         theta_l, theta_r, theta_t, theta_b = theta, 1.0, 1.0, 1.0
 
@@ -384,59 +381,61 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             + eps_m * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
             + eps_jump * n2**2 * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
         )
-        Nu = [
+
+        N = [
             # u[i,j]
-            eps_jump * n1 * n2 * theta_l * dx / dy
+            -eps_jump * n1 * n2 * theta_l * dx / dy
             + (eps_jump * n2**2 + eps_m) * (1 + theta_l) / theta_l,
             # u[i-1,j]
             eps_p * (theta_l - 2) / (theta_l - 1),
             # u[i-2,j]
             -eps_p * (theta_l - 1) / (theta_l - 2),
             # u[i+1,j]
-            -eps_jump * n1 * n2 * theta_l * dx / dy
+            eps_jump * n1 * n2 * theta_l * dx / dy
             - (eps_jump * n2**2 + eps_m) * theta_l / (1 + theta_l),
-            # u[i,j+1]
-            -eps_jump * n1 * n2 * (2 * theta_l + 1) * dx / (2 * dy),
             # u[i,j-1]
-            eps_jump * n1 * n2 * dx / (2 * dy),
-            # u[i+1,j+1]
-            eps_jump * n1 * n2 * theta_l * dx / dy,
+            eps_jump * n1 * n2 * (2 * theta_l + 1) * dx / (2 * dy),
+            # u[i,j+1]
+            -eps_jump * n1 * n2 * dx / (2 * dy),
+            # u[i+1,j-1]
+            -eps_jump * n1 * n2 * theta_l * dx / dy,
         ]
 
         f[i, j] -= (d / M) * eps_l / theta_l / bot_x
 
-        rows.extend([row_idx] * len(Nu))
+        rows.extend([row_idx] * len(N))
         cols.extend(
             [
                 index(i, j),
                 index(i - 1, j),
                 index(i - 2, j),
                 index(i + 1, j),
-                index(i, j + 1),
                 index(i, j - 1),
-                index(i + 1, j + 1),
+                index(i, j + 1),
+                index(i + 1, j - 1),
             ]
         )
         vals.extend(
             [
                 # u[i,j]
-                (Nu[0] / M) * eps_l / theta_l / bot_x
+                (N[0] / M) * eps_l / theta_l / bot_x
                 - (eps_r / theta_r + eps_l / theta_l) / bot_x
                 - (eps_t / theta_t + eps_b / theta_b) / bot_y,
                 # u[i-1,j]
-                (Nu[1] / M) * eps_l / theta_l / bot_x,
+                (N[1] / M) * eps_l / theta_l / bot_x,
                 # u[i-2,j]
-                (Nu[2] / M) * eps_l / theta_l / bot_x,
+                (N[2] / M) * eps_l / theta_l / bot_x,
                 # u[i+1,j]
-                (Nu[3] / M) * eps_l / theta_l / bot_x + eps_r / theta_r / bot_x,
+                (N[3] / M) * eps_l / theta_l / bot_x + eps_r / theta_r / bot_x,
                 # u[i,j+1]
-                (Nu[4] / M) * eps_l / theta_l / bot_x + eps_t / theta_t / bot_y,
+                (N[4] / M) * eps_l / theta_l / bot_x + eps_t / theta_t / bot_y,
                 # u[i,j-1]
-                (Nu[5] / M) * eps_l / theta_l / bot_x + eps_b / theta_b / bot_y,
+                (N[5] / M) * eps_l / theta_l / bot_x + eps_b / theta_b / bot_y,
                 # u_ext at [i+1,j+1]
-                (Nu[6] / M) * eps_l / theta_l / bot_x,
+                (N[6] / M) * eps_l / theta_l / bot_x,
             ]
         )
+        # breakpoint()
     elif direction == Direction.B:
         theta_l, theta_r, theta_t, theta_b = 1.0, 1.0, 1.0, theta
 
@@ -473,7 +472,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             + eps_m * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
             + eps_jump * n1**2 * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
         )
-        Nu = [
+        N = [
             # u[i,j]
             eps_jump * n1 * n2 * theta_b * dy / dx
             + (eps_jump * n1**2 + eps_m) * (1 + theta_b) / theta_b,
@@ -494,7 +493,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
 
         f[i, j] -= (d / M) * eps_b / theta_b / bot_y
 
-        rows.extend([row_idx] * len(Nu))
+        rows.extend([row_idx] * len(N))
         cols.extend(
             [
                 index(i, j),
@@ -509,21 +508,21 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
         vals.extend(
             [
                 # u[i,j]
-                (Nu[0] / M) * eps_b / theta_b / bot_y
+                (N[0] / M) * eps_b / theta_b / bot_y
                 - (eps_r / theta_r + eps_l / theta_l) / bot_x
-                - (eps_b / theta_b + eps_b / theta_b) / bot_y,
+                - (eps_t / theta_t + eps_b / theta_b) / bot_y,
                 # u[i,j-1]
-                (Nu[1] / M) * eps_b / theta_b / bot_y,
+                (N[1] / M) * eps_b / theta_b / bot_y,
                 # u[i,j-2]
-                (Nu[2] / M) * eps_b / theta_b / bot_y,
+                (N[2] / M) * eps_b / theta_b / bot_y,
                 # u[i,j+1]
-                (Nu[3] / M) * eps_b / theta_b / bot_y + eps_t / theta_t / bot_y,
+                (N[3] / M) * eps_b / theta_b / bot_y + eps_t / theta_t / bot_y,
                 # u[i+1,j]
-                (Nu[4] / M) * eps_b / theta_b / bot_x + eps_r / theta_r / bot_x,
+                (N[4] / M) * eps_b / theta_b / bot_x + eps_r / theta_r / bot_x,
                 # u[i-1,j]
-                (Nu[5] / M) * eps_b / theta_b / bot_x + eps_l / theta_l / bot_x,
+                (N[5] / M) * eps_b / theta_b / bot_x + eps_l / theta_l / bot_x,
                 # u_ext at [i+1,j+1]
-                (Nu[6] / M) * eps_b / theta_b / bot_y,
+                (N[6] / M) * eps_b / theta_b / bot_y,
             ]
         )
     else:
@@ -654,7 +653,7 @@ def coeff_case2(direction: int, i: int, j: int):
                 if (offset_x, offset_y) == (0, 0):
                     value += (
                         -(eps_r / theta_r + eps_l / theta_l) / bot_x
-                        - (eps_b / theta_b + eps_b / theta_b) / bot_y
+                        - (eps_t / theta_t + eps_b / theta_b) / bot_y
                     )
                 elif (offset_x, offset_y) == (-1, 0):
                     value += eps_l / theta_l / bot_x
@@ -758,7 +757,7 @@ def coeff_case2(direction: int, i: int, j: int):
                 if (offset_x, offset_y) == (0, 0):
                     value += (
                         -(eps_r / theta_r + eps_l / theta_l) / bot_x
-                        - (eps_b / theta_b + eps_b / theta_b) / bot_y
+                        - (eps_t / theta_t + eps_b / theta_b) / bot_y
                     )
                 elif (offset_x, offset_y) == (1, 0):
                     value += eps_r / theta_r / bot_x
@@ -862,7 +861,7 @@ def coeff_case2(direction: int, i: int, j: int):
                 if (offset_x, offset_y) == (0, 0):
                     value += (
                         -(eps_r / theta_r + eps_l / theta_l) / bot_x
-                        - (eps_b / theta_b + eps_b / theta_b) / bot_y
+                        - (eps_t / theta_t + eps_b / theta_b) / bot_y
                     )
                 elif (offset_x, offset_y) == (-1, 0):
                     value += eps_l / theta_l / bot_x
@@ -883,7 +882,7 @@ def coeff_case2(direction: int, i: int, j: int):
         bot_y = (theta_t + theta_b) / 2 * dy**2
 
         eps_r = permittivity(x + dx / 2, y)
-        eps_l = permittivity(x - theta_b * dx / 2, y)
+        eps_l = permittivity(x - theta_l * dx / 2, y)
         eps_t = permittivity(x, y + dy / 2)
         eps_b = permittivity(x, y - theta_b * dy / 2)
 
@@ -966,7 +965,7 @@ def coeff_case2(direction: int, i: int, j: int):
                 if (offset_x, offset_y) == (0, 0):
                     value += (
                         -(eps_r / theta_r + eps_l / theta_l) / bot_x
-                        - (eps_b / theta_b + eps_b / theta_b) / bot_y
+                        - (eps_t / theta_t + eps_b / theta_b) / bot_y
                     )
                 elif (offset_x, offset_y) == (1, 0):
                     value += eps_r / theta_r / bot_x
@@ -1026,11 +1025,13 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     # nx, ny = 64, 64
-    nx, ny = 10, 3
+    # nx, ny = 3, 4
+    nx, ny = 5, 100
     dx, dy = 1.0 / nx, 1.0 / ny
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
     print("x=", x)
+    print("y=", y)
     X, Y = np.meshgrid(x, y, indexing="ij")
     # source term
     f = -2 * np.pi**2 * np.sin(np.pi * X) * np.sin(np.pi * Y)
@@ -1041,7 +1042,10 @@ if __name__ == "__main__":
     b = np.zeros((nx, ny))
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
-    print("A = \n", A.toarray())
+    A_dense = A.toarray()
+    print("A_dense = \n", A_dense)
+    # print(f"A[4*ny+1] = {A_dense[index(4,1)]}")
+    # print(f"A[5*ny+1] = {A_dense[index(5,1)]}")
     u = spsolve(A, f.flatten())
     u = u.reshape((nx, ny))
     error = np.max(np.abs(u - u_exact))
@@ -1062,7 +1066,7 @@ if __name__ == "__main__":
     # plt.pcolormesh(X, Y, u, shading="auto", vmin=0.0, vmax=1.0)
     plt.pcolormesh(X, Y, u, shading="auto")
     plt.colorbar(label="u(x,y)")
-    plt.title("Numerical solution of 2D Poisson equation")
+    plt.title("Nmerical solution of 2D Poisson equation")
     plt.xlabel("x")
     plt.ylabel("y")
 

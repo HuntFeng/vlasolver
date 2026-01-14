@@ -1054,6 +1054,270 @@ def construct_matrix():
     A = coo_matrix((vals, (rows, cols)), shape=(nx * ny, nx * ny))
     return A
 
+def interface_value_case0(i: int, j: int, u: np.ndarray) -> tuple[float, float, float, float, float, float, float, float]:
+    """Compute the interface value of u at the cut."""
+    return u[i-1,j], u[i+1,j], u[i,j-1], u[i, j+1], 1.0, 1.0, 1.0, 1.0
+
+def interface_value_case1(direction: int, i: int, j: int, u: np.ndarray) -> tuple[float, float, float, float, float, float, float, float]:
+    """Compute the interface value of u at the cut."""
+    x, y = center(i, j)
+    eta = surface(x, y)  # assume this is negative for now
+    n1, n2 = normal(x, y)
+    a_tau = compute_a_tau(i, j)
+    theta = compute_theta(direction, i, j)
+
+    if direction == Direction.R:
+        theta_l, theta_r, theta_b, theta_t = 1.0, theta, 1.0, 1.0
+
+        if eta > 0:
+            _eps_p = permittivity(x + theta_r * dx - M_EPS, y)
+            _eps_m = permittivity(x + theta_r * dx + M_EPS, y)
+            eps_jump = _eps_p - _eps_m
+            # swap these two variable in the d expression
+            eps_p, eps_m = _eps_m, _eps_p
+        else:
+            _eps_p = permittivity(x + theta_r * dx + M_EPS, y)
+            _eps_m = permittivity(x + theta_r * dx - M_EPS, y)
+            eps_jump = _eps_p - _eps_m
+            eps_p, eps_m = _eps_p, _eps_m
+
+        d = (
+            -a_tau * eps_p * n2 * dx
+            + b[i, j] * n1 * dx
+            + a[i, j] * eps_p * (3 - 2 * theta_r) / ((2 - theta_r) * (1 - theta_r))
+        )
+
+        if eta > 0:
+            # in the following formulas, permittivity signs are also swapped
+            # the permittivity jump stays the same
+            eps_p, eps_m = -_eps_m, -_eps_p
+
+        M = (
+            -eps_p * (3 - 2 * theta_r) / ((1 - theta_r) * (2 - theta_r))
+            - eps_m * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
+            - eps_jump * n2**2 * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
+        )
+
+        N = [
+            # u[i,j]
+            -eps_jump * n1 * n2 * theta_r * dx / dy
+            - (eps_jump * n2**2 + eps_m) * (1 + theta_r) / theta_r,
+            # u[i+1,j]
+            -eps_p * (theta_r - 2) / (theta_r - 1),
+            # u[i+2,j]
+            eps_p * (theta_r - 1) / (theta_r - 2),
+            # u[i-1,j]
+            eps_jump * n1 * n2 * theta_r * dx / dy
+            + (eps_jump * n2**2 + eps_m) * theta_r / (1 + theta_r),
+            # u[i,j-1]
+            eps_jump * n1 * n2 * (2 * theta_r + 1) * dx / (2 * dy),
+            # u[i,j+1]
+            -eps_jump * n1 * n2 * dx / (2 * dy),
+            # u[i-1,j-1]
+            -eps_jump * n1 * n2 * theta_r * dx / dy,
+        ]
+        u_arr = [u[i,j], u[i+1,j], u[i+2,j], u[i-1,j], u[i,j-1], u[i,j+1], u[i-1,j-1],]
+        u_I = (np.dot(N, u_arr) + d)/M
+        return u[i-1,j], u_I, u[i,j-1], u[i, j+1], theta_l, theta_r, theta_b, theta_t
+    elif direction == Direction.T:
+        theta_l, theta_r, theta_b, theta_t = 1.0, 1.0, 1.0, theta
+
+        if eta > 0:
+            _eps_p = permittivity(x, y + theta_t * dy - M_EPS)
+            _eps_m = permittivity(x, y + theta_t * dy + M_EPS)
+            eps_jump = _eps_p - _eps_m
+            eps_p, eps_m = _eps_m, _eps_p
+        else:
+            _eps_p = permittivity(x, y + theta_t * dy + M_EPS)
+            _eps_m = permittivity(x, y + theta_t * dy - M_EPS)
+            eps_jump = _eps_p - _eps_m
+            eps_p, eps_m = _eps_p, _eps_m
+
+        d = (
+            a_tau * eps_p * n1 * dy
+            + b[i, j] * n2 * dy
+            + a[i, j] * eps_p * (3 - 2 * theta_t) / ((2 - theta_t) * (1 - theta_t))
+        )
+
+        if eta > 0:
+            eps_p, eps_m = -_eps_m, -_eps_p
+
+        M = (
+            -eps_p * (3 - 2 * theta_t) / ((1 - theta_t) * (2 - theta_t))
+            - eps_m * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
+            - eps_jump * n1**2 * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
+        )
+        N = [
+            # u[i,j]
+            -eps_jump * n1 * n2 * theta_t * dy / dx
+            - (eps_jump * n1**2 + eps_m) * (1 + theta_t) / theta_t,
+            # u[i,j+1]
+            -eps_p * (theta_t - 2) / (theta_t - 1),
+            # u[i,j+2]
+            eps_p * (theta_t - 1) / (theta_t - 2),
+            # u[i,j-1]
+            eps_jump * n1 * n2 * theta_t * dy / dx
+            + (eps_jump * n1**2 + eps_m) * theta_t / (1 + theta_t),
+            # u[i-1,j]
+            eps_jump * n1 * n2 * (2 * theta_t + 1) * dy / (2 * dx),
+            # u[i+1,j]
+            -eps_jump * n1 * n2 * dy / (2 * dx),
+            # u[i-1,j-1]
+            -eps_jump * n1 * n2 * theta_t * dy / dx,
+        ]
+        u_arr = [u[i,j], u[i,j+1], u[i,j+2], u[i,j-1], u[i-1,j], u[i+1,j], u[i-1,j-1],]
+        u_I = (np.dot(N, u_arr) + d)/M
+        return u[i-1,j], u[i+1,j], u[i,j-1], u_I, theta_l, theta_r, theta_b, theta_t
+    elif direction == Direction.L:
+        theta_l, theta_r, theta_b, theta_t = theta, 1.0, 1.0, 1.0
+
+        if eta > 0:
+            _eps_p = permittivity(x - theta_l * dx + M_EPS, y)
+            _eps_m = permittivity(x - theta_l * dx - M_EPS, y)
+            eps_jump = _eps_p - _eps_m
+            eps_p, eps_m = _eps_m, _eps_p
+        else:
+            _eps_p = permittivity(x - theta_l * dx - M_EPS, y)
+            _eps_m = permittivity(x - theta_l * dx + M_EPS, y)
+            eps_jump = _eps_p - _eps_m
+            eps_p, eps_m = _eps_p, _eps_m
+
+        d = (
+            -a_tau * eps_p * n2 * dx
+            + b[i, j] * n1 * dx
+            - a[i, j] * eps_p * (3 - 2 * theta_l) / ((2 - theta_l) * (1 - theta_l))
+        )
+
+        if eta > 0:
+            eps_p, eps_m = -_eps_m, -_eps_p
+
+        M = (
+            eps_p * (3 - 2 * theta_l) / ((1 - theta_l) * (2 - theta_l))
+            + eps_m * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
+            + eps_jump * n2**2 * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
+        )
+
+        N = [
+            # u[i,j]
+            -eps_jump * n1 * n2 * theta_l * dx / dy
+            + (eps_jump * n2**2 + eps_m) * (1 + theta_l) / theta_l,
+            # u[i-1,j]
+            eps_p * (theta_l - 2) / (theta_l - 1),
+            # u[i-2,j]
+            -eps_p * (theta_l - 1) / (theta_l - 2),
+            # u[i+1,j]
+            eps_jump * n1 * n2 * theta_l * dx / dy
+            - (eps_jump * n2**2 + eps_m) * theta_l / (1 + theta_l),
+            # u[i,j-1]
+            eps_jump * n1 * n2 * (2 * theta_l + 1) * dx / (2 * dy),
+            # u[i,j+1]
+            -eps_jump * n1 * n2 * dx / (2 * dy),
+            # u[i+1,j-1]
+            -eps_jump * n1 * n2 * theta_l * dx / dy,
+        ]
+        u_arr = [u[i,j], u[i-1,j], u[i-2,j], u[i+1,j], u[i,j-1], u[i,j+1], u[i+1,j-1],]
+        u_I = (np.dot(N, u_arr) + d)/M
+        return u_I, u[i+1,j], u[i, j-1], u[i, j+1], theta_l, theta_r, theta_b, theta_t
+    elif direction == Direction.B:
+        theta_l, theta_r, theta_b, theta_t = 1.0, 1.0, theta, 1.0
+
+        if eta > 0:
+            _eps_p = permittivity(x, y - theta_b * dy + M_EPS)
+            _eps_m = permittivity(x, y - theta_b * dy - M_EPS)
+            eps_jump = _eps_p - _eps_m
+            eps_p, eps_m = _eps_m, _eps_p
+        else:
+            _eps_p = permittivity(x, y - theta_b * dy - M_EPS)
+            _eps_m = permittivity(x, y - theta_b * dy + M_EPS)
+            eps_jump = _eps_p - _eps_m
+            eps_p, eps_m = _eps_p, _eps_m
+
+        d = (
+            a_tau * eps_p * n1 * dy
+            + b[i, j] * n2 * dy
+            - a[i, j] * eps_p * (3 - 2 * theta_b) / ((2 - theta_b) * (1 - theta_b))
+        )
+
+        if eta > 0:
+            eps_p, eps_m = -_eps_m, -_eps_p
+
+        M = (
+            eps_p * (3 - 2 * theta_b) / ((1 - theta_b) * (2 - theta_b))
+            + eps_m * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
+            + eps_jump * n1**2 * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
+        )
+        N = [
+            # u[i,j]
+            -eps_jump * n1 * n2 * theta_b * dy / dx
+            + (eps_jump * n1**2 + eps_m) * (1 + theta_b) / theta_b,
+            # u[i,j-1]
+            eps_p * (theta_b - 2) / (theta_b - 1),
+            # u[i,j-2]
+            -eps_p * (theta_b - 1) / (theta_b - 2),
+            # u[i,j+1]
+            eps_jump * n1 * n2 * theta_b * dy / dx
+            - (eps_jump * n1**2 + eps_m) * theta_b / (1 + theta_b),
+            # u[i-1,j]
+            eps_jump * n1 * n2 * (2 * theta_b + 1) * dy / (2 * dx),
+            # u[i+1,j]
+            -eps_jump * n1 * n2 * dy / (2 * dx),
+            # u[i-1,j+1]
+            -eps_jump * n1 * n2 * theta_b * dy / dx,
+        ]
+        u_arr = [u[i,j], u[i,j-1], u[i,j-2], u[i,j+1], u[i-1,j], u[i+1,j], u[i-1,j+1],]
+        u_I = (np.dot(N, u_arr) + d)/M
+        return u[i-1,j], u[i+1,j], u_I, u[i, j+1], theta_l, theta_r, theta_b, theta_t
+    else:
+        raise ValueError("Invalid direction for case 1", direction)
+
+def interface_value_case2(direction: int, i: int, j: int, u: np.ndarray) -> tuple[float, float, float, float, float, float, float, float]:
+    """Compute the interface value of u at the cut."""
+    pass
+
+def gradient(u: np.ndarray):
+    """Compute the gradient of u using central difference."""
+    dudx = np.zeros_like(u)
+    dudy = np.zeros_like(u)
+
+    # boundaries (not important, will be discarded when computing error)
+    dudx[0, :] = (u[1, :] - u[0, :]) / dx
+    dudx[-1, :] = (u[-1, :] - u[-2, :]) / dx
+    dudy[:, 0] = (u[:, 1] - u[:, 0]) / dy
+    dudy[:, -1] = (u[:, -1] - u[:, -2]) / dy
+
+    # near interface
+    for i in range(1, nx-1):
+        for j in range(1, ny-1):
+            x, y = center(i, j)
+            eta = surface(x, y)
+            eta_l = surface(x - dx, y)
+            eta_r = surface(x + dx, y)
+            eta_b = surface(x, y - dy)
+            eta_t = surface(x, y + dy)
+
+            direction = 0
+            if eta * eta_l < 0:
+                direction |= Direction.L
+            if eta * eta_r < 0:
+                direction |= Direction.R
+            if eta * eta_b < 0:
+                direction |= Direction.B
+            if eta * eta_t < 0:
+                direction |= Direction.T
+
+            match direction.bit_count():
+                case 0:
+                    u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t = interface_value_case0(i, j, u)
+                case 1:
+                    u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t = interface_value_case1(direction, i, j, u)
+                case 2:
+                    u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t = interface_value_case2(direction, i, j, u)
+                case _:
+                    raise NotImplementedError("More than 2 cuts not implemented yet.")
+
+            dudx[i, j] = (-theta_r**2*u_l + (theta_r**2-theta_l**2)*u[i,j] + theta_l**2*u_r) / (theta_l*theta_r*(theta_l + theta_r) * dx)
+            dudy[i, j] = (-theta_t**2*u_b + (theta_t**2-theta_b**2)*u[i,j] + theta_b**2*u_t) / (theta_b*theta_t*(theta_b + theta_t) * dy)    
+    return dudx, dudy
 
 def problem1():
     """[beta]=0, a=0, b=0, surface=x-0.52, f=-2pi^2 sin(pi x) sin(pi y)"""
@@ -1591,7 +1855,8 @@ def convergence_test1():
         return 2.0 if surface(x, y) <= 0 else 1.0
 
     n_range = 2 ** np.arange(3, 8, dtype=int)
-    errors = np.zeros(n_range.size)
+    errors_u = np.zeros(n_range.size)
+    errors_du = np.zeros(n_range.size)
 
     for i, n in enumerate(n_range):
         nx, ny = 3, n
@@ -1609,6 +1874,12 @@ def convergence_test1():
             [(Y < 0.6) & (Y > 0.3)],
             [lambda y: np.exp(-(y**2)), 0.0],
         )
+        dudx_exact = np.zeros_like(X)
+        dudy_exact = np.piecewise(
+            Y,
+            [(Y < 0.6) & (Y > 0.3)],
+            [lambda y: -2 * y * np.exp(-(y**2)), 0.0],
+        )
         a = np.piecewise(
             Y,
             [Y < 0.45, Y >= 0.45],
@@ -1623,13 +1894,33 @@ def convergence_test1():
         A = construct_matrix()
         u = spsolve(A, f.flatten())
         u = u.reshape((nx, ny))
-        errors[i] = np.max(np.abs(u - u_exact))
+        dudx, dudy = gradient(u)
+        errors_u[i] = np.max(np.abs(u - u_exact))
+        errors_du[i] = np.max(np.abs(dudx - dudx_exact)[1:-1, 1:-1]) + np.max(np.abs(dudy - dudy_exact)[1:-1, 1:-1])
+
     plt.figure()
-    plt.loglog(1 / n_range, errors, "o-", label="actual")
+    plt.plot(y, dudy_exact[nx//2,:], label="exact")
+    plt.plot(y, dudy[nx//2,:], label="numerical", linestyle="--")
+    plt.xlabel("y")
+    plt.ylabel("du/dy")
+    plt.legend()
+
+
+    plt.figure()
+    plt.subplot(1,2,1)
+    plt.loglog(1 / n_range, errors_u, "o-", label="actual")
     plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
     plt.xlabel("h")
     plt.ylabel("err")
     plt.legend()
+    plt.title("Convergence of $u$")
+    plt.subplot(1,2,2)
+    plt.loglog(1 / n_range, errors_du, "o-", label="actual")
+    plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
+    plt.xlabel("h")
+    plt.ylabel("err")
+    plt.legend()
+    plt.title("Convergence of $\\nabla u$")
     plt.show()
 
 

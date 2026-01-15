@@ -642,27 +642,27 @@ def coeff_case2(direction: int, i: int, j: int):
         # u[i+2,j]
         N[0, offset(2, 0)] = eps_p * (theta_r - 1) / (theta_r - 2)
         # u[i-1,j]
-        N[0, offset(-1, 0)] = (eps_m + eps_jump * n2_x**2) / (theta_r + 1) \
-            + eps_jump * n1_x * n2_x * dx / dy
+        N[0, offset(-1, 0)] = (eps_m + eps_jump * n2_x**2) * theta_r / (theta_r + 1) \
+            + eps_jump * n1_x * n2_x * theta_r * (dx / dy)
         # u[i,j-1]
         N[0, offset(0, -1)] = eps_jump * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1) + theta_r) 
         # u[i-1,j-1]
         N[0, offset(-1, -1)] = -eps_jump * n1_x * n2_x * theta_r * (dx / dy)
 
         # u[i,j]
-        N[1, offset(0,0)] = -(eps_m + eps_jump * n1_y**2) * (theta_t + 1) / theta_t \
+        N[1, offset(0, 0)] = -(eps_m + eps_jump * n1_y**2) * (theta_t + 1) / theta_t \
             - (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_t + theta_r - 1) / theta_r)
         # u[i,j+1]
-        N[1, offset(0,1)] = -eps_p * (theta_t - 2) / (theta_t - 1)
+        N[1, offset(0, 1)] = -eps_p * (theta_t - 2) / (theta_t - 1)
         # u[i,j+2]
-        N[1, offset(0,2)] = eps_p * (theta_t - 1) / (theta_t - 2)
+        N[1, offset(0, 2)] = eps_p * (theta_t - 1) / (theta_t - 2)
         # u[i,j-1]
-        N[1, offset(0,-1)] = (eps_m + eps_jump * n1_y**2) / (theta_t + 1) \
-            + eps_jump * n1_y * n2_y * dy / dx
+        N[1, offset(0, -1)] = (eps_m + eps_jump * n1_y**2) * theta_t / (theta_t + 1) \
+            + eps_jump * n1_y * n2_y * theta_t * (dy / dx)
         # u[i-1,j]
-        N[1, offset(-1,0)] = eps_jump * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1) + theta_t)
+        N[1, offset(-1, 0)] = eps_jump * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1) + theta_t)
         # u[i-1,j-1]
-        N[1, offset(-1,-1)] = -eps_jump * n1_y * n2_y * theta_t * (dy / dx)
+        N[1, offset(-1, -1)] = -eps_jump * n1_y * n2_y * theta_t * (dy / dx)
         # fmt: on
 
         M_inv = np.linalg.inv(M)
@@ -754,7 +754,7 @@ def coeff_case2(direction: int, i: int, j: int):
         N[0, offset(-1, 0)] = eps_p * (theta_l - 2) / (theta_l - 1)
         N[0, offset(-2, 0)] = -eps_p * (theta_l - 1) / (theta_l - 2)
         N[0, offset(1, 0)] = -(eps_m + eps_jump * n2_x**2) * theta_l / (theta_l + 1) \
-            + eps_jump * n1_x * n2_x * theta_l * dx / dy
+            + eps_jump * n1_x * n2_x * theta_l * (dx / dy)
         N[0, offset(0, -1)] = eps_jump * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1) + theta_l) 
         N[0, offset(1, -1)] = -eps_jump * n1_x * n2_x * theta_l * (dx / dy)
 
@@ -763,7 +763,7 @@ def coeff_case2(direction: int, i: int, j: int):
         N[1, offset(0, 1)] = -eps_p * (theta_t - 2) / (theta_t - 1)
         N[1, offset(0, 2)] = eps_p * (theta_t - 1) / (theta_t - 2)
         N[1, offset(0, -1)] = (eps_m + eps_jump * n1_y**2) * theta_t / (theta_t + 1) \
-            - eps_jump * n1_y * n2_y * theta_t * dy / dx
+            - eps_jump * n1_y * n2_y * theta_t * (dy / dx)
         N[1, offset(1, 0)] = -eps_jump * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1) + theta_t)
         N[1, offset(1, -1)] = eps_jump * n1_y * n2_y * theta_t * (dy / dx)
         # fmt: on
@@ -857,19 +857,19 @@ def coeff_case2(direction: int, i: int, j: int):
             + (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_r + theta_b - 1) / theta_b)
         N[0, offset(1, 0)] = -eps_p * (theta_r - 2) / (theta_r - 1)
         N[0, offset(2, 0)] = eps_p * (theta_r - 1) / (theta_r - 2)
-        N[0, offset(-1, 0)] = (eps_m + eps_jump * n2_x**2) / (theta_r + 1) \
-            - eps_jump * n1_x * n2_x * dx / dy
+        N[0, offset(-1, 0)] = (eps_m + eps_jump * n2_x**2) * theta_r / (theta_r + 1) \
+            - eps_jump * n1_x * n2_x * theta_r * (dx / dy)
         N[0, offset(0, 1)] = -eps_jump * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1) + theta_r) 
         N[0, offset(-1, 1)] = eps_jump * n1_x * n2_x * theta_r * (dx / dy)
 
-        N[1, offset(0,0)] = (eps_m + eps_jump * n1_y**2) * (theta_b + 1) / theta_b \
+        N[1, offset(0, 0)] = (eps_m + eps_jump * n1_y**2) * (theta_b + 1) / theta_b \
             - (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_b + theta_r - 1) / theta_r)
-        N[1, offset(0,-1)] = eps_p * (theta_b - 2) / (theta_b - 1)
-        N[1, offset(0,2)] = -eps_p * (theta_b - 1) / (theta_b - 2)
-        N[1, offset(0,1)] = -(eps_m + eps_jump * n1_y**2) / (theta_b + 1) \
-            + eps_jump * n1_y * n2_y * dy / dx
-        N[1, offset(-1,0)] = eps_jump * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1) + theta_b)
-        N[1, offset(-1,1)] = -eps_jump * n1_y * n2_y * theta_b * (dy / dx)
+        N[1, offset(0, -1)] = eps_p * (theta_b - 2) / (theta_b - 1)
+        N[1, offset(0, -2)] = -eps_p * (theta_b - 1) / (theta_b - 2)
+        N[1, offset(0, 1)] = -(eps_m + eps_jump * n1_y**2) * theta_b / (theta_b + 1) \
+            + eps_jump * n1_y * n2_y * theta_b * (dy / dx)
+        N[1, offset(-1, 0)] = eps_jump * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1) + theta_b)
+        N[1, offset(-1, 1)] = -eps_jump * n1_y * n2_y * theta_b * (dy / dx)
         # fmt: on
 
         M_inv = np.linalg.inv(M)
@@ -897,7 +897,7 @@ def coeff_case2(direction: int, i: int, j: int):
                     value += eps_t / theta_t / bot_y
 
                 col_idx = index(i + offset_x, j + offset_y)
-                if col_idx >= nx*ny:
+                if col_idx >= nx * ny:
                     breakpoint()
                 rows.append(row_idx)
                 cols.append(index(i + offset_x, j + offset_y))
@@ -964,19 +964,19 @@ def coeff_case2(direction: int, i: int, j: int):
             + (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_l + theta_b - 1) / theta_b)
         N[0, offset(-1, 0)] = eps_p * (theta_l - 2) / (theta_l - 1)
         N[0, offset(-2, 0)] = -eps_p * (theta_l - 1) / (theta_l - 2)
-        N[0, offset(1, 0)] = -(eps_m + eps_jump * n2_x**2) / (theta_l + 1) \
-            - eps_jump * n1_x * n2_x * dx / dy
+        N[0, offset(1, 0)] = -(eps_m + eps_jump * n2_x**2) * theta_l / (theta_l + 1) \
+            - eps_jump * n1_x * n2_x * theta_l * (dx / dy)
         N[0, offset(0, 1)] = -eps_jump * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1) + theta_l) 
         N[0, offset(1, 1)] = eps_jump * n1_x * n2_x * theta_l * (dx / dy)
 
-        N[1, offset(0,0)] = (eps_m + eps_jump * n1_y**2) * (theta_b + 1) / theta_b \
+        N[1, offset(0, 0)] = (eps_m + eps_jump * n1_y**2) * (theta_b + 1) / theta_b \
             + (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_b + theta_l - 1) / theta_l)
-        N[1, offset(0,-1)] = eps_p * (theta_b - 2) / (theta_b - 1)
-        N[1, offset(0,-2)] = -eps_p * (theta_b - 1) / (theta_b - 2)
-        N[1, offset(0,1)] = -(eps_m + eps_jump * n1_y**2) / (theta_b + 1) \
-            - eps_jump * n1_y * n2_y * dy / dx
-        N[1, offset(1,0)] = -eps_jump * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1) + theta_b)
-        N[1, offset(1,1)] = eps_jump * n1_y * n2_y * theta_b * (dy / dx)
+        N[1, offset(0, -1)] = eps_p * (theta_b - 2) / (theta_b - 1)
+        N[1, offset(0, -2)] = -eps_p * (theta_b - 1) / (theta_b - 2)
+        N[1, offset(0, 1)] = -(eps_m + eps_jump * n1_y**2) * theta_b / (theta_b + 1) \
+            - eps_jump * n1_y * n2_y * theta_b * (dy / dx)
+        N[1, offset(1, 0)] = -eps_jump * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1) + theta_b)
+        N[1, offset(1, 1)] = eps_jump * n1_y * n2_y * theta_b * (dy / dx)
         # fmt: on
 
         M_inv = np.linalg.inv(M)
@@ -1003,9 +1003,6 @@ def coeff_case2(direction: int, i: int, j: int):
                 elif (offset_x, offset_y) == (0, 1):
                     value += eps_t / theta_t / bot_y
 
-                col_idx = index(i + offset_x, j + offset_y)
-                if col_idx >= nx*ny:
-                    breakpoint()
                 rows.append(row_idx)
                 cols.append(index(i + offset_x, j + offset_y))
                 vals.append(value)
@@ -1017,7 +1014,8 @@ def coeff_case2(direction: int, i: int, j: int):
 def construct_matrix():
     for i in range(nx):
         for j in range(ny):
-            if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
+            # if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
+            if i < 2 or i >= nx - 2 or j < 2 or j >= ny - 2:
                 rows.append(index(i, j))
                 cols.append(index(i, j))
                 vals.append(1.0)
@@ -2017,6 +2015,7 @@ def convergence_test1():
     plt.title("Convergence of $\\nabla u$")
     plt.show()
 
+
 def problem9():
     """
     exampel 3 in Liu.
@@ -2028,12 +2027,13 @@ def problem9():
     global surface, normal, permittivity
 
     r = 0.3
+
     def surface(x, y):
-        return (x-0.5)**2 + (y-0.5)**2 - r**2
+        return (x - 0.5) ** 2 + (y - 0.5) ** 2 - r**2
 
     def normal(x, y):
-        norm = np.sqrt((2*(x-0.5))**2 + (2*(y-0.5))**2)
-        return 2*(x-0.5)/norm, 2*(y-0.5)/norm
+        norm = np.sqrt((x - 0.5) ** 2 + (y - 0.5) ** 2)
+        return (x - 0.5) / norm, (y - 0.5) / norm
 
     def permittivity(x, y):
         return 2.0 if surface(x, y) <= 0 else 1.0
@@ -2043,12 +2043,12 @@ def problem9():
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
     X, Y = np.meshgrid(x, y, indexing="ij")
-    f = 8*(X**2 + Y**2 - 1.0)*np.exp(-(X**2 + Y**2))
-    f[(X-0.5)**2 + (Y-0.5)**2 > r**2] = 0.0
+    f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+    f[(X - 0.5) ** 2 + (Y - 0.5) ** 2 > r**2] = 0.0
     u_exact = np.exp(-(X**2 + Y**2))
-    u_exact[(X-0.5)**2 + (Y-0.5)**2 > r**2] = 0.0
+    u_exact[(X - 0.5) ** 2 + (Y - 0.5) ** 2 > r**2] = 0.0
     a = -np.exp(-(X**2 + Y**2))
-    b = -8.0*(2*X**2 + 2*Y**2 - X - Y)*np.exp(-(X**2 + Y**2))
+    b = -8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
     u = spsolve(A, f.flatten())
@@ -2077,7 +2077,7 @@ def problem9():
     plt.show()
 
 
-def problem10():
+def problemRT():
     """
     exampel 3 in Liu. RT
     """
@@ -2088,27 +2088,38 @@ def problem10():
     global surface, normal, permittivity
 
     r = 0.3
+
     def surface(x, y):
         return x**2 + y**2 - r**2
 
     def normal(x, y):
-        norm = np.sqrt(2*x**2 + 2*y**2)
-        return 2*x/norm, 2*y/norm
+        norm = np.sqrt(x**2 + y**2)
+        return x / norm, y / norm
 
     def permittivity(x, y):
         return 2.0 if surface(x, y) <= 0 else 1.0
+        # return 1.0
 
     nx, ny = 64, 64
     dx, dy = 1.0 / nx, 1.0 / ny
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
     X, Y = np.meshgrid(x, y, indexing="ij")
-    f = 8*(X**2 + Y**2 - 1.0)*np.exp(-(X**2 + Y**2))
+
+    # f = np.zeros((nx, ny))
+    # mask = X**2 + Y**2 > r**2
+    # u_exact = X + Y
+    # u_exact[mask] = (X + Y + 1.0)[mask]
+    # a = np.ones((nx, ny))
+    # b = np.zeros((nx, ny))
+
+    f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+    # f = 4 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
     f[X**2 + Y**2 > r**2] = 0.0
     u_exact = np.exp(-(X**2 + Y**2))
     u_exact[X**2 + Y**2 > r**2] = 0.0
     a = -np.exp(-(X**2 + Y**2))
-    b = -8.0*(2*X**2 + 2*Y**2 - X - Y)*np.exp(-(X**2 + Y**2))
+    b = -8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
     u = spsolve(A, f.flatten())
@@ -2136,7 +2147,8 @@ def problem10():
     plt.ylabel("y")
     plt.show()
 
-def problem11():
+
+def problemTL():
     """exampel 3 in Liu. TL"""
     global nx, ny, dx, dy
     global x, y, X, Y
@@ -2145,27 +2157,40 @@ def problem11():
     global surface, normal, permittivity
 
     r = 0.3
+
     def surface(x, y):
-        return (x-1.0)**2 + y**2 - r**2
+        return (x - 1.0) ** 2 + y**2 - r**2
 
     def normal(x, y):
-        norm = np.sqrt(2*(x-1.0)**2 + 2*y**2)
-        return 2*(x-1.0)/norm, 2*y/norm
+        norm = np.sqrt((x - 1.0) ** 2 + y**2)
+        return (x - 1.0) / norm, y / norm
 
     def permittivity(x, y):
         return 2.0 if surface(x, y) <= 0 else 1.0
+        # return 1.0
 
     nx, ny = 64, 64
     dx, dy = 1.0 / nx, 1.0 / ny
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
     X, Y = np.meshgrid(x, y, indexing="ij")
-    f = 8*(X**2 + Y**2 - 1.0)*np.exp(-(X**2 + Y**2))
-    f[(X-1.0)**2 + Y**2 > r**2] = 0.0
+    X -= 1.0
+
+    # f = np.zeros((nx, ny))
+    # mask = X**2 + Y**2 > r**2
+    # u_exact = X + Y
+    # u_exact[mask] = (X + Y + 1.0)[mask]
+    # a = np.ones((nx, ny))
+    # b = np.zeros((nx, ny))
+
+    f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+    # f = 4 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+    f[X**2 + Y**2 > r**2] = 0.0
     u_exact = np.exp(-(X**2 + Y**2))
-    u_exact[(X-1.0)**2 + Y**2 > r**2] = 0.0
+    u_exact[X**2 + Y**2 > r**2] = 0.0
     a = -np.exp(-(X**2 + Y**2))
-    b = -8.0*(2*X**2 + 2*Y**2 - X - Y)*np.exp(-(X**2 + Y**2))
+    b = -8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+    X += 1.0
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
     u = spsolve(A, f.flatten())
@@ -2191,66 +2216,18 @@ def problem11():
     plt.title("Nmerical solution of 2D Poisson equation")
     plt.xlabel("x")
     plt.ylabel("y")
+
+    fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
+    fig.suptitle(f"Max error: {error:.2e}")
+    ax[0].scatter(X, Y, u_exact)
+    ax[0].set_title("Exact solution")
+    ax[1].scatter(X, Y, u)
+    ax[1].set_title("Nmerical solution of 2D Poisson equation")
+
     plt.show()
 
-def problem12():
-    """exampel 3 in Liu. LB"""
-    global nx, ny, dx, dy
-    global x, y, X, Y
-    global f, u_exact, a, b
-    global rows, cols, vals
-    global surface, normal, permittivity
 
-    r = 0.3
-    def surface(x, y):
-        return x**2 + (y-1.0)**2 - r**2
-
-    def normal(x, y):
-        norm = np.sqrt(2*x**2 + 2*(y-1.0)**2)
-        return 2*x/norm, 2*(y-1.0)/norm
-
-    def permittivity(x, y):
-        return 2.0 if surface(x, y) <= 0 else 1.0
-
-    nx, ny = 64, 64
-    dx, dy = 1.0 / nx, 1.0 / ny
-    x = np.arange(dx / 2, 1.0 + dx / 2, dx)
-    y = np.arange(dy / 2, 1.0 + dy / 2, dy)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-    f = 8*(X**2 + Y**2 - 1.0)*np.exp(-(X**2 + Y**2))
-    f[X**2 + (Y-1.0)**2 > r**2] = 0.0
-    u_exact = np.exp(-(X**2 + Y**2))
-    u_exact[X**2 + (Y-1.0)**2 > r**2] = 0.0
-    a = -np.exp(-(X**2 + Y**2))
-    b = -8.0*(2*X**2 + 2*Y**2 - X - Y)*np.exp(-(X**2 + Y**2))
-    rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
-    A = construct_matrix()
-    u = spsolve(A, f.flatten())
-    u = u.reshape((nx, ny))
-    error = np.max(np.abs(u - u_exact))
-    print(f"Max error: {error}")
-    plt.figure()
-    plt.spy(A)
-    plt.title("Sparsity Pattern")
-    plt.figure()
-    plt.suptitle(f"Max error: {error:.2e}")
-    plt.subplot(1, 2, 1)
-    plt.pcolormesh(X, Y, u_exact, shading="auto")
-    plt.colorbar(label="u_exact(x,y)")
-    plt.title("Exact solution")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.xlabel("x")
-    plt.ylabel("u")
-    plt.subplot(1, 2, 2)
-    plt.pcolormesh(X, Y, u, shading="auto")
-    plt.colorbar(label="u(x,y)")
-    plt.title("Nmerical solution of 2D Poisson equation")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.show()
-
-def problem13():
+def problemBR():
     """exampel 3 in Liu. BR"""
     global nx, ny, dx, dy
     global x, y, X, Y
@@ -2259,27 +2236,40 @@ def problem13():
     global surface, normal, permittivity
 
     r = 0.3
+
     def surface(x, y):
-        return (x-1.0)**2 + (y-1.0)**2 - r**2
+        return x**2 + (y - 1.0) ** 2 - r**2
 
     def normal(x, y):
-        norm = np.sqrt(2*(x-1.0)**2 + 2*(y-1.0)**2)
-        return 2*(x-1.0)/norm, 2*(y-1.0)/norm
+        norm = np.sqrt(x**2 + (y - 1.0) ** 2)
+        return x / norm, (y - 1.0) / norm
 
     def permittivity(x, y):
         return 2.0 if surface(x, y) <= 0 else 1.0
+        # return 1.0
 
     nx, ny = 64, 64
     dx, dy = 1.0 / nx, 1.0 / ny
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
     X, Y = np.meshgrid(x, y, indexing="ij")
-    f = 8*(X**2 + Y**2 - 1.0)*np.exp(-(X**2 + Y**2))
-    f[(X-1.0)**2 + (Y-1.0)**2 > r**2] = 0.0
+    Y -= 1.0
+
+    # f = np.zeros((nx, ny))
+    # mask = X**2 + Y**2 > r**2
+    # u_exact = X + Y
+    # u_exact[mask] = (X + Y + 1.0)[mask]
+    # a = np.ones((nx, ny))
+    # b = np.zeros((nx, ny))
+
+    f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+    # f = 4 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+    f[X**2 + Y**2 > r**2] = 0.0
     u_exact = np.exp(-(X**2 + Y**2))
-    u_exact[(X-1.0)**2 + (Y-1.0)**2 > r**2] = 0.0
+    u_exact[X**2 + Y**2 > r**2] = 0.0
     a = -np.exp(-(X**2 + Y**2))
-    b = -8.0*(2*X**2 + 2*Y**2 - X - Y)*np.exp(-(X**2 + Y**2))
+    b = -8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+    Y += 1.0
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
     u = spsolve(A, f.flatten())
@@ -2306,6 +2296,81 @@ def problem13():
     plt.xlabel("x")
     plt.ylabel("y")
     plt.show()
+
+
+def problemLB():
+    """exampel 3 in Liu. LB"""
+    global nx, ny, dx, dy
+    global x, y, X, Y
+    global f, u_exact, a, b
+    global rows, cols, vals
+    global surface, normal, permittivity
+
+    r = 0.3
+
+    def surface(x, y):
+        return (x - 1.0) ** 2 + (y - 1.0) ** 2 - r**2
+
+    def normal(x, y):
+        norm = np.sqrt((x - 1.0) ** 2 + (y - 1.0) ** 2)
+        return (x - 1.0) / norm, (y - 1.0) / norm
+
+    def permittivity(x, y):
+        return 2.0 if surface(x, y) <= 0 else 1.0
+        # return 1.0
+
+    nx, ny = 64, 64
+    dx, dy = 1.0 / nx, 1.0 / ny
+    x = np.arange(dx / 2, 1.0 + dx / 2, dx)
+    y = np.arange(dy / 2, 1.0 + dy / 2, dy)
+    X, Y = np.meshgrid(x, y, indexing="ij")
+    X -= 1.0
+    Y -= 1.0
+
+    # f = np.zeros((nx, ny))
+    # mask = X**2 + Y**2 > r**2
+    # u_exact = X + Y
+    # u_exact[mask] = (X + Y + 1.0)[mask]
+    # a = np.ones((nx, ny))
+    # b = np.zeros((nx, ny))
+
+    f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+    # f = 4 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+    f[X**2 + Y**2 > r**2] = 0.0
+    u_exact = np.exp(-(X**2 + Y**2))
+    u_exact[X**2 + Y**2 > r**2] = 0.0
+    a = -np.exp(-(X**2 + Y**2))
+    b = -8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+
+    X += 1.0
+    Y += 1.0
+    rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
+    A = construct_matrix()
+    u = spsolve(A, f.flatten())
+    u = u.reshape((nx, ny))
+    error = np.max(np.abs(u - u_exact))
+    print(f"Max error: {error}")
+    plt.figure()
+    plt.spy(A)
+    plt.title("Sparsity Pattern")
+    plt.figure()
+    plt.suptitle(f"Max error: {error:.2e}")
+    plt.subplot(1, 2, 1)
+    plt.pcolormesh(X, Y, u_exact, shading="auto")
+    plt.colorbar(label="u_exact(x,y)")
+    plt.title("Exact solution")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.xlabel("x")
+    plt.ylabel("u")
+    plt.subplot(1, 2, 2)
+    plt.pcolormesh(X, Y, u, shading="auto")
+    plt.colorbar(label="u(x,y)")
+    plt.title("Nmerical solution of 2D Poisson equation")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.show()
+
 
 if __name__ == "__main__":
     # problem1()
@@ -2319,7 +2384,17 @@ if __name__ == "__main__":
     # convergence_test1()
 
     # problem9()
-    # problem10()
-    problem11() # has some issue
-    # problem12() # has some issue
-    # problem13() # has more issue
+
+    # okay [beta]=0, a=0, b=0
+    # okay [beta]=-1, a=0, b=0
+    # okay [beta]=0, a=1, b=0
+    # test [beta]=-1, a=1, b=0
+    #  [beta]=0, a=0, b=1
+    #  [beta]=-1, a=0, b=1
+    #  [beta]=0, a=1, b=1
+    #  [beta]=-1, a=1, b=1
+
+    # problemRT()
+    # problemTL()  # has some issue with the [beta]
+    # problemBR()
+    problemLB()

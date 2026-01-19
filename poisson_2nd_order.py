@@ -62,7 +62,7 @@ def center(i: int, j: int) -> tuple[float, float]:
     return x, y
 
 
-def compute_theta(direction: int, i: int, j: int) -> float:
+def compute_theta_deprecated(direction: int, i: int, j: int) -> float:
     x, y = center(i, j)
     eta = surface(x, y)
     eta_r = surface(x + dx, y)
@@ -107,6 +107,56 @@ def compute_theta(direction: int, i: int, j: int) -> float:
     #         ) / (2 * dyy_eta)
     else:
         theta = 1.0
+
+    return theta
+
+
+def compute_theta(direction: int, i: int, j: int) -> float:
+    x, y = center(i, j)
+    eta = surface(x, y)
+    eta_r = surface(x + dx, y)
+    eta_l = surface(x - dx, y)
+    eta_t = surface(x, y + dy)
+
+    eta_b = surface(x, y - dy)
+    dx_eta = (eta_r - eta_l) / 2
+    dy_eta = (eta_t - eta_b) / 2
+    dxx_eta = (eta_r - 2 * eta + eta_l) / 2
+    dyy_eta = (eta_t - 2 * eta + eta_b) / 2
+
+    if direction == Direction.R:
+        if np.isclose(dxx_eta, 0.0):
+            theta = np.abs(eta / dx_eta)
+        else:
+            theta = (
+                -dx_eta - np.sign(eta) * np.sqrt(dx_eta**2 - 4 * dxx_eta * eta)
+            ) / (2 * dxx_eta)
+    elif direction == Direction.T:
+        if np.isclose(dyy_eta, 0.0):
+            theta = np.abs(eta / dy_eta)
+        else:
+            theta = (
+                -dy_eta - np.sign(eta) * np.sqrt(dy_eta**2 - 4 * dyy_eta * eta)
+            ) / (2 * dyy_eta)
+    elif direction == Direction.L:
+        if np.isclose(dxx_eta, 0.0):
+            theta = np.abs(eta / dx_eta)
+        else:
+            theta = (
+                dx_eta - np.sign(eta) * np.sqrt(dx_eta**2 - 4 * dxx_eta * eta)
+            ) / (2 * dxx_eta)
+    elif direction == Direction.B:
+        if np.isclose(dyy_eta, 0.0):
+            theta = np.abs(eta / dy_eta)
+        else:
+            theta = (
+                dy_eta - np.sign(eta) * np.sqrt(dy_eta**2 - 4 * dyy_eta * eta)
+            ) / (2 * dyy_eta)
+    else:
+        theta = 1.0
+
+    if theta < 0 or theta > 1:
+        breakpoint()
 
     return theta
 
@@ -896,9 +946,6 @@ def coeff_case2(direction: int, i: int, j: int):
                 elif (offset_x, offset_y) == (0, 1):
                     value += eps_t / theta_t / bot_y
 
-                col_idx = index(i + offset_x, j + offset_y)
-                if col_idx >= nx * ny:
-                    breakpoint()
                 rows.append(row_idx)
                 cols.append(index(i + offset_x, j + offset_y))
                 vals.append(value)
@@ -1411,360 +1458,6 @@ def gradient(u: np.ndarray):
 
 
 def problem1():
-    """[beta]=0, a=0, b=0, surface=x-0.52, f=-2pi^2 sin(pi x) sin(pi y)"""
-    global nx, ny, dx, dy
-    global x, y, X, Y
-    global f, u_exact, a, b
-    global rows, cols, vals
-    global surface, normal, permittivity
-
-    def surface(x, y):
-        return x - 0.52
-
-    def normal(x, y):
-        return 1.0, 0.0
-
-    def permittivity(x, y):
-        return 1.0
-
-    nx, ny = 100, 5
-    dx, dy = 1.0 / nx, 1.0 / ny
-    x = np.arange(dx / 2, 1.0 + dx / 2, dx)
-    y = np.arange(dy / 2, 1.0 + dy / 2, dy)
-    print("x=", x)
-    print("y=", y)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-    f = -2 * np.pi**2 * np.sin(np.pi * X) * np.sin(np.pi * Y)
-    u_exact = np.sin(np.pi * X) * np.sin(np.pi * Y)
-    a = np.zeros((nx, ny))
-    b = np.zeros((nx, ny))
-    rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
-    A = construct_matrix()
-    A_dense = A.toarray()
-    print("A_dense = \n", A_dense)
-    u = spsolve(A, f.flatten())
-    u = u.reshape((nx, ny))
-    error = np.max(np.abs(u - u_exact))
-    print(f"Max error: {error}")
-    plt.figure()
-    plt.spy(A)
-    # plt.imshow(A.toarray(), interpolation="none", cmap="binary")
-    # plt.colorbar()
-    plt.title("Sparsity Pattern")
-    plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.pcolormesh(X, Y, u_exact, shading="auto", vmin=0.0, vmax=1.0)
-    plt.colorbar(label="u_exact(x,y)")
-    plt.title("Exact solution")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.subplot(1, 2, 2)
-    # plt.pcolormesh(X, Y, u, shading="auto", vmin=0.0, vmax=1.0)
-    plt.pcolormesh(X, Y, u, shading="auto")
-    plt.colorbar(label="u(x,y)")
-    plt.title("Nmerical solution of 2D Poisson equation")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.show()
-
-
-def problem2():
-    """[beta]=0, a=0, b=0, surface=y-0.52, f=-2pi^2 sin(pi x) sin(pi y)"""
-    global nx, ny, dx, dy
-    global x, y, X, Y
-    global f, u_exact, a, b
-    global rows, cols, vals
-    global surface, normal, permittivity
-
-    def surface(x, y):
-        return y - 0.52
-
-    def normal(x, y):
-        return 0.0, 1.0
-
-    def permittivity(x, y):
-        return 1.0
-
-    nx, ny = 5, 100
-    dx, dy = 1.0 / nx, 1.0 / ny
-    x = np.arange(dx / 2, 1.0 + dx / 2, dx)
-    y = np.arange(dy / 2, 1.0 + dy / 2, dy)
-    print("x=", x)
-    print("y=", y)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-    f = -2 * np.pi**2 * np.sin(np.pi * X) * np.sin(np.pi * Y)
-    u_exact = np.sin(np.pi * X) * np.sin(np.pi * Y)
-    a = np.zeros((nx, ny))
-    b = np.zeros((nx, ny))
-    rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
-    A = construct_matrix()
-    A_dense = A.toarray()
-    print("A_dense = \n", A_dense)
-    u = spsolve(A, f.flatten())
-    u = u.reshape((nx, ny))
-    error = np.max(np.abs(u - u_exact))
-    print(f"Max error: {error}")
-    plt.figure()
-    plt.spy(A)
-    # plt.imshow(A.toarray(), interpolation="none", cmap="binary")
-    # plt.colorbar()
-    plt.title("Sparsity Pattern")
-    plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.pcolormesh(X, Y, u_exact, shading="auto", vmin=0.0, vmax=1.0)
-    plt.colorbar(label="u_exact(x,y)")
-    plt.title("Exact solution")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.subplot(1, 2, 2)
-    plt.pcolormesh(X, Y, u, shading="auto")
-    plt.colorbar(label="u(x,y)")
-    plt.title("Nmerical solution of 2D Poisson equation")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.show()
-
-
-def problem3():
-    """[beta]=0, a=1, b=0, surface=x-0.52, f=0"""
-    global nx, ny, dx, dy
-    global x, y, X, Y
-    global f, u_exact, a, b
-    global rows, cols, vals
-    global surface, normal, permittivity
-
-    def surface(x, y):
-        return x - 0.52
-
-    def normal(x, y):
-        return 1.0, 0.0
-
-    def permittivity(x, y):
-        return 1.0
-
-    nx, ny = 100, 5
-    dx, dy = 1.0 / nx, 1.0 / ny
-    x = np.arange(dx / 2, 1.0 + dx / 2, dx)
-    y = np.arange(dy / 2, 1.0 + dy / 2, dy)
-    print("x=", x)
-    print("y=", y)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-    f = np.zeros((nx, ny))
-    u_exact = np.piecewise(X, [X < 0.52, X >= 0.52], [lambda x: x, lambda x: x + 1.0])
-    a = np.ones((nx, ny))
-    b = np.zeros((nx, ny))
-    rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
-    A = construct_matrix()
-    A_dense = A.toarray()
-    print("A_dense = \n", A_dense)
-    u = spsolve(A, f.flatten())
-    u = u.reshape((nx, ny))
-    error = np.max(np.abs(u - u_exact))
-    print(f"Max error: {error}")
-    plt.figure()
-    plt.spy(A)
-    # plt.imshow(A.toarray(), interpolation="none", cmap="binary")
-    # plt.colorbar()
-    plt.title("Sparsity Pattern")
-    plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.pcolormesh(X, Y, u_exact, shading="auto")
-    plt.colorbar(label="u_exact(x,y)")
-    plt.title("Exact solution")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.subplot(1, 2, 2)
-    # plt.pcolormesh(X, Y, u, shading="auto", vmin=0.0, vmax=1.0)
-    plt.pcolormesh(X, Y, u, shading="auto")
-    plt.colorbar(label="u(x,y)")
-    plt.title("Nmerical solution of 2D Poisson equation")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.show()
-
-
-def problem4():
-    """[beta]=0, a=1, b=0, surface=y-0.52, f=0"""
-    global nx, ny, dx, dy
-    global x, y, X, Y
-    global f, u_exact, a, b
-    global rows, cols, vals
-    global surface, normal, permittivity
-
-    def surface(x, y):
-        return y - 0.52
-
-    def normal(x, y):
-        return 0.0, 1.0
-
-    def permittivity(x, y):
-        return 1.0
-
-    nx, ny = 5, 100
-    dx, dy = 1.0 / nx, 1.0 / ny
-    x = np.arange(dx / 2, 1.0 + dx / 2, dx)
-    y = np.arange(dy / 2, 1.0 + dy / 2, dy)
-    print("x=", x)
-    print("y=", y)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-    f = np.zeros((nx, ny))
-    u_exact = np.piecewise(Y, [Y < 0.52, Y >= 0.52], [lambda y: y, lambda y: y + 1.0])
-    a = np.ones((nx, ny))
-    b = np.zeros((nx, ny))
-    rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
-    A = construct_matrix()
-    A_dense = A.toarray()
-    print("A_dense = \n", A_dense)
-    u = spsolve(A, f.flatten())
-    u = u.reshape((nx, ny))
-    error = np.max(np.abs(u - u_exact))
-    print(f"Max error: {error}")
-    plt.figure()
-    plt.spy(A)
-    # plt.imshow(A.toarray(), interpolation="none", cmap="binary")
-    # plt.colorbar()
-    plt.title("Sparsity Pattern")
-    plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.pcolormesh(X, Y, u_exact, shading="auto")
-    plt.colorbar(label="u_exact(x,y)")
-    plt.title("Exact solution")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.subplot(1, 2, 2)
-    # plt.pcolormesh(X, Y, u, shading="auto", vmin=0.0, vmax=1.0)
-    plt.pcolormesh(X, Y, u, shading="auto")
-    plt.colorbar(label="u(x,y)")
-    plt.title("Nmerical solution of 2D Poisson equation")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.show()
-
-
-def problem5():
-    """[beta]=0, a=0, b=1, surface=x-0.52, f=0"""
-    global nx, ny, dx, dy
-    global x, y, X, Y
-    global f, u_exact, a, b
-    global rows, cols, vals
-    global surface, normal, permittivity
-
-    def surface(x, y):
-        return x - 0.52
-
-    def normal(x, y):
-        return 1.0, 0.0
-
-    def permittivity(x, y):
-        return 1.0
-
-    nx, ny = 100, 3
-    dx, dy = 1.0 / nx, 1.0 / ny
-    x = np.arange(dx / 2, 1.0 + dx / 2, dx)
-    y = np.arange(dy / 2, 1.0 + dy / 2, dy)
-    print("x=", x)
-    print("y=", y)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-    f = np.zeros((nx, ny))
-    u_exact = np.piecewise(
-        X, [X < 0.52, X >= 0.52], [lambda x: x, lambda x: 2 * (x - 0.52) + 0.52]
-    )
-    a = np.zeros((nx, ny))
-    b = np.ones((nx, ny))
-    rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
-    A = construct_matrix()
-    A_dense = A.toarray()
-    print("A_dense = \n", A_dense)
-    u = spsolve(A, f.flatten())
-    u = u.reshape((nx, ny))
-    error = np.max(np.abs(u - u_exact))
-    print(f"Max error: {error}")
-    plt.figure()
-    plt.spy(A)
-    # plt.imshow(A.toarray(), interpolation="none", cmap="binary")
-    # plt.colorbar()
-    plt.title("Sparsity Pattern")
-    plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.pcolormesh(X, Y, u_exact, shading="auto")
-    plt.colorbar(label="u_exact(x,y)")
-    plt.title("Exact solution")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.xlabel("x")
-    plt.ylabel("u")
-    plt.subplot(1, 2, 2)
-    # plt.pcolormesh(X, Y, u, shading="auto", vmin=0.0, vmax=1.0)
-    plt.pcolormesh(X, Y, u, shading="auto")
-    plt.colorbar(label="u(x,y)")
-    plt.title("Nmerical solution of 2D Poisson equation")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.show()
-
-
-def problem6():
-    """[beta]=0, a=0, b=1, surface=y-0.52, f=0"""
-    global nx, ny, dx, dy
-    global x, y, X, Y
-    global f, u_exact, a, b
-    global rows, cols, vals
-    global surface, normal, permittivity
-
-    def surface(x, y):
-        return y - 0.52
-
-    def normal(x, y):
-        return 0.0, 1.0
-
-    def permittivity(x, y):
-        return 1.0
-
-    nx, ny = 5, 50
-    dx, dy = 1.0 / nx, 1.0 / ny
-    x = np.arange(dx / 2, 1.0 + dx / 2, dx)
-    y = np.arange(dy / 2, 1.0 + dy / 2, dy)
-    print("x=", x)
-    print("y=", y)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-    f = np.zeros((nx, ny))
-    u_exact = np.piecewise(
-        Y, [Y < 0.52, Y >= 0.52], [lambda y: y, lambda y: 2 * (y - 0.52) + 0.52]
-    )
-    a = np.zeros((nx, ny))
-    b = np.ones((nx, ny))
-    rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
-    A = construct_matrix()
-    A_dense = A.toarray()
-    print("A_dense = \n", A_dense)
-    u = spsolve(A, f.flatten())
-    u = u.reshape((nx, ny))
-    error = np.max(np.abs(u - u_exact))
-    print(f"Max error: {error}")
-    plt.figure()
-    plt.spy(A)
-    # plt.imshow(A.toarray(), interpolation="none", cmap="binary")
-    # plt.colorbar()
-    plt.title("Sparsity Pattern")
-    plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.pcolormesh(X, Y, u_exact, shading="auto")
-    plt.colorbar(label="u_exact(x,y)")
-    plt.title("Exact solution")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.xlabel("x")
-    plt.ylabel("u")
-    plt.subplot(1, 2, 2)
-    plt.pcolormesh(X, Y, u, shading="auto")
-    plt.colorbar(label="u(x,y)")
-    plt.title("Nmerical solution of 2D Poisson equation")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.show()
-
-
-def problem7():
     """
     [beta]=-1,
     a(x=0.3)=-exp(-0.09), a(x=0.6)=-exp(-0.36),
@@ -1787,7 +1480,7 @@ def problem7():
     def permittivity(x, y):
         return 2.0 if surface(x, y) <= 0 else 1.0
 
-    nx, ny = 50, 3
+    nx, ny = 50, 9
     dx, dy = 1.0 / nx, 1.0 / ny
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
@@ -1814,16 +1507,12 @@ def problem7():
     )
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
-    A_dense = A.toarray()
-    print("A_dense = \n", A_dense)
     u = spsolve(A, f.flatten())
     u = u.reshape((nx, ny))
     error = np.max(np.abs(u - u_exact))
     print(f"Max error: {error}")
     plt.figure()
     plt.spy(A)
-    # plt.imshow(A.toarray(), interpolation="none", cmap="binary")
-    # plt.colorbar()
     plt.title("Sparsity Pattern")
     plt.figure()
     plt.subplot(1, 2, 1)
@@ -1843,7 +1532,7 @@ def problem7():
     plt.show()
 
 
-def problem8():
+def problem2():
     """
     [beta]=-1,
     a(y=0.3)=-exp(-0.09), a(y=0.6)=-exp(-0.36),
@@ -1866,7 +1555,7 @@ def problem8():
     def permittivity(x, y):
         return 2.0 if surface(x, y) <= 0 else 1.0
 
-    nx, ny = 3, 50
+    nx, ny = 9, 50
     dx, dy = 1.0 / nx, 1.0 / ny
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
@@ -1950,7 +1639,7 @@ def convergence_test1():
     errors_du = np.zeros(n_range.size)
 
     for i, n in enumerate(n_range):
-        nx, ny = 3, n
+        nx, ny = 9, n
         dx, dy = 1.0 / nx, 1.0 / ny
         x = np.arange(dx / 2, 1.0 + dx / 2, dx)
         y = np.arange(dy / 2, 1.0 + dy / 2, dy)
@@ -2016,7 +1705,7 @@ def convergence_test1():
     plt.show()
 
 
-def problem9():
+def problem3():
     """
     exampel 3 in Liu.
     """
@@ -2026,7 +1715,7 @@ def problem9():
     global rows, cols, vals
     global surface, normal, permittivity
 
-    r = 0.3
+    r = 0.25
 
     def surface(x, y):
         return (x - 0.5) ** 2 + (y - 0.5) ** 2 - r**2
@@ -2048,7 +1737,7 @@ def problem9():
     u_exact = np.exp(-(X**2 + Y**2))
     u_exact[(X - 0.5) ** 2 + (Y - 0.5) ** 2 > r**2] = 0.0
     a = -np.exp(-(X**2 + Y**2))
-    b = -8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+    b = 8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
     u = spsolve(A, f.flatten())
@@ -2074,6 +1763,13 @@ def problem9():
     plt.title("Nmerical solution of 2D Poisson equation")
     plt.xlabel("x")
     plt.ylabel("y")
+
+    fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
+    fig.suptitle(f"Max error: {error:.2e}")
+    ax[0].scatter(X, Y, u_exact)
+    ax[0].set_title("Exact solution")
+    ax[1].scatter(X, Y, u)
+    ax[1].set_title("Nmerical solution of 2D Poisson equation")
     plt.show()
 
 
@@ -2087,7 +1783,7 @@ def problemRT():
     global rows, cols, vals
     global surface, normal, permittivity
 
-    r = 0.3
+    r = 0.25
 
     def surface(x, y):
         return x**2 + y**2 - r**2
@@ -2097,7 +1793,8 @@ def problemRT():
         return x / norm, y / norm
 
     def permittivity(x, y):
-        return 2.0 if surface(x, y) <= 0 else 1.0
+        # return 2.0 if surface(x, y) <= 0 else 1.0
+        return 4.0 if surface(x, y) <= 0 else 1.0
         # return 1.0
 
     nx, ny = 64, 64
@@ -2109,17 +1806,34 @@ def problemRT():
     # f = np.zeros((nx, ny))
     # mask = X**2 + Y**2 > r**2
     # u_exact = X + Y
-    # u_exact[mask] = (X + Y + 1.0)[mask]
-    # a = np.ones((nx, ny))
-    # b = np.zeros((nx, ny))
+    # # u_exact[mask] = (X + Y + 1.0)[mask]
+    # # a = np.ones((nx, ny))
+    # # b = np.zeros((nx, ny))
+    # u_exact[mask] = 2 * (X + Y)[mask]
+    # a = np.zeros((nx, ny))
+    # b = (X + Y) / np.sqrt(X**2 + Y**2)
 
-    f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
-    # f = 4 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
-    f[X**2 + Y**2 > r**2] = 0.0
-    u_exact = np.exp(-(X**2 + Y**2))
-    u_exact[X**2 + Y**2 > r**2] = 0.0
-    a = -np.exp(-(X**2 + Y**2))
-    b = -8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+    mask = X**2 + Y**2 > r**2
+    # f = 4.0 * np.ones((nx, ny))
+    f = 16.0 * np.ones((nx, ny))
+    f[mask] = 8.0
+    u_exact = X**2 + Y**2
+    # u_exact[mask] = 2.0 * (X**2 + Y**2)[mask] - r**2
+    u_exact[mask] = 2.0 * (X**2 + Y**2)[mask]
+    # a = np.zeros((nx, ny))
+    a = r**2 * np.ones((nx, ny))
+    # b = 2.0 * r * np.ones((nx, ny))
+    b = -4.0 * r * np.ones((nx, ny))
+
+    # f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+    # # f[X**2 + Y**2 > r**2] = 0.0
+    # u_exact = np.exp(-(X**2 + Y**2))
+    # # u_exact[X**2 + Y**2 > r**2] = 0.0
+    # a = np.zeros((nx, ny))
+    # b = np.zeros((nx, ny))
+    # # a = -np.exp(-(X**2 + Y**2))
+    # # b = 8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
     u = spsolve(A, f.flatten())
@@ -2145,6 +1859,13 @@ def problemRT():
     plt.title("Nmerical solution of 2D Poisson equation")
     plt.xlabel("x")
     plt.ylabel("y")
+
+    fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
+    fig.suptitle(f"Max error: {error:.2e}")
+    ax[0].scatter(X, Y, u_exact)
+    ax[0].set_title("Exact solution")
+    ax[1].scatter(X, Y, u)
+    ax[1].set_title("Nmerical solution of 2D Poisson equation")
     plt.show()
 
 
@@ -2156,7 +1877,7 @@ def problemTL():
     global rows, cols, vals
     global surface, normal, permittivity
 
-    r = 0.3
+    r = 0.25
 
     def surface(x, y):
         return (x - 1.0) ** 2 + y**2 - r**2
@@ -2174,23 +1895,27 @@ def problemTL():
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
     X, Y = np.meshgrid(x, y, indexing="ij")
-    X -= 1.0
+    # X -= 1.0
 
     # f = np.zeros((nx, ny))
-    # mask = X**2 + Y**2 > r**2
+    # mask = (X - 1.0) ** 2 + Y**2 > r**2
     # u_exact = X + Y
-    # u_exact[mask] = (X + Y + 1.0)[mask]
-    # a = np.ones((nx, ny))
-    # b = np.zeros((nx, ny))
+    # # u_exact[mask] = (X + Y + 1.0)[mask]
+    # # a = np.ones((nx, ny))
+    # # b = np.zeros((nx, ny))
+    # u_exact[mask] = 2 * (X + Y)[mask]
+    # a = np.zeros((nx, ny))
+    # b = (X + Y) / np.sqrt(X**2 + Y**2)
 
     f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
     # f = 4 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
-    f[X**2 + Y**2 > r**2] = 0.0
+    f[(X - 1.0) ** 2 + Y**2 > r**2] = 0.0
     u_exact = np.exp(-(X**2 + Y**2))
-    u_exact[X**2 + Y**2 > r**2] = 0.0
+    u_exact[(X - 1.0) ** 2 + Y**2 > r**2] = 0.0
     a = -np.exp(-(X**2 + Y**2))
-    b = -8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
-    X += 1.0
+    b = 8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+    # X += 1.0
+
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
     u = spsolve(A, f.flatten())
@@ -2235,7 +1960,7 @@ def problemBR():
     global rows, cols, vals
     global surface, normal, permittivity
 
-    r = 0.3
+    r = 0.25
 
     def surface(x, y):
         return x**2 + (y - 1.0) ** 2 - r**2
@@ -2253,23 +1978,26 @@ def problemBR():
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
     X, Y = np.meshgrid(x, y, indexing="ij")
-    Y -= 1.0
+    # Y -= 1.0
 
     # f = np.zeros((nx, ny))
-    # mask = X**2 + Y**2 > r**2
+    # mask = X**2 + (Y - 1.0) ** 2 > r**2
     # u_exact = X + Y
-    # u_exact[mask] = (X + Y + 1.0)[mask]
-    # a = np.ones((nx, ny))
-    # b = np.zeros((nx, ny))
+    # # u_exact[mask] = (X + Y + 1.0)[mask]
+    # # a = np.ones((nx, ny))
+    # # b = np.zeros((nx, ny))
+    # u_exact[mask] = 2 * (X + Y)[mask]
+    # a = np.zeros((nx, ny))
+    # b = (X + Y) / np.sqrt(X**2 + Y**2)
 
     f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
-    # f = 4 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
-    f[X**2 + Y**2 > r**2] = 0.0
+    f[X**2 + (Y - 1.0) ** 2 > r**2] = 0.0
     u_exact = np.exp(-(X**2 + Y**2))
-    u_exact[X**2 + Y**2 > r**2] = 0.0
+    u_exact[X**2 + (Y - 1.0) ** 2 > r**2] = 0.0
     a = -np.exp(-(X**2 + Y**2))
-    b = -8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
-    Y += 1.0
+    b = 8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+    # Y += 1.0
+
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
     u = spsolve(A, f.flatten())
@@ -2295,6 +2023,13 @@ def problemBR():
     plt.title("Nmerical solution of 2D Poisson equation")
     plt.xlabel("x")
     plt.ylabel("y")
+
+    fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
+    fig.suptitle(f"Max error: {error:.2e}")
+    ax[0].scatter(X, Y, u_exact)
+    ax[0].set_title("Exact solution")
+    ax[1].scatter(X, Y, u)
+    ax[1].set_title("Nmerical solution of 2D Poisson equation")
     plt.show()
 
 
@@ -2306,7 +2041,7 @@ def problemLB():
     global rows, cols, vals
     global surface, normal, permittivity
 
-    r = 0.3
+    r = 0.25
 
     def surface(x, y):
         return (x - 1.0) ** 2 + (y - 1.0) ** 2 - r**2
@@ -2324,26 +2059,29 @@ def problemLB():
     x = np.arange(dx / 2, 1.0 + dx / 2, dx)
     y = np.arange(dy / 2, 1.0 + dy / 2, dy)
     X, Y = np.meshgrid(x, y, indexing="ij")
-    X -= 1.0
-    Y -= 1.0
+    # X -= 1.0
+    # Y -= 1.0
 
     # f = np.zeros((nx, ny))
-    # mask = X**2 + Y**2 > r**2
+    # mask = (X - 1) ** 2 + (Y - 1) ** 2 > r**2
     # u_exact = X + Y
-    # u_exact[mask] = (X + Y + 1.0)[mask]
-    # a = np.ones((nx, ny))
-    # b = np.zeros((nx, ny))
+    # # u_exact[mask] = (X + Y + 1.0)[mask]
+    # # a = np.ones((nx, ny))
+    # # b = np.zeros((nx, ny))
+    # u_exact[mask] = 2 * (X + Y)[mask]
+    # a = np.zeros((nx, ny))
+    # b = (X + Y) / np.sqrt(X**2 + Y**2)
 
     f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
-    # f = 4 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
-    f[X**2 + Y**2 > r**2] = 0.0
+    f[(X - 1.0) ** 2 + (Y - 1.0) ** 2 > r**2] = 0.0
     u_exact = np.exp(-(X**2 + Y**2))
-    u_exact[X**2 + Y**2 > r**2] = 0.0
+    u_exact[(X - 1.0) ** 2 + (Y - 1.0) ** 2 > r**2] = 0.0
     a = -np.exp(-(X**2 + Y**2))
-    b = -8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+    b = 8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
 
-    X += 1.0
-    Y += 1.0
+    # X += 1.0
+    # Y += 1.0
+
     rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
     A = construct_matrix()
     u = spsolve(A, f.flatten())
@@ -2369,32 +2107,136 @@ def problemLB():
     plt.title("Nmerical solution of 2D Poisson equation")
     plt.xlabel("x")
     plt.ylabel("y")
+
+    fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
+    fig.suptitle(f"Max error: {error:.2e}")
+    ax[0].scatter(X, Y, u_exact)
+    ax[0].set_title("Exact solution")
+    ax[1].scatter(X, Y, u)
+    ax[1].set_title("Nmerical solution of 2D Poisson equation")
+    plt.show()
+
+
+def convergence_test2():
+    """
+    exampel 3 in Liu.
+    """
+    global nx, ny, dx, dy
+    global x, y, X, Y
+    global f, u_exact, a, b
+    global rows, cols, vals
+    global surface, normal, permittivity
+
+    r = 0.25
+
+    def surface(x, y):
+        # return x**2 + y**2 - r**2
+        return (x - 0.5) ** 2 + (y - 0.5) ** 2 - r**2
+        # return x - 0.5
+        # return y - 0.5
+
+    def normal(x, y):
+        norm = np.sqrt((x - 0.5) ** 2 + (y - 0.5) ** 2)
+        return (x - 0.5) / norm, (y - 0.5) / norm
+        # return 1.0, 0.0
+        # return 0.0, 1.0
+
+    def permittivity(x, y):
+        # return 2.0 if surface(x, y) <= 0 else 1.0
+        # return 4.0 if surface(x, y) <= 0 else 1.0
+        # return 4.0
+        return 1.0
+
+    n_range = 2 ** np.arange(3, 8, dtype=int)
+    errors_u = np.zeros(n_range.size)
+
+    for i, n in enumerate(n_range):
+        nx, ny = n, n
+        dx, dy = 1.0 / nx, 1.0 / ny
+        x = np.arange(dx / 2, 1.0 + dx / 2, dx)
+        y = np.arange(dy / 2, 1.0 + dy / 2, dy)
+        X, Y = np.meshgrid(x, y, indexing="ij")
+
+        # f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+        # f[(X - 0.5) ** 2 + (Y - 0.5) ** 2 > r**2] = 0.0
+        # u_exact = np.exp(-(X**2 + Y**2))
+        # u_exact[(X - 0.5) ** 2 + (Y - 0.5) ** 2 > r**2] = 0.0
+        # a = -np.exp(-(X**2 + Y**2))
+        # b = 8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+
+        # mask = X**2 + Y**2 > r**2
+        # # # f = 16.0 * np.ones((nx, ny))
+        # # # f = 4.0 * np.ones((nx, ny))
+        # f = 2.0 * np.ones((nx, ny))
+        # # # f[mask] = 8.0
+        # # # u_exact = X**2 + Y**2
+        # u_exact = X**2
+        # # # u_exact[mask] = 2.0 * (X**2 + Y**2)[mask]
+        # # # a = r**2 * np.ones((nx, ny))
+        # # # b = -4.0 * r * np.ones((nx, ny))
+        # a = np.zeros((nx, ny))
+        # b = np.zeros((nx, ny))
+
+        mask = (X - 0.5) ** 2 + (Y - 0.5) ** 2 > r**2
+        f = -2.0 * np.pi**2 * np.sin(np.pi * X) * np.sin(np.pi * Y)
+        f[mask] = 0.0
+        u_exact = np.sin(np.pi * X) * np.sin(np.pi * Y)
+        u_exact[mask] = 0.0
+        # a = np.zeros((nx, ny))
+        a = -u_exact
+        b = np.zeros((nx, ny))
+
+        rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
+        A = construct_matrix()
+        u = spsolve(A, f.flatten())
+        u = u.reshape((nx, ny))
+        errors_u[i] = np.max(np.abs(u - u_exact)[2:-2, 2:-2])
+        print(f"n={n}, Max error: {errors_u[i]}")
+
+    plt.figure()
+    plt.loglog(1 / n_range, errors_u, "o-", label="actual")
+    plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
+    plt.loglog(1 / n_range, 1 / n_range, "--", label="$O(h)$")
+    plt.xlabel("h")
+    plt.ylabel("err")
+    plt.legend()
+    plt.title("Convergence of $u$")
+
+    plt.figure()
+    plt.subplot(121)
+    plt.pcolormesh(X, Y, u_exact, shading="auto")
+    plt.colorbar()
+    plt.title("Exact solution")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.subplot(122)
+    plt.pcolormesh(X, Y, u, shading="auto")
+    plt.colorbar()
+    plt.title("Nmerical solution of 2D Poisson equation")
+    plt.xlabel("x")
+    plt.ylabel("y")
     plt.show()
 
 
 if __name__ == "__main__":
     # problem1()
     # problem2()
-    # problem3()
-    # problem4()
-    # problem5()
-    # problem6()
-    # problem7()
-    # problem8()
     # convergence_test1()
 
-    # problem9()
+    # problem3()
 
-    # okay [beta]=0, a=0, b=0
-    # okay [beta]=-1, a=0, b=0
-    # okay [beta]=0, a=1, b=0
-    # test [beta]=-1, a=1, b=0
-    #  [beta]=0, a=0, b=1
-    #  [beta]=-1, a=0, b=1
-    #  [beta]=0, a=1, b=1
-    #  [beta]=-1, a=1, b=1
+    # okay [beta]=0, a=0, b=0 convergence good
+    #  [beta]=-1, a=0, b=0 convergence not okay
+    #  [beta]=0, a=1, b=0 convergence not okay
+    #  [beta]=-1, a=1, b=0
+    #  [beta]=0, a=0, b!=0 RT okay
+    #  [beta]=-1, a=0, b!=0 RT okay
+    #  [beta]=0, a=1, b!=0 RT not okay
+    #  [beta]=-1, a=1, b!=0
 
-    # problemRT()
-    # problemTL()  # has some issue with the [beta]
-    # problemBR()
-    problemLB()
+    # problemRT()  # not good with example 3
+    # problemTL()  # not good with example 3
+    # problemBR()  # not good with example 3
+    # problemLB()  # not good with example 3
+
+    convergence_test2()

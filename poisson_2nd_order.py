@@ -2004,7 +2004,6 @@ def convergence_test2():
         a = np.zeros((nx, ny))
         b = 2.0 * np.ones((nx, ny))
         n1, n2 = compute_normal_field()
-        # n1, n2 = X / np.sqrt(X**2 + Y**2), Y / np.sqrt(X**2 + Y**2)
         a_tau = compute_a_tau_field()
 
         rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
@@ -2027,10 +2026,10 @@ def convergence_test2():
         )
         print(f"n={n}, Max error: {errors_u[i]}, Max grad error: {errors_du[i]}")
 
-    # convergence table
-    print("Convergence Table:")
-    print(f" N    Err_u({norm})  Order Err_du({norm}) Order")
-    print("-------------------------")
+    print(f"Convergence (norm = {np.inf}):")
+    print(f"{'N':>5} {'Err_u':>14} {'Order':>8} {'Err_du':>14} {'Order':>8}")
+    print("-" * 55)
+
     for i, n in enumerate(n_range):
         if i == 0:
             order_u = np.nan
@@ -2038,7 +2037,15 @@ def convergence_test2():
         else:
             order_u = np.log(errors_u[i - 1] / errors_u[i]) / np.log(2)
             order_du = np.log(errors_du[i - 1] / errors_du[i]) / np.log(2)
-        print(f"{n} {errors_u[i]:.2e} {order_u:.2f} {errors_du[i]:.2e} {order_du:.2f}")
+
+        print(
+            f"{n:5d} "
+            f"{errors_u[i]:14.2e} "
+            f"{order_u:8.2f} "
+            f"{errors_du[i]:14.2e} "
+            f"{order_du:8.2f}"
+        )
+
     plt.figure()
     plt.pcolormesh(X, Y, np.log(np.abs(dudx - dudx_exact)), shading="auto")
     plt.xlabel("x")
@@ -2064,19 +2071,11 @@ def convergence_test2():
     plt.legend()
     plt.title("Convergence of $\\nabla u$")
 
-    plt.figure()
-    plt.subplot(121)
-    plt.pcolormesh(X, Y, u_exact, shading="auto")
-    plt.colorbar()
-    plt.title("Exact solution")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.subplot(122)
-    plt.pcolormesh(X, Y, u, shading="auto")
-    plt.colorbar()
-    plt.title("Nmerical solution of 2D Poisson equation")
-    plt.xlabel("x")
-    plt.ylabel("y")
+    fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
+    ax[0].plot_surface(X, Y, u_exact)
+    ax[0].set_title("Exact solution")
+    ax[1].plot_surface(X, Y, u)
+    ax[1].set_title("Nmerical solution of 2D Poisson equation")
 
     plt.figure()
     plt.subplot(221)
@@ -2106,6 +2105,113 @@ def convergence_test2():
     plt.show()
 
 
+def convergence_test3():
+    """
+    exampel 3 in Liu.
+    """
+    global nx, ny, dx, dy
+    global x, y, X, Y
+    global f, u_exact
+    global a, b, a_tau, n1, n2
+    global rows, cols, vals
+    global surface, permittivity
+
+    r = 0.25
+
+    def surface(x, y):
+        return (x - 0.5) ** 2 + (y - 0.5) ** 2 - r**2
+
+    def permittivity(x, y):
+        return 2.0 if surface(x, y) <= 0 else 1.0
+
+    n_range = 2 ** np.arange(3, 9, dtype=int)
+    errors_u = np.zeros(n_range.size)
+    errors_du = np.zeros(n_range.size)
+
+    for i, n in enumerate(n_range):
+        nx, ny = n, n
+        dx, dy = 1.0 / nx, 1.0 / ny
+        x = np.arange(dx / 2, 1.0 + dx / 2, dx)
+        y = np.arange(dy / 2, 1.0 + dy / 2, dy)
+        X, Y = np.meshgrid(x, y, indexing="ij")
+
+        mask = (X - 0.5) ** 2 + (Y - 0.5) ** 2 > r**2
+        f = 8 * (X**2 + Y**2 - 1.0) * np.exp(-(X**2 + Y**2))
+        f[mask] = 0.0
+        u_exact = np.exp(-(X**2 + Y**2))
+        u_exact[mask] = 0.0
+        dudx_exact = -2.0 * X * np.exp(-(X**2 + Y**2))
+        dudx_exact[mask] = 0.0
+        dudy_exact = -2.0 * Y * np.exp(-(X**2 + Y**2))
+        dudy_exact[mask] = 0.0
+        a = -np.exp(-(X**2 + Y**2))
+        b = 8.0 * (2 * X**2 + 2 * Y**2 - X - Y) * np.exp(-(X**2 + Y**2))
+        n1, n2 = compute_normal_field()
+        a_tau = compute_a_tau_field()
+
+        rows, cols, vals = [], [], []  # triplet format for sparse matrix assembly
+        A = construct_matrix()
+        u = spsolve(A, f.flatten())
+        u = u.reshape((nx, ny))
+        dudx, dudy = gradient(u)
+        errors_u[i] = np.linalg.norm((u - u_exact)[2:-2, 2:-2].flat, np.inf)
+        errors_du[i] = np.linalg.norm(
+            np.append(
+                (dudx - dudx_exact)[2:-2, 2:-2].flat,
+                (dudy - dudy_exact)[2:-2, 2:-2].flat,
+            ),
+            np.inf,
+        )
+        print(f"n={n}, Max error: {errors_u[i]}, Max grad error: {errors_du[i]}")
+
+    # convergence table
+    print(f"Convergence (norm = {np.inf}):")
+    print(f"{'N':>5} {'Err_u':>14} {'Order':>8} {'Err_du':>14} {'Order':>8}")
+    print("-" * 55)
+
+    for i, n in enumerate(n_range):
+        if i == 0:
+            order_u = np.nan
+            order_du = np.nan
+        else:
+            order_u = np.log(errors_u[i - 1] / errors_u[i]) / np.log(2)
+            order_du = np.log(errors_du[i - 1] / errors_du[i]) / np.log(2)
+
+        print(
+            f"{n:5d} "
+            f"{errors_u[i]:14.2e} "
+            f"{order_u:8.2f} "
+            f"{errors_du[i]:14.2e} "
+            f"{order_du:8.2f}"
+        )
+
+    plt.figure()
+    plt.subplot(121)
+    plt.loglog(1 / n_range, errors_u, "o-", label="actual")
+    plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
+    plt.loglog(1 / n_range, 1 / n_range, "--", label="$O(h)$")
+    plt.xlabel("h")
+    plt.ylabel("err")
+    plt.legend()
+    plt.title("Convergence of $u$")
+    plt.subplot(122)
+    plt.loglog(1 / n_range, errors_du, "o-", label="actual")
+    plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
+    plt.loglog(1 / n_range, 1 / n_range, "--", label="$O(h)$")
+    plt.xlabel("h")
+    plt.ylabel("err")
+    plt.legend()
+    plt.title("Convergence of $\\nabla u$")
+
+    fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
+    ax[0].plot_surface(X, Y, u_exact)
+    ax[0].set_title("Exact solution")
+    ax[1].plot_surface(X, Y, u)
+    ax[1].set_title("Nmerical solution of 2D Poisson equation")
+    plt.show()
+
+
 if __name__ == "__main__":
     # convergence_test1()
     convergence_test2()
+    # convergence_test3()

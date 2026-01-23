@@ -666,9 +666,8 @@ def coeff_case2(direction: int, i: int, j: int):
         N[1, offset(-1, -1)] = -eps_jump * n1_y * n2_y * theta_t * (dy / dx)
         # fmt: on
 
-        M_inv = np.linalg.inv(M)
-        M_inv_d = M_inv @ d
-        M_inv_N = M_inv @ N
+        M_inv_d = np.linalg.solve(M, d)
+        M_inv_N = np.linalg.solve(M, N)
 
         f[i, j] -= (
             M_inv_d[0] * eps_r / theta_r / bot_x + M_inv_d[1] * eps_t / theta_t / bot_y
@@ -781,9 +780,8 @@ def coeff_case2(direction: int, i: int, j: int):
         N[1, offset(1, -1)] = eps_jump * n1_y * n2_y * theta_t * (dy / dx)
         # fmt: on
 
-        M_inv = np.linalg.inv(M)
-        M_inv_d = M_inv @ d
-        M_inv_N = M_inv @ N
+        M_inv_d = np.linalg.solve(M, d)
+        M_inv_N = np.linalg.solve(M, N)
 
         f[i, j] -= (
             M_inv_d[0] * eps_l / theta_l / bot_x + M_inv_d[1] * eps_t / theta_t / bot_y
@@ -897,9 +895,8 @@ def coeff_case2(direction: int, i: int, j: int):
         N[1, offset(-1, 1)] = -eps_jump * n1_y * n2_y * theta_b * (dy / dx)
         # fmt: on
 
-        M_inv = np.linalg.inv(M)
-        M_inv_d = M_inv @ d
-        M_inv_N = M_inv @ N
+        M_inv_d = np.linalg.solve(M, d)
+        M_inv_N = np.linalg.solve(M, N)
 
         f[i, j] -= (
             M_inv_d[0] * eps_r / theta_r / bot_x + M_inv_d[1] * eps_b / theta_b / bot_y
@@ -1013,9 +1010,8 @@ def coeff_case2(direction: int, i: int, j: int):
         N[1, offset(1, 1)] = eps_jump * n1_y * n2_y * theta_b * (dy / dx)
         # fmt: on
 
-        M_inv = np.linalg.inv(M)
-        M_inv_d = M_inv @ d
-        M_inv_N = M_inv @ N
+        M_inv_d = np.linalg.solve(M, d)
+        M_inv_N = np.linalg.solve(M, N)
 
         f[i, j] -= (
             M_inv_d[0] * eps_l / theta_l / bot_x + M_inv_d[1] * eps_b / theta_b / bot_y
@@ -1085,6 +1081,8 @@ def construct_matrix():
                     raise NotImplementedError("More than 2 cuts not implemented yet.")
 
     A = coo_matrix((vals, (rows, cols)), shape=(nx * ny, nx * ny))
+    # convert csr for cg / gmres solve
+    # convert to csc for lu solve
     return A
 
 
@@ -1494,8 +1492,7 @@ def interface_value_case2(
                 for offset_y in range(-2, 3)
             ]
         )
-        M_inv = np.linalg.inv(M)
-        u_I = M_inv @ (N @ u_arr + d)
+        u_I = np.linalg.solve(M, N @ u_arr + d)
         return (
             u[i - 1, j],
             u_I[0],
@@ -1594,8 +1591,7 @@ def interface_value_case2(
                 for offset_y in range(-2, 3)
             ]
         )
-        M_inv = np.linalg.inv(M)
-        u_I = M_inv @ (N @ u_arr + d)
+        u_I = np.linalg.solve(M, N @ u_arr + d)
         return (
             u_I[0],
             u[i + 1, j],
@@ -1693,8 +1689,7 @@ def interface_value_case2(
                 for offset_y in range(-2, 3)
             ]
         )
-        M_inv = np.linalg.inv(M)
-        u_I = M_inv @ (N @ u_arr + d)
+        u_I = np.linalg.solve(M, N @ u_arr + d)
         return (
             u[i - 1, j],
             u_I[0],
@@ -1792,8 +1787,7 @@ def interface_value_case2(
                 for offset_y in range(-2, 3)
             ]
         )
-        M_inv = np.linalg.inv(M)
-        u_I = M_inv @ (N @ u_arr + d)
+        u_I = np.linalg.solve(M, N @ u_arr + d)
         return (
             u_I[0],
             u[i + 1, j],

@@ -100,6 +100,8 @@ def compute_theta(direction: int, i: int, j: int) -> float:
     else:
         theta = 1.0
 
+    if theta < 1e-6 or theta > 1.0 - 1e-6:
+        breakpoint()
     return theta
 
 

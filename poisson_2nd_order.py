@@ -29,11 +29,13 @@ def compute_normal_field() -> tuple[np.ndarray, np.ndarray]:
                 -surface(x + 2 * dx, y)
                 + 8 * surface(x + dx, y)
                 - 8 * surface(x - dx, y)
+                + surface(x - 2 * dx, y)
             ) / (12 * dx)
             dy_eta = (
                 -surface(x, y + 2 * dy)
                 + 8 * surface(x, y + dy)
                 - 8 * surface(x, y - dy)
+                + surface(x, y - 2 * dy)
             ) / (12 * dy)
             norm = np.sqrt(dx_eta**2 + dy_eta**2)
             if np.isclose(norm, 0.0):

@@ -108,7 +108,14 @@ def compute_theta(direction: int, i: int, j: int) -> float:
 def interp(direction: int, theta: float, i: int, j: int, field: np.ndarray) -> float:
     """cubic interpolation"""
     t_matrix = np.array([1, theta, theta**2, theta**3])
-    c_matrix = np.array([[0, 2, 0, 0], [-1, 0, 1, 0], [2, -5, 4, -1], [-1, 3, -3, 1]])
+    c_matrix = np.array(
+        [
+            [0.0, 2.0, 0.0, 0.0],
+            [-1.0, 0.0, 1.0, 0.0],
+            [2.0, -5.0, 4.0, -1.0],
+            [-1.0, 3.0, -3.0, 1.0],
+        ]
+    )
     if direction == Direction.R:
         points = field[i - 1 : i + 3, j]
     elif direction == Direction.T:

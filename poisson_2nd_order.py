@@ -1883,7 +1883,7 @@ def convergence_test1():
     def permittivity(x, y):
         return 2.0 if surface(x, y) <= 0 else 1.0
 
-    n_range = 2 ** np.arange(4, 8, dtype=int)
+    n_range = 2 ** np.arange(4, 10, dtype=int)
     errors_u = np.zeros(n_range.size)
     errors_du = np.zeros(n_range.size)
 
@@ -1930,6 +1930,25 @@ def convergence_test1():
         errors_u[i] = np.max(np.abs(u - u_exact)[2:-2, 2:-2])
         errors_du[i] = np.max(np.abs(dudx - dudx_exact)[2:-2, 2:-2]) + np.max(
             np.abs(dudy - dudy_exact)[2:-2, 2:-2]
+        )
+
+    print(f"Convergence (norm = {np.inf}):")
+    print(f"{'N':>5} {'Err_u':>14} {'Order':>8} {'Err_du':>14} {'Order':>8}")
+    print("-" * 55)
+    for i, n in enumerate(n_range):
+        if i == 0:
+            order_u = np.nan
+            order_du = np.nan
+        else:
+            order_u = np.log(errors_u[i - 1] / errors_u[i]) / np.log(2)
+            order_du = np.log(errors_du[i - 1] / errors_du[i]) / np.log(2)
+
+        print(
+            f"{n:5d} "
+            f"{errors_u[i]:14.2e} "
+            f"{order_u:8.2f} "
+            f"{errors_du[i]:14.2e} "
+            f"{order_du:8.2f}"
         )
 
     plt.figure()
@@ -1982,7 +2001,7 @@ def convergence_test2():
     def permittivity(x, y):
         return 1.0
 
-    n_range = 2 ** np.arange(3, 9, dtype=int)
+    n_range = 2 ** np.arange(4, 10, dtype=int)
     errors_u = np.zeros(n_range.size)
     errors_du = np.zeros(n_range.size)
 
@@ -2029,7 +2048,6 @@ def convergence_test2():
     print(f"Convergence (norm = {np.inf}):")
     print(f"{'N':>5} {'Err_u':>14} {'Order':>8} {'Err_du':>14} {'Order':>8}")
     print("-" * 55)
-
     for i, n in enumerate(n_range):
         if i == 0:
             order_u = np.nan
@@ -2057,7 +2075,6 @@ def convergence_test2():
     plt.subplot(121)
     plt.loglog(1 / n_range, errors_u, "o-", label="actual")
     plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
-    plt.loglog(1 / n_range, 1 / n_range, "--", label="$O(h)$")
     plt.xlabel("h")
     plt.ylabel("err")
     plt.legend()
@@ -2065,7 +2082,6 @@ def convergence_test2():
     plt.subplot(122)
     plt.loglog(1 / n_range, errors_du, "o-", label="actual")
     plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
-    plt.loglog(1 / n_range, 1 / n_range, "--", label="$O(h)$")
     plt.xlabel("h")
     plt.ylabel("err")
     plt.legend()
@@ -2124,7 +2140,7 @@ def convergence_test3():
     def permittivity(x, y):
         return 2.0 if surface(x, y) <= 0 else 1.0
 
-    n_range = 2 ** np.arange(3, 9, dtype=int)
+    n_range = 2 ** np.arange(4, 10, dtype=int)
     errors_u = np.zeros(n_range.size)
     errors_du = np.zeros(n_range.size)
 
@@ -2189,7 +2205,6 @@ def convergence_test3():
     plt.subplot(121)
     plt.loglog(1 / n_range, errors_u, "o-", label="actual")
     plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
-    plt.loglog(1 / n_range, 1 / n_range, "--", label="$O(h)$")
     plt.xlabel("h")
     plt.ylabel("err")
     plt.legend()
@@ -2197,7 +2212,6 @@ def convergence_test3():
     plt.subplot(122)
     plt.loglog(1 / n_range, errors_du, "o-", label="actual")
     plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
-    plt.loglog(1 / n_range, 1 / n_range, "--", label="$O(h)$")
     plt.xlabel("h")
     plt.ylabel("err")
     plt.legend()
@@ -2212,6 +2226,6 @@ def convergence_test3():
 
 
 if __name__ == "__main__":
-    # convergence_test1()
+    convergence_test1()
     convergence_test2()
-    # convergence_test3()
+    convergence_test3()

@@ -9,6 +9,7 @@ project(Vlasolver CXX)
 
 # Find required packages
 find_package(Kokkos REQUIRED)
+find_package(KokkosKernels REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(HighFive REQUIRED)
 
@@ -16,7 +17,7 @@ find_package(HighFive REQUIRED)
 add_library(vlasolver INTERFACE)
 target_include_directories(vlasolver
                            INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(vlasolver INTERFACE Kokkos::kokkos HighFive INIReader)
+target_link_libraries(vlasolver INTERFACE Kokkos::kokkos KokkosKernels::kokkoskernels HighFive INIReader)
 
 # Set common compiler options
 target_compile_features(vlasolver INTERFACE cxx_std_20)
@@ -28,6 +29,8 @@ add_executable(sheath examples/sheath/main.cpp)
 target_link_libraries(sheath PRIVATE vlasolver)
 add_executable(sheath_rough_wall examples/sheath_rough_wall/main.cpp)
 target_link_libraries(sheath_rough_wall PRIVATE vlasolver)
+add_executable(poisson examples/poisson/main.cpp)
+target_link_libraries(poisson PRIVATE vlasolver)
 
 # Print helpful information when configuration is done
 message(STATUS "")

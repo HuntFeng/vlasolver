@@ -76,9 +76,8 @@ struct World {
      * S(x) < 0 is the exterior of the computational domain (interior of the immersed object).
      * S(x) > 0 is the interior of the computational domain (exterior of the immersed object).
      *
-     * @param x The x coordinate at which to evaluate the surface function.
-     * @param y The y coordinate at which to evaluate the surface function.
-     * @return The value of the surface function at (x,y).
+     * @param x The coordinate at which to evaluate the surface function.
+     * @return The value of the surface function at x.
      */
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const { return static_cast<WorldType*>(this)->surface(x, y); }
@@ -97,15 +96,6 @@ struct World {
     Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
         return static_cast<WorldType*>(this)->normal(x, y, dx, dy);
     }
-
-    /**
-     * Permittivity as function of spatial coordinate
-     *
-     * @param x The x coordinate at which to evaluate the permittivity.
-     * @param y The y coordinate at which to evaluate the permittivity.
-     * @return The permittivity at (x,y).
-     */
-    double permittivity(double x, double y) const { return static_cast<WorldType*>(this)->permittivity(x, y); }
 
     /**
      * Boundary conditions for the particle distribution function.

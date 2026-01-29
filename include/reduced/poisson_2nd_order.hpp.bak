@@ -12,15 +12,7 @@
 #include <KokkosSparse_Preconditioner.hpp>
 #include <KokkosSparse_gmres.hpp>
 #include <Kokkos_Core.hpp>
-#include <bit>
 #include <vector>
-
-enum Direction : size_t {
-    R = 1 << 0, // 0001
-    T = 1 << 1, // 0010
-    L = 1 << 2, // 0100
-    B = 1 << 2, // 1000
-};
 
 template <typename World>
 class PoissonSolver {
@@ -109,12 +101,12 @@ class PoissonSolver {
     /**
      * Matrix entry for cells having 1 cut by interface
      */
-    void coeff_case1(size_t direction, int i, int j) {}
+    void coeff_case1() {}
 
     /**
      * Matrix entry for cells having 2 cuts by interface
      */
-    void coeff_case2(size_t direction, int i, int j) {}
+    void coeff_case2() {}
 
     /**
      * Convert sparse matrix coo format to csr format
@@ -163,35 +155,7 @@ class PoissonSolver {
                     continue;
                 }
 
-                // Detect interface cuts
-                auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
-                double eta          = world.surface(x, y);
-                double eta_l        = world.surface(x - dx, y);
-                double eta_r        = world.surface(x + dx, y);
-                double eta_b        = world.surface(x, y - dy);
-                double eta_t        = world.surface(x, y + dy);
-
-                size_t direction    = 0;
-                if (eta * eta_l < 0)
-                    direction |= Direction::L; // L
-                if (eta * eta_r < 0)
-                    direction |= Direction::R; // R
-                if (eta * eta_b < 0)
-                    direction |= Direction::B; // B
-                if (eta * eta_t < 0)
-                    direction |= Direction::T; // T
-
-                int ncuts = std::popcount(direction);
-                if (ncuts == 0) {
-                    coeff_case0(i, j);
-                } else if (ncuts == 1) {
-                    coeff_case1(direction, i, j);
-                } else if (ncuts == 2) {
-                    coeff_case2(direction, i, j);
-                } else {
-                    // Not implemented for >2 cuts
-                    throw std::runtime_error("More than 2 cuts not implemented yet.");
-                }
+                coeff_case0(i, j);
             }
         }
 
@@ -246,36 +210,5 @@ class PoissonSolver {
                        (conv == GMRESHandle::Conv ? "Conv" : "NoConv/LOA/NotRun"));
     }
 
-    /**
-     * Compute electric field E = -grad phi
-     */
-    void compute_electric_field() {
-        auto& phi = world.phi;
-        auto& E   = world.E;
-        // Central difference for interior, one-sided for boundaries
-        Kokkos::parallel_for(
-            "compute_electric_field", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {nx, ny}),
-            KOKKOS_LAMBDA(const int i, const int j) {
-                double dudx = 0.0, dudy = 0.0;
-                if (i == 0)
-                    dudx = (phi(i + 1, j) - phi(i, j)) / dx;
-                else if (i == nx - 1)
-                    dudx = (phi(i, j) - phi(i - 1, j)) / dx;
-                else
-                    dudx = (phi(i + 1, j) - phi(i - 1, j)) / (2 * dx);
-
-                if (j == 0)
-                    dudy = (phi(i, j + 1) - phi(i, j)) / dy;
-                else if (j == ny - 1)
-                    dudy = (phi(i, j) - phi(i, j - 1)) / dy;
-                else
-                    dudy = (phi(i, j + 1) - phi(i, j - 1)) / (2 * dy);
-
-                // For interface cells, you may want to implement the interface_value_caseX logic
-                // as in the Python code for higher accuracy.
-
-                E(i, j, 0) = -dudx;
-                E(i, j, 1) = -dudy;
-            });
-    }
+    void compute_electric_field() {}
 };

@@ -9,6 +9,7 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
       - CMake, build-essential, and other core tools for building C++ projects
       - HDF5 and HighFive for HDF5 file handling
       - Kokkos framework for parallel programming
+      - KokkosKernels for sparse matrix support
       - Google Test (gtest) for unit testing
 
 %post
@@ -20,6 +21,7 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
         unzip \
         build-essential \
         cmake \
+        openssh-server \
         git \
         software-properties-common \
         ripgrep \
@@ -79,6 +81,20 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
     cmake --build build --parallel 4
     cmake --install build --prefix /usr/local
     rm -rf kokkos-${KOKKOS_VERSION}
+
+    # kokkos-kernels for sparse matrix support
+    wget https://github.com/kokkos/kokkos-kernels/releases/download/${KOKKOS_VERSION}/kokkos-kernels-${KOKKOS_VERSION}.tar.gz
+    tar -xvzf kokkos-kernels-${KOKKOS_VERSION}.tar.gz
+    rm kokkos-kernels-${KOKKOS_VERSION}.tar.gz
+    cd kokkos-kernels-${KOKKOS_VERSION}
+    cmake -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_STANDARD=20 \
+    -DKokkos_ROOT=/usr/local \
+    -DKokkosKernels_ENABLE_EXPERIMENTAL=On
+    cmake --build build --parallel 4
+    cmake --install build --prefix /usr/local
+    rm -rf kokkos-kernels-${KOKKOS_VERSION}
 
     # gtest for unit testing
     export GTEST_VERSION=1.17.0

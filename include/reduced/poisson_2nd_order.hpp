@@ -19,7 +19,7 @@ enum Direction : size_t {
     R = 1 << 0, // 0001
     T = 1 << 1, // 0010
     L = 1 << 2, // 0100
-    B = 1 << 2, // 1000
+    B = 1 << 3, // 1000
 };
 
 template <typename World>
@@ -52,6 +52,15 @@ class PoissonSolver {
     // convert to csr format later for better GMRES perf
     CRS A;
 
+    // jump conditions
+    Kokkos::View<double**> a;
+    Kokkos::View<double**> b;
+    Kokkos::View<double**> a_tau;
+
+    // normal
+    Kokkos::View<double**> n1;
+    Kokkos::View<double**> n2;
+
   public:
     __host__
     PoissonSolver(World& world, double tol = 1e-8, int gmres_m = 100, int max_restart = 10, bool verbose = false)
@@ -62,6 +71,131 @@ class PoissonSolver {
           verbose(verbose) {}
 
     inline int index(int i, int j) { return i * ny + j; }
+
+    inline bool isclose(double val1, double val2) { return Kokkos::abs(val1 - val2) < 1e-6 ? true : false; }
+
+    void compute_normal_field() {
+        n1 = Kokkos::View<double**>("n1", nx, ny);
+        n2 = Kokkos::View<double**>("n2", nx, ny);
+        for (int i = 2; i < nx - 2; ++i) {
+            for (int j = 2; j < ny - 2; ++j) {
+                auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+                double dx_eta       = (-surface(x + 2 * dx, y) + 8 * surface(x + dx, y) - 8 * surface(x - dx, y) +
+                                 surface(x - 2 * dx, y)) /
+                                (12 * dx);
+                double dy_eta = (-surface(x, y + 2 * dy) + 8 * surface(x, y + dy) - 8 * surface(x, y - dy) +
+                                 surface(x, y - 2 * dy)) /
+                                (12 * dy);
+                double norm = sqrt(dx_eta * dx_eta + dy_eta * dy_eta);
+                if (isclose(norm, 0.0)) {
+                    n1(i, j) = 0.0;
+                    n2(i, j) = 0.0;
+                } else {
+                    n1(i, j) = dx_eta / norm;
+                    n2(i, j) = dy_eta / norm;
+                }
+            }
+        }
+    }
+
+    /**
+     * Compute tangential derivative of jump condition a at (i, j)
+     */
+    void compute_a_tau_field() {
+        a_tau = Kokkos::View<double**>("a_tau", nx, ny);
+        for (int i = 2; i < nx - 2; ++i) {
+            for (int j = 2; j < ny - 2; ++j) {
+                double dx_a = (-a(i, j) + 8 * a(i, j) - 8 * a(i, j) + a(i, j)) / (12 * dx);
+                double dy_a = (-a(i, j) + 8 * a(i, j) - 8 * a(i, j) + a(i, j)) / (12 * dy);
+                a_tau(i, j) = -dx_a * n2(i, j) + dy_a * n1(i, j);
+            }
+        }
+    }
+
+    double compute_theta(size_t direction, int i, int j) {
+        using Kokkos::abs;
+        using Kokkos::pow;
+        using Kokkos::sqrt;
+
+        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        double eta          = surface(x, y);
+        double eta_r        = surface(x + dx, y);
+        double eta_l        = surface(x - dx, y);
+        double eta_t        = surface(x, y + dy);
+        double eta_b        = surface(x, y - dy);
+
+        double dx_eta       = (eta_r - eta_l) / 2;
+        double dy_eta       = (eta_t - eta_b) / 2;
+        double dxx_eta      = (eta_r - 2 * eta + eta_l) / 2;
+        double dyy_eta      = (eta_t - 2 * eta + eta_b) / 2;
+
+        double d1 = 0.0, d2 = 0.0;
+        double dir_sign = 0.0;
+        double eta_sign = eta > 0.0 ? 1.0 : -1.0;
+        switch (direction) {
+        case Direction::R:
+            d1       = dx_eta;
+            d2       = dxx_eta;
+            dir_sign = -1.0;
+            break;
+        case Direction::T:
+            d1       = dy_eta;
+            d2       = dyy_eta;
+            dir_sign = -1.0;
+            break;
+        case Direction::L:
+            d1       = dx_eta;
+            d2       = dxx_eta;
+            dir_sign = +1.0;
+            break;
+        case Direction::B:
+            d1       = dy_eta;
+            d2       = dyy_eta;
+            dir_sign = +1.0;
+            break;
+        default:
+            return 1.0;
+        }
+
+        if (isclose(d2, 0.0))
+            return abs(eta / d1);
+
+        double disc = d1 * d1 - 4.0 * d2 * eta;
+        return (dir_sign * d1 - eta_sign * sqrt(disc)) / (2.0 * d2);
+    }
+
+    /**
+     * cubic interpolation
+     */
+    double interp(size_t direction, double theta, int i, int j, Kokkos::View<double**>& field) {
+        using Kokkos::pow;
+        double t_matrix[4]    = {1, theta, pow(theta, 2), pow(theta, 3)};
+        double c_matrix[4][4] = {
+            {0.0, 2.0, 0.0, 0.0},
+            {-1.0, 0.0, 1.0, 0.0},
+            {2.0, -5.0, 4.0, -1.0},
+            {-1.0, 3.0, -3.0, 1.0},
+        };
+        double points[4];
+        if (direction == Direction::R)
+            double points[4] = {field(i - 1, j), field(i, j), field(i + 1, j), field(i + 2, j)};
+        else if (direction == Direction::T)
+            double points[4] = {field(i, j - 1), field(i, j), field(i, j + 1), field(i, j + 2)};
+        else if (direction == Direction::L)
+            double points[4] = {field(i + 1, j), field(i, j), field(i - 1, j), field(i - 2, j)};
+        else if (direction == Direction::B)
+            double points[4] = {field(i, j + 1), field(i, j), field(i, j - 1), field(i, j - 2)};
+        else
+            Kokkos::abort("Interp invalid direction for interpolation");
+        double val_I = 0.0;
+        for (int p; p < 4; ++p) {
+            for (int q; q < 4; ++q) {
+                val_I += 0.5 * t_matrix[p] * c_matrix[p][q] * points[q];
+            }
+        }
+
+        return val_I;
+    }
 
     /**
      * Matrix entry for cells having no cuts by interface
@@ -226,6 +360,8 @@ class PoissonSolver {
                 rho1d(idx) = rho(i, j);
                 phi1d(idx) = phi(i, j);
             });
+        compute_normal_field();
+        compute_a_tau_field();
         construct_matrix();
 
         KokkosSparse::Experimental::gmres(&kh, A, rho1d, phi1d /*, precond */);
@@ -252,30 +388,5 @@ class PoissonSolver {
     void compute_electric_field() {
         auto& phi = world.phi;
         auto& E   = world.E;
-        // Central difference for interior, one-sided for boundaries
-        Kokkos::parallel_for(
-            "compute_electric_field", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {nx, ny}),
-            KOKKOS_LAMBDA(const int i, const int j) {
-                double dudx = 0.0, dudy = 0.0;
-                if (i == 0)
-                    dudx = (phi(i + 1, j) - phi(i, j)) / dx;
-                else if (i == nx - 1)
-                    dudx = (phi(i, j) - phi(i - 1, j)) / dx;
-                else
-                    dudx = (phi(i + 1, j) - phi(i - 1, j)) / (2 * dx);
-
-                if (j == 0)
-                    dudy = (phi(i, j + 1) - phi(i, j)) / dy;
-                else if (j == ny - 1)
-                    dudy = (phi(i, j) - phi(i, j - 1)) / dy;
-                else
-                    dudy = (phi(i, j + 1) - phi(i, j - 1)) / (2 * dy);
-
-                // For interface cells, you may want to implement the interface_value_caseX logic
-                // as in the Python code for higher accuracy.
-
-                E(i, j, 0) = -dudx;
-                E(i, j, 1) = -dudy;
-            });
     }
 };

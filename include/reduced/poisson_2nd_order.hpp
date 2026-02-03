@@ -70,7 +70,6 @@ class PoissonSolver {
     Kokkos::View<double**, Kokkos::HostSpace> n2;
 
   public:
-    __host__
     PoissonSolver(World& world, double tol = 1e-12, int gmres_m = 100, int max_restart = 10, bool verbose = false)
         : world(world),
           tol(tol),

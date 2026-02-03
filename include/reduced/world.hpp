@@ -105,7 +105,18 @@ struct World {
      * @param y The y coordinate at which to evaluate the permittivity.
      * @return The permittivity at (x,y).
      */
+    KOKKOS_INLINE_FUNCTION
     double permittivity(double x, double y) const { return static_cast<WorldType*>(this)->permittivity(x, y); }
+
+    KOKKOS_INLINE_FUNCTION
+    double poisson_jump_condition_a(double x, double y) const {
+        return static_cast<WorldType*>(this)->poisson_jump_condition_a(x, y);
+    };
+
+    KOKKOS_INLINE_FUNCTION
+    double poisson_jump_condition_b(double x, double y) const {
+        return static_cast<WorldType*>(this)->poisson_jump_condition_b(x, y);
+    };
 
     /**
      * Boundary conditions for the particle distribution function.

@@ -118,6 +118,7 @@ class PoissonSolver {
             }
         }
 
+        // tangentual derivative of a
         for (int i = ngc; i < nx - ngc; ++i) {
             for (int j = ngc; j < ny - ngc; ++j) {
                 double dx_a = (-a(i + 2, j) + 8 * a(i + 1, j) - 8 * a(i - 1, j) + a(i - 2, j)) / (12 * dx);
@@ -130,59 +131,6 @@ class PoissonSolver {
     inline int index(int i, int j) { return i * ny + j; }
 
     inline bool isclose(double val1, double val2) { return Kokkos::abs(val1 - val2) < 1e-6 ? true : false; }
-
-    void compute_normal_field() {
-        using Kokkos::pow;
-        using Kokkos::sqrt;
-        const int ngc = world.grid.ngc;
-
-        for (int i = ngc; i < nx - ngc; ++i) {
-            for (int j = ngc; j < ny - ngc; ++j) {
-                auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
-
-                double dx_eta       = (-surface(x + 2 * dx, y) + 8 * surface(x + dx, y) - 8 * surface(x - dx, y) +
-                                 surface(x - 2 * dx, y)) /
-                                (12 * dx);
-                double dy_eta = (-surface(x, y + 2 * dy) + 8 * surface(x, y + dy) - 8 * surface(x, y - dy) +
-                                 surface(x, y - 2 * dy)) /
-                                (12 * dy);
-                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
-                if (isclose(norm, 0.0)) {
-                    n1(i, j) = 0.0;
-                    n2(i, j) = 0.0;
-                } else {
-                    n1(i, j) = dx_eta / norm;
-                    n2(i, j) = dy_eta / norm;
-                }
-            }
-        }
-    }
-
-    /**
-     * Compute Poisson jump conditions at (i, j)
-     */
-    void compute_jump_conditions_field() {
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
-                auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
-                a(i, j)             = world.poisson_jump_condition_a(x, y);
-                b(i, j)             = world.poisson_jump_condition_a(x, y);
-            }
-        }
-    }
-
-    /**
-     * Compute tangential derivative of jump condition a at (i, j)
-     */
-    void compute_a_tau_field() {
-        for (int i = 2; i < nx - 2; ++i) {
-            for (int j = 2; j < ny - 2; ++j) {
-                double dx_a = (-a(i + 2, j) + 8 * a(i + 1, j) - 8 * a(i - 1, j) + a(i - 2, j)) / (12 * dx);
-                double dy_a = (-a(i + 2, j) + 8 * a(i + 1, j) - 8 * a(i - 1, j) + a(i - 2, j)) / (12 * dy);
-                a_tau(i, j) = -dx_a * n2(i, j) + dy_a * n1(i, j);
-            }
-        }
-    }
 
     double compute_theta(size_t direction, int i, int j) {
         using Kokkos::abs;

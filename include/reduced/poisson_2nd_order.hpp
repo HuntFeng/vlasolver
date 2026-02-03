@@ -22,6 +22,11 @@ enum Direction : size_t {
     B = 1 << 3, // 1000
 };
 
+struct InterfaceValue {
+    double u_l, u_r, u_b, u_t;
+    double theta_l, theta_r, theta_b, theta_t;
+};
+
 template <typename World>
 class PoissonSolver {
   private:
@@ -66,7 +71,7 @@ class PoissonSolver {
 
   public:
     __host__
-    PoissonSolver(World& world, double tol = 1e-8, int gmres_m = 100, int max_restart = 10, bool verbose = false)
+    PoissonSolver(World& world, double tol = 1e-12, int gmres_m = 100, int max_restart = 10, bool verbose = false)
         : world(world),
           tol(tol),
           gmres_m(gmres_m),
@@ -685,6 +690,16 @@ class PoissonSolver {
         }
     }
 
+    KOKKOS_INLINE_FUNCTION
+    int offset(int offset_x, int offset_y) { return (offset_x + 2) * 5 + (offset_y + 2); };
+
+    KOKKOS_INLINE_FUNCTION
+    void solve2x2(const double M[2][2], const double rhs[2], double sol[2]) {
+        double det = M[0][0] * M[1][1] - M[0][1] * M[1][0];
+        sol[0]     = (rhs[0] * M[1][1] - rhs[1] * M[0][1]) / det;
+        sol[1]     = (-rhs[0] * M[1][0] + rhs[1] * M[0][0]) / det;
+    }
+
     /**
      * Matrix entry for cells having 2 cuts by interface
      */
@@ -696,9 +711,6 @@ class PoissonSolver {
         double d[2]     = {};
         double M[2][2]  = {};
         double N[2][25] = {};
-
-        // used to traverse N matrix
-        static const auto offset = [](int offset_x, int offset_y) { return (offset_x + 2) * 5 + (offset_y + 2); };
 
         if (direction == (Direction::R | Direction::T)) {
             double theta_r = compute_theta(Direction::R, i, j);
@@ -1187,6 +1199,739 @@ class PoissonSolver {
         }
     }
 
+    InterfaceValue interface_value_case0(int i, int j, const Kokkos::View<double*, Kokkos::HostSpace>& u) {
+        return {
+            u(index(i - 1, j)), u(index(i + 1, j)), u(index(i, j - 1)), u(index(i, j + 1)), 1.0, 1.0, 1.0, 1.0,
+        };
+    }
+
+    InterfaceValue
+    interface_value_case1(size_t direction, int i, int j, const Kokkos::View<double*, Kokkos::HostSpace>& u) {
+        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        double eta          = world.surface(x, y);
+
+        double theta        = compute_theta(direction, i, j);
+
+        double a_tau_I      = interp(direction, theta, i, j, a_tau);
+        double a_I          = interp(direction, theta, i, j, a);
+        double b_I          = interp(direction, theta, i, j, b);
+        double n1_I         = interp(direction, theta, i, j, n1);
+        double n2_I         = interp(direction, theta, i, j, n2);
+
+        double theta_l, theta_r, theta_b, theta_t;
+
+        if (direction == Direction::R) {
+
+            theta_l = 1.0;
+            theta_r = theta;
+            theta_b = 1.0;
+            theta_t = 1.0;
+
+            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
+
+            if (eta > 0) {
+                _eps_p   = world.permittivity(x, y);
+                _eps_m   = world.permittivity(x + dx, y);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_m;
+                eps_m    = _eps_p;
+            } else {
+                _eps_p   = world.permittivity(x + dx, y);
+                _eps_m   = world.permittivity(x, y);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_p;
+                eps_m    = _eps_m;
+            }
+
+            double d = -a_tau_I * eps_p * n2_I * dx + b_I * n1_I * dx +
+                       a_I * eps_p * (3.0 - 2.0 * theta_r) / ((2.0 - theta_r) * (1.0 - theta_r));
+
+            if (eta > 0) {
+                eps_p = -_eps_m;
+                eps_m = -_eps_p;
+            }
+
+            double M = -eps_p * (3.0 - 2.0 * theta_r) / ((1.0 - theta_r) * (2.0 - theta_r)) -
+                       eps_m * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0)) -
+                       eps_jump * n2_I * n2_I * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0));
+
+            double N[7]     = {-eps_jump * n1_I * n2_I * theta_r * dx / dy -
+                                   (eps_jump * n2_I * n2_I + eps_m) * (1.0 + theta_r) / theta_r,
+
+                               -eps_p * (theta_r - 2.0) / (theta_r - 1.0),
+
+                               eps_p * (theta_r - 1.0) / (theta_r - 2.0),
+
+                               eps_jump * n1_I * n2_I * theta_r * dx / dy +
+                                   (eps_jump * n2_I * n2_I + eps_m) * theta_r / (1.0 + theta_r),
+
+                               eps_jump * n1_I * n2_I * (2.0 * theta_r + 1.0) * dx / (2.0 * dy),
+
+                               -eps_jump * n1_I * n2_I * dx / (2.0 * dy),
+
+                               -eps_jump * n1_I * n2_I * theta_r * dx / dy};
+
+            double u_arr[7] = {u(index(i, j)),     u(index(i + 1, j)), u(index(i + 2, j)),    u(index(i - 1, j)),
+                               u(index(i, j - 1)), u(index(i, j + 1)), u(index(i - 1, j - 1))};
+
+            double dot      = 0.0;
+            for (int k = 0; k < 7; k++) {
+                dot += N[k] * u_arr[k];
+            }
+
+            double u_I = (dot + d) / M;
+
+            return {
+                u(index(i - 1, j)), u_I, u(index(i, j - 1)), u(index(i, j + 1)), theta_l, theta_r, theta_b, theta_t};
+        } else if (direction == Direction::T) {
+
+            theta_l = 1.0;
+            theta_r = 1.0;
+            theta_b = 1.0;
+            theta_t = theta;
+
+            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
+
+            if (eta > 0) {
+                _eps_p   = world.permittivity(x, y);
+                _eps_m   = world.permittivity(x, y + dy);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_m;
+                eps_m    = _eps_p;
+            } else {
+                _eps_p   = world.permittivity(x, y + dy);
+                _eps_m   = world.permittivity(x, y);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_p;
+                eps_m    = _eps_m;
+            }
+
+            double d = a_tau_I * eps_p * n1_I * dy + b_I * n2_I * dy +
+                       a_I * eps_p * (3.0 - 2.0 * theta_t) / ((2.0 - theta_t) * (1.0 - theta_t));
+
+            if (eta > 0) {
+                eps_p = -_eps_m;
+                eps_m = -_eps_p;
+            }
+
+            double M = -eps_p * (3.0 - 2.0 * theta_t) / ((1.0 - theta_t) * (2.0 - theta_t)) -
+                       eps_m * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0)) -
+                       eps_jump * n1_I * n1_I * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0));
+
+            double N[7]     = {-eps_jump * n1_I * n2_I * theta_t * dy / dx -
+                                   (eps_jump * n1_I * n1_I + eps_m) * (1.0 + theta_t) / theta_t,
+
+                               -eps_p * (theta_t - 2.0) / (theta_t - 1.0),
+
+                               eps_p * (theta_t - 1.0) / (theta_t - 2.0),
+
+                               eps_jump * n1_I * n2_I * theta_t * dy / dx +
+                                   (eps_jump * n1_I * n1_I + eps_m) * theta_t / (1.0 + theta_t),
+
+                               eps_jump * n1_I * n2_I * (2.0 * theta_t + 1.0) * dy / (2.0 * dx),
+
+                               -eps_jump * n1_I * n2_I * dy / (2.0 * dx),
+
+                               -eps_jump * n1_I * n2_I * theta_t * dy / dx};
+
+            double u_arr[7] = {u(index(i, j)),     u(index(i, j + 1)), u(index(i, j + 2)),    u(index(i, j - 1)),
+                               u(index(i - 1, j)), u(index(i + 1, j)), u(index(i - 1, j - 1))};
+
+            double dot      = 0.0;
+            for (int k = 0; k < 7; k++) {
+                dot += N[k] * u_arr[k];
+            }
+
+            double u_I = (dot + d) / M;
+
+            return {
+                u(index(i - 1, j)), u(index(i + 1, j)), u(index(i, j - 1)), u_I, theta_l, theta_r, theta_b, theta_t};
+        } else if (direction == Direction::L) {
+
+            theta_l = theta;
+            theta_r = 1.0;
+            theta_b = 1.0;
+            theta_t = 1.0;
+
+            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
+
+            if (eta > 0) {
+                _eps_p   = world.permittivity(x, y);
+                _eps_m   = world.permittivity(x - dx, y);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_m;
+                eps_m    = _eps_p;
+            } else {
+                _eps_p   = world.permittivity(x - dx, y);
+                _eps_m   = world.permittivity(x, y);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_p;
+                eps_m    = _eps_m;
+            }
+
+            double d = -a_tau_I * eps_p * n2_I * dx + b_I * n1_I * dx -
+                       a_I * eps_p * (3.0 - 2.0 * theta_l) / ((2.0 - theta_l) * (1.0 - theta_l));
+
+            if (eta > 0) {
+                eps_p = -_eps_m;
+                eps_m = -_eps_p;
+            }
+
+            double M = eps_p * (3.0 - 2.0 * theta_l) / ((1.0 - theta_l) * (2.0 - theta_l)) +
+                       eps_m * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0)) +
+                       eps_jump * n2_I * n2_I * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0));
+
+            double N[7]     = {-eps_jump * n1_I * n2_I * theta_l * dx / dy +
+                                   (eps_jump * n2_I * n2_I + eps_m) * (1.0 + theta_l) / theta_l,
+
+                               eps_p * (theta_l - 2.0) / (theta_l - 1.0),
+
+                               -eps_p * (theta_l - 1.0) / (theta_l - 2.0),
+
+                               eps_jump * n1_I * n2_I * theta_l * dx / dy -
+                                   (eps_jump * n2_I * n2_I + eps_m) * theta_l / (1.0 + theta_l),
+
+                               eps_jump * n1_I * n2_I * (2.0 * theta_l + 1.0) * dx / (2.0 * dy),
+
+                               -eps_jump * n1_I * n2_I * dx / (2.0 * dy),
+
+                               -eps_jump * n1_I * n2_I * theta_l * dx / dy};
+
+            double u_arr[7] = {u(index(i, j)),     u(index(i - 1, j)), u(index(i - 2, j)),    u(index(i + 1, j)),
+                               u(index(i, j - 1)), u(index(i, j + 1)), u(index(i + 1, j - 1))};
+
+            double dot      = 0.0;
+            for (int k = 0; k < 7; k++) {
+                dot += N[k] * u_arr[k];
+            }
+
+            double u_I = (dot + d) / M;
+
+            return {u_I,    u(index(i + 1, j)), u(index(i, j - 1)), u(index(i, j + 1)), theta_l, theta_r, theta_b,
+                    theta_t};
+        } else if (direction == Direction::B) {
+
+            theta_l = 1.0;
+            theta_r = 1.0;
+            theta_b = theta;
+            theta_t = 1.0;
+
+            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
+
+            if (eta > 0) {
+                _eps_p   = world.permittivity(x, y);
+                _eps_m   = world.permittivity(x, y - dy);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_m;
+                eps_m    = _eps_p;
+            } else {
+                _eps_p   = world.permittivity(x, y - dy);
+                _eps_m   = world.permittivity(x, y);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_p;
+                eps_m    = _eps_m;
+            }
+
+            double d = a_tau_I * eps_p * n1_I * dy + b_I * n2_I * dy -
+                       a_I * eps_p * (3.0 - 2.0 * theta_b) / ((2.0 - theta_b) * (1.0 - theta_b));
+
+            if (eta > 0) {
+                eps_p = -_eps_m;
+                eps_m = -_eps_p;
+            }
+
+            double M = eps_p * (3.0 - 2.0 * theta_b) / ((1.0 - theta_b) * (2.0 - theta_b)) +
+                       eps_m * (2.0 * theta_b + 1.0) / (theta_b * (theta_b + 1.0)) +
+                       eps_jump * n1_I * n1_I * (2.0 * theta_b + 1.0) / (theta_b * (theta_b + 1.0));
+
+            double N[7]     = {-eps_jump * n1_I * n2_I * theta_b * dy / dx +
+                                   (eps_jump * n1_I * n1_I + eps_m) * (1.0 + theta_b) / theta_b,
+
+                               eps_p * (theta_b - 2.0) / (theta_b - 1.0),
+
+                               -eps_p * (theta_b - 1.0) / (theta_b - 2.0),
+
+                               eps_jump * n1_I * n2_I * theta_b * dy / dx -
+                                   (eps_jump * n1_I * n1_I + eps_m) * theta_b / (1.0 + theta_b),
+
+                               eps_jump * n1_I * n2_I * (2.0 * theta_b + 1.0) * dy / (2.0 * dx),
+
+                               -eps_jump * n1_I * n2_I * dy / (2.0 * dx),
+
+                               -eps_jump * n1_I * n2_I * theta_b * dy / dx};
+
+            double u_arr[7] = {u(index(i, j)),     u(index(i, j - 1)), u(index(i, j - 2)),    u(index(i, j + 1)),
+                               u(index(i - 1, j)), u(index(i + 1, j)), u(index(i - 1, j + 1))};
+
+            double dot      = 0.0;
+            for (int k = 0; k < 7; k++) {
+                dot += N[k] * u_arr[k];
+            }
+
+            double u_I = (dot + d) / M;
+
+            return {
+                u(index(i - 1, j)), u(index(i + 1, j)), u_I, u(index(i, j + 1)), theta_l, theta_r, theta_b, theta_t};
+        }
+
+        else {
+            Kokkos::printf("interface_value_case1():Invalid direction %d", direction);
+            Kokkos::abort("Exit");
+        }
+    }
+
+    InterfaceValue
+    interface_value_case2(size_t direction, int i, int j, const Kokkos::View<double*, Kokkos::HostSpace>& u) {
+        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        double eta          = world.surface(x, y);
+
+        // use = {} so they're zero-initialized
+        double d[2]      = {};
+        double M[2][2]   = {};
+        double N[2][25]  = {};
+        double u_arr[25] = {};
+        for (int ox = -2; ox <= 2; ++ox) {
+            for (int oy = -2; oy <= 2; ++oy) {
+                u_arr[offset(ox, oy)] = u(index(i + ox, j + oy));
+            }
+        }
+
+        if (direction == (Direction::R | Direction::T)) {
+
+            double theta_r = compute_theta(Direction::R, i, j);
+            double theta_t = compute_theta(Direction::T, i, j);
+            double theta_l = 1.0;
+            double theta_b = 1.0;
+
+            // normal evaluated at x_R and x_T
+            double n1_x = interp(Direction::R, theta_r, i, j, n1);
+            double n2_x = interp(Direction::R, theta_r, i, j, n2);
+            double n1_y = interp(Direction::T, theta_t, i, j, n1);
+            double n2_y = interp(Direction::T, theta_t, i, j, n2);
+
+            // a_tau at x_R and x_T
+            double a_tau_x = interp(Direction::R, theta_r, i, j, a_tau);
+            double a_tau_y = interp(Direction::T, theta_t, i, j, a_tau);
+
+            // jump conditions at x_R and x_T
+            double a_x = interp(Direction::R, theta_r, i, j, a);
+            double a_y = interp(Direction::T, theta_t, i, j, a);
+            double b_x = interp(Direction::R, theta_r, i, j, b);
+            double b_y = interp(Direction::T, theta_t, i, j, b);
+
+            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
+
+            if (eta > 0) {
+                _eps_p   = world.permittivity(x, y);
+                _eps_m   = world.permittivity(x + dx, y + dy);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_m;
+                eps_m    = _eps_p;
+            } else {
+                _eps_p   = world.permittivity(x + dx, y + dy);
+                _eps_m   = world.permittivity(x, y);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_p;
+                eps_m    = _eps_m;
+            }
+
+            d[0] = -a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx +
+                   a_x * eps_p * (3.0 - 2.0 * theta_r) / ((2.0 - theta_r) * (1.0 - theta_r));
+
+            d[1] = a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy +
+                   a_y * eps_p * (3.0 - 2.0 * theta_t) / ((2.0 - theta_t) * (1.0 - theta_t));
+
+            if (eta > 0) {
+                eps_p = -_eps_m;
+                eps_m = -_eps_p;
+            }
+
+            M[0][0] = -eps_p * (3.0 - 2.0 * theta_r) / ((1.0 - theta_r) * (2.0 - theta_r)) -
+                      eps_m * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0)) -
+                      eps_jump * n2_x * n2_x * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0));
+
+            M[0][1] = eps_jump * n1_x * n2_x * dx / (dy * theta_t * (theta_t + 1.0));
+
+            M[1][0] = eps_jump * n1_y * n2_y * dy / (dx * theta_r * (theta_r + 1.0));
+
+            M[1][1] = -eps_p * (3.0 - 2.0 * theta_t) / ((1.0 - theta_t) * (2.0 - theta_t)) -
+                      eps_m * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0)) -
+                      eps_jump * n1_y * n1_y * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0));
+
+            // Row 0
+            N[0][offset(0, 0)] = -(eps_m + eps_jump * n2_x * n2_x) * (theta_r + 1.0) / theta_r -
+                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_t * theta_r + theta_t - 1.0) / theta_t);
+
+            N[0][offset(1, 0)]  = -eps_p * (theta_r - 2.0) / (theta_r - 1.0);
+
+            N[0][offset(2, 0)]  = eps_p * (theta_r - 1.0) / (theta_r - 2.0);
+
+            N[0][offset(-1, 0)] = (eps_m + eps_jump * n2_x * n2_x) * theta_r / (theta_r + 1.0) +
+                                  eps_jump * n1_x * n2_x * theta_r * (dx / dy);
+
+            N[0][offset(0, -1)]  = eps_jump * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1.0) + theta_r);
+
+            N[0][offset(-1, -1)] = -eps_jump * n1_x * n2_x * theta_r * (dx / dy);
+
+            // Row 1
+            N[1][offset(0, 0)] = -(eps_m + eps_jump * n1_y * n1_y) * (theta_t + 1.0) / theta_t -
+                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_t + theta_r - 1.0) / theta_r);
+
+            N[1][offset(0, 1)]  = -eps_p * (theta_t - 2.0) / (theta_t - 1.0);
+
+            N[1][offset(0, 2)]  = eps_p * (theta_t - 1.0) / (theta_t - 2.0);
+
+            N[1][offset(0, -1)] = (eps_m + eps_jump * n1_y * n1_y) * theta_t / (theta_t + 1.0) +
+                                  eps_jump * n1_y * n2_y * theta_t * (dy / dx);
+
+            N[1][offset(-1, 0)]  = eps_jump * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1.0) + theta_t);
+
+            N[1][offset(-1, -1)] = -eps_jump * n1_y * n2_y * theta_t * (dy / dx);
+
+            // --- Compute rhs = N*u_arr + d ---
+            double _rhs[2] = {d[0], d[1]};
+            for (int r = 0; r < 2; ++r) {
+                for (int c = 0; c < 25; ++c) {
+                    _rhs[r] += N[r][c] * u_arr[c];
+                }
+            }
+
+            double det  = M[0][0] * M[1][1] - M[0][1] * M[1][0];
+
+            double u_I0 = (_rhs[0] * M[1][1] - _rhs[1] * M[0][1]) / det;
+
+            double u_I1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
+            return {
+                u(index(i - 1, j)), u_I0, u(index(i, j - 1)), u_I1, theta_l, theta_r, theta_b, theta_t,
+            };
+        } else if (direction == (Direction::L | Direction::T)) {
+            double theta_l = compute_theta(Direction::L, i, j);
+            double theta_t = compute_theta(Direction::T, i, j);
+            double theta_r = 1.0;
+            double theta_b = 1.0;
+
+            // normal evaluated at x_L and x_T
+            double n1_x = interp(Direction::L, theta_l, i, j, n1);
+            double n2_x = interp(Direction::L, theta_l, i, j, n2);
+            double n1_y = interp(Direction::T, theta_t, i, j, n1);
+            double n2_y = interp(Direction::T, theta_t, i, j, n2);
+
+            // jump conditions at x_L and x_T
+            double a_x = interp(Direction::L, theta_l, i, j, a);
+            double a_y = interp(Direction::T, theta_t, i, j, a);
+            double b_x = interp(Direction::L, theta_l, i, j, b);
+            double b_y = interp(Direction::T, theta_t, i, j, b);
+
+            // a_tau at x_L and x_T
+            double a_tau_x = interp(Direction::L, theta_l, i, j, a_tau);
+            double a_tau_y = interp(Direction::T, theta_t, i, j, a_tau);
+
+            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
+
+            if (eta > 0) {
+                _eps_p   = world.permittivity(x, y);
+                _eps_m   = world.permittivity(x - dx, y + dy);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_m;
+                eps_m    = _eps_p;
+            } else {
+                _eps_p   = world.permittivity(x - dx, y + dy);
+                _eps_m   = world.permittivity(x, y);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_p;
+                eps_m    = _eps_m;
+            }
+
+            d[0] = -a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx -
+                   a_x * eps_p * (3.0 - 2.0 * theta_l) / ((2.0 - theta_l) * (1.0 - theta_l));
+
+            d[1] = a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy +
+                   a_y * eps_p * (3.0 - 2.0 * theta_t) / ((2.0 - theta_t) * (1.0 - theta_t));
+
+            if (eta > 0) {
+                eps_p = -_eps_m;
+                eps_m = -_eps_p;
+            }
+
+            M[0][0] = eps_p * (3.0 - 2.0 * theta_l) / ((1.0 - theta_l) * (2.0 - theta_l)) +
+                      eps_m * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0)) +
+                      eps_jump * n2_x * n2_x * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0));
+
+            M[0][1] = eps_jump * n1_x * n2_x * dx / (dy * theta_t * (theta_t + 1.0));
+
+            M[1][0] = -eps_jump * n1_y * n2_y * dy / (dx * theta_l * (theta_l + 1.0));
+
+            M[1][1] = -eps_p * (3.0 - 2.0 * theta_t) / ((1.0 - theta_t) * (2.0 - theta_t)) -
+                      eps_m * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0)) -
+                      eps_jump * n1_y * n1_y * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0));
+
+            // ---------- Row 0 ----------
+            N[0][offset(0, 0)] = (eps_m + eps_jump * n2_x * n2_x) * (theta_l + 1.0) / theta_l -
+                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_t * theta_l + theta_t - 1.0) / theta_t);
+
+            N[0][offset(-1, 0)] = eps_p * (theta_l - 2.0) / (theta_l - 1.0);
+
+            N[0][offset(-2, 0)] = -eps_p * (theta_l - 1.0) / (theta_l - 2.0);
+
+            N[0][offset(1, 0)]  = -(eps_m + eps_jump * n2_x * n2_x) * theta_l / (theta_l + 1.0) +
+                                 eps_jump * n1_x * n2_x * theta_l * (dx / dy);
+
+            N[0][offset(0, -1)] = eps_jump * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1.0) + theta_l);
+
+            N[0][offset(1, -1)] = -eps_jump * n1_x * n2_x * theta_l * (dx / dy);
+
+            // ---------- Row 1 ----------
+            N[1][offset(0, 0)] = -(eps_m + eps_jump * n1_y * n1_y) * (theta_t + 1.0) / theta_t +
+                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_t + theta_l - 1.0) / theta_l);
+
+            N[1][offset(0, 1)]  = -eps_p * (theta_t - 2.0) / (theta_t - 1.0);
+
+            N[1][offset(0, 2)]  = eps_p * (theta_t - 1.0) / (theta_t - 2.0);
+
+            N[1][offset(0, -1)] = (eps_m + eps_jump * n1_y * n1_y) * theta_t / (theta_t + 1.0) -
+                                  eps_jump * n1_y * n2_y * theta_t * (dy / dx);
+
+            N[1][offset(1, 0)]  = -eps_jump * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1.0) + theta_t);
+
+            N[1][offset(1, -1)] = eps_jump * n1_y * n2_y * theta_t * (dy / dx);
+
+            // rhs = N*u_arr + d
+            double _rhs[2] = {d[0], d[1]};
+            for (int r = 0; r < 2; ++r) {
+                for (int c = 0; c < 25; ++c) {
+                    _rhs[r] += N[r][c] * u_arr[c];
+                }
+            }
+
+            // solve 2x2 system
+            double det  = M[0][0] * M[1][1] - M[0][1] * M[1][0];
+
+            double u_I0 = (_rhs[0] * M[1][1] - _rhs[1] * M[0][1]) / det;
+
+            double u_I1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
+
+            return {
+                u_I0, u(index(i + 1, j)), u(index(i, j - 1)), u_I1, theta_l, theta_r, theta_b, theta_t,
+            };
+        } else if (direction == (Direction::R | Direction::B)) {
+            double theta_r = compute_theta(Direction::R, i, j);
+            double theta_b = compute_theta(Direction::B, i, j);
+            double theta_l = 1.0;
+            double theta_t = 1.0;
+
+            // normal evaluated at x_R and x_B
+            double n1_x = interp(Direction::R, theta_r, i, j, n1);
+            double n2_x = interp(Direction::R, theta_r, i, j, n2);
+            double n1_y = interp(Direction::B, theta_b, i, j, n1);
+            double n2_y = interp(Direction::B, theta_b, i, j, n2);
+
+            // jump conditions at x_R and x_B
+            double a_x = interp(Direction::R, theta_r, i, j, a);
+            double a_y = interp(Direction::B, theta_b, i, j, a);
+            double b_x = interp(Direction::R, theta_r, i, j, b);
+            double b_y = interp(Direction::B, theta_b, i, j, b);
+
+            // a_tau at x_R and x_B
+            double a_tau_x = interp(Direction::R, theta_r, i, j, a_tau);
+            double a_tau_y = interp(Direction::B, theta_b, i, j, a_tau);
+
+            double _eps_p, _eps_m, eps_p, eps_m, eps_jump;
+
+            if (eta > 0) {
+                _eps_p   = world.permittivity(x, y);
+                _eps_m   = world.permittivity(x + dx, y - dy);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_m;
+                eps_m    = _eps_p;
+            } else {
+                _eps_p   = world.permittivity(x + dx, y - dy);
+                _eps_m   = world.permittivity(x, y);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_p;
+                eps_m    = _eps_m;
+            }
+
+            d[0] = (-a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx +
+                    a_x * eps_p * (3 - 2 * theta_r) / ((2 - theta_r) * (1 - theta_r)));
+
+            d[1] = (a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy -
+                    a_y * eps_p * (3 - 2 * theta_b) / ((2 - theta_b) * (1 - theta_b)));
+
+            if (eta > 0) {
+                eps_p = -_eps_m;
+                eps_m = -_eps_p;
+            }
+
+            M[0][0] = -eps_p * (3 - 2 * theta_r) / ((1 - theta_r) * (2 - theta_r)) -
+                      eps_m * (2 * theta_r + 1) / (theta_r * (theta_r + 1)) -
+                      eps_jump * n2_x * n2_x * (2 * theta_r + 1) / (theta_r * (theta_r + 1));
+
+            M[0][1] = -eps_jump * n1_x * n2_x * dx / (dy * theta_b * (theta_b + 1));
+
+            M[1][0] = eps_jump * n1_y * n2_y * dy / (dx * theta_r * (theta_r + 1));
+
+            M[1][1] = eps_p * (3 - 2 * theta_b) / ((1 - theta_b) * (2 - theta_b)) +
+                      eps_m * (2 * theta_b + 1) / (theta_b * (theta_b + 1)) +
+                      eps_jump * n1_y * n1_y * (2 * theta_b + 1) / (theta_b * (theta_b + 1));
+
+            // ---- Fill N matrix ----
+            N[0][offset(0, 0)] = -(eps_m + eps_jump * n2_x * n2_x) * (theta_r + 1) / theta_r +
+                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_r + theta_b - 1) / theta_b);
+
+            N[0][offset(1, 0)]  = -eps_p * (theta_r - 2) / (theta_r - 1);
+
+            N[0][offset(2, 0)]  = eps_p * (theta_r - 1) / (theta_r - 2);
+
+            N[0][offset(-1, 0)] = (eps_m + eps_jump * n2_x * n2_x) * theta_r / (theta_r + 1) -
+                                  eps_jump * n1_x * n2_x * theta_r * (dx / dy);
+
+            N[0][offset(0, 1)]  = -eps_jump * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1) + theta_r);
+
+            N[0][offset(-1, 1)] = eps_jump * n1_x * n2_x * theta_r * (dx / dy);
+
+            N[1][offset(0, 0)]  = (eps_m + eps_jump * n1_y * n1_y) * (theta_b + 1) / theta_b -
+                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_b + theta_r - 1) / theta_r);
+
+            N[1][offset(0, -1)] = eps_p * (theta_b - 2) / (theta_b - 1);
+
+            N[1][offset(0, -2)] = -eps_p * (theta_b - 1) / (theta_b - 2);
+
+            N[1][offset(0, 1)]  = -(eps_m + eps_jump * n1_y * n1_y) * theta_b / (theta_b + 1) +
+                                 eps_jump * n1_y * n2_y * theta_b * (dy / dx);
+
+            N[1][offset(-1, 0)] = eps_jump * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1) + theta_b);
+
+            N[1][offset(-1, 1)] = -eps_jump * n1_y * n2_y * theta_b * (dy / dx);
+
+            // ---- Form RHS:  _rhs = N * u_arr + d ----
+            double _rhs[2] = {d[0], d[1]};
+
+            for (int k = 0; k < 25; ++k) {
+                _rhs[0] += N[0][k] * u_arr[k];
+                _rhs[1] += N[1][k] * u_arr[k];
+            }
+
+            // ---- Solve 2x2 system M * u_I = _rhs ----
+            double det = M[0][0] * M[1][1] - M[0][1] * M[1][0];
+
+            double uI0 = (_rhs[0] * M[1][1] - _rhs[1] * M[0][1]) / det;
+
+            double uI1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
+
+            return {u[index(i - 1, j)], uI0, uI1, u[index(i, j + 1)], theta_l, theta_r, theta_b, theta_t};
+        } else if (direction == (Direction::L | Direction::B)) {
+
+            double theta_l = compute_theta(Direction::L, i, j);
+            double theta_b = compute_theta(Direction::B, i, j);
+            double theta_r = 1.0;
+            double theta_t = 1.0;
+
+            // normal evaluated at x_L and x_B
+            double n1_x = interp(Direction::L, theta_l, i, j, n1);
+            double n2_x = interp(Direction::L, theta_l, i, j, n2);
+            double n1_y = interp(Direction::B, theta_b, i, j, n1);
+            double n2_y = interp(Direction::B, theta_b, i, j, n2);
+
+            // jump conditions at x_L and x_B
+            double a_x = interp(Direction::L, theta_l, i, j, a);
+            double a_y = interp(Direction::B, theta_b, i, j, a);
+            double b_x = interp(Direction::L, theta_l, i, j, b);
+            double b_y = interp(Direction::B, theta_b, i, j, b);
+
+            // a_tau at x_L and x_B
+            double a_tau_x = interp(Direction::L, theta_l, i, j, a_tau);
+            double a_tau_y = interp(Direction::B, theta_b, i, j, a_tau);
+
+            double _eps_p, _eps_m, eps_p, eps_m, eps_jump;
+
+            if (eta > 0) {
+                _eps_p   = world.permittivity(x, y);
+                _eps_m   = world.permittivity(x - dx, y - dy);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_m;
+                eps_m    = _eps_p;
+            } else {
+                _eps_p   = world.permittivity(x - dx, y - dy);
+                _eps_m   = world.permittivity(x, y);
+                eps_jump = _eps_p - _eps_m;
+                eps_p    = _eps_p;
+                eps_m    = _eps_m;
+            }
+
+            d[0] = (-a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx -
+                    a_x * eps_p * (3 - 2 * theta_l) / ((2 - theta_l) * (1 - theta_l)));
+
+            d[1] = (a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy -
+                    a_y * eps_p * (3 - 2 * theta_b) / ((2 - theta_b) * (1 - theta_b)));
+
+            if (eta > 0) {
+                eps_p = -_eps_m;
+                eps_m = -_eps_p;
+            }
+
+            M[0][0] = eps_p * (3 - 2 * theta_l) / ((1 - theta_l) * (2 - theta_l)) +
+                      eps_m * (2 * theta_l + 1) / (theta_l * (theta_l + 1)) +
+                      eps_jump * n2_x * n2_x * (2 * theta_l + 1) / (theta_l * (theta_l + 1));
+
+            M[0][1] = -eps_jump * n1_x * n2_x * dx / (dy * theta_b * (theta_b + 1));
+
+            M[1][0] = -eps_jump * n1_y * n2_y * dy / (dx * theta_l * (theta_l + 1));
+
+            M[1][1] = eps_p * (3 - 2 * theta_b) / ((1 - theta_b) * (2 - theta_b)) +
+                      eps_m * (2 * theta_b + 1) / (theta_b * (theta_b + 1)) +
+                      eps_jump * n1_y * n1_y * (2 * theta_b + 1) / (theta_b * (theta_b + 1));
+
+            // ---- N matrix entries ----
+            N[0][offset(0, 0)] = (eps_m + eps_jump * n2_x * n2_x) * (theta_l + 1) / theta_l +
+                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_l + theta_b - 1) / theta_b);
+
+            N[0][offset(-1, 0)] = eps_p * (theta_l - 2) / (theta_l - 1);
+
+            N[0][offset(-2, 0)] = -eps_p * (theta_l - 1) / (theta_l - 2);
+
+            N[0][offset(1, 0)]  = -(eps_m + eps_jump * n2_x * n2_x) * theta_l / (theta_l + 1) -
+                                 eps_jump * n1_x * n2_x * theta_l * (dx / dy);
+
+            N[0][offset(0, 1)] = -eps_jump * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1) + theta_l);
+
+            N[0][offset(1, 1)] = eps_jump * n1_x * n2_x * theta_l * (dx / dy);
+
+            N[1][offset(0, 0)] = (eps_m + eps_jump * n1_y * n1_y) * (theta_b + 1) / theta_b +
+                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_b + theta_l - 1) / theta_l);
+
+            N[1][offset(0, -1)] = eps_p * (theta_b - 2) / (theta_b - 1);
+
+            N[1][offset(0, -2)] = -eps_p * (theta_b - 1) / (theta_b - 2);
+
+            N[1][offset(0, 1)]  = -(eps_m + eps_jump * n1_y * n1_y) * theta_b / (theta_b + 1) -
+                                 eps_jump * n1_y * n2_y * theta_b * (dy / dx);
+
+            N[1][offset(1, 0)] = -eps_jump * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1) + theta_b);
+
+            N[1][offset(1, 1)] = eps_jump * n1_y * n2_y * theta_b * (dy / dx);
+
+            // ---- Build RHS:  _rhs = N*u_arr + d ----
+            double _rhs[2] = {d[0], d[1]};
+
+            for (int k = 0; k < 25; ++k) {
+                _rhs[0] += N[0][k] * u_arr[k];
+                _rhs[1] += N[1][k] * u_arr[k];
+            }
+
+            // ---- Solve 2x2 system M * u_I = _rhs ----
+            double det = M[0][0] * M[1][1] - M[0][1] * M[1][0];
+
+            double uI0 = (_rhs[0] * M[1][1] - _rhs[1] * M[0][1]) / det;
+
+            double uI1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
+
+            return {uI0, u[index(i + 1, j)], uI1, u[index(i, j + 1)], theta_l, theta_r, theta_b, theta_t};
+        } else {
+            Kokkos::printf("interface_value_case2(): Invalid direction", direction);
+            Kokkos::abort("Exit");
+        }
+    }
+
     /**
      * Convert sparse matrix coo format to csr format
      */
@@ -1223,11 +1968,12 @@ class PoissonSolver {
      * Construct the Laplacian matrix -nabla^2
      */
     void construct_matrix() {
+        int ngc = world.grid.ngc;
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 int row_idx = index(i, j);
                 // TODO: assume dirichlet for now, let users modify this later
-                if (i == 0 || i == nx - 1 || j == 0 || j == ny - 1) {
+                if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
                     vals_coo.push_back(1.0);
                     rows_coo.push_back(row_idx);
                     cols_coo.push_back(row_idx);
@@ -1317,7 +2063,60 @@ class PoissonSolver {
      * Compute electric field E = -grad phi
      */
     void compute_electric_field() {
-        auto& phi = world.phi;
-        auto& E   = world.E;
+        using Kokkos::pow;
+        auto E_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
+        auto u_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), u);
+        int ngc  = world.grid.ngc;
+
+        for (int i = ngc; i < nx - ngc; ++i) {
+            for (int j = ngc; j < ny - ngc; ++j) {
+                auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+                double eta          = world.surface(x, y);
+                double eta_l        = world.surface(x - dx, y);
+                double eta_r        = world.surface(x + dx, y);
+                double eta_b        = world.surface(x, y - dy);
+                double eta_t        = world.surface(x, y + dy);
+
+                size_t direction    = 0;
+                if (eta * eta_l < 0)
+                    direction |= Direction::L;
+                if (eta * eta_r < 0)
+                    direction |= Direction::R;
+                if (eta * eta_b < 0)
+                    direction |= Direction::B;
+                if (eta * eta_t < 0)
+                    direction |= Direction::T;
+
+                int ncuts = std::popcount(direction);
+                InterfaceValue ival;
+                if (ncuts == 0) {
+                    ival = interface_value_case0(i, j, u_h);
+                } else if (ncuts == 1) {
+                    ival = interface_value_case1(direction, i, j, u_h);
+                } else if (ncuts == 2) {
+                    ival = interface_value_case2(direction, i, j, u_h);
+                } else {
+                    Kokkos::abort("compute_electric_field(): More than 2 cuts not implemented yet.");
+                }
+
+                double u_c     = u_h(index(i, j));
+                double u_l     = ival.u_l;
+                double u_r     = ival.u_r;
+                double u_b     = ival.u_b;
+                double u_t     = ival.u_t;
+                double theta_l = ival.theta_l;
+                double theta_r = ival.theta_r;
+                double theta_b = ival.theta_b;
+                double theta_t = ival.theta_t;
+
+                E_h(i, j, 0) =
+                    -(-pow(theta_r, 2) * u_l + (pow(theta_r, 2) - pow(theta_l, 2)) * u_c + pow(theta_l, 2) * u_r) /
+                    (theta_l * theta_r * (theta_l + theta_r) * dx);
+                E_h(i, j, 1) =
+                    -(-pow(theta_t, 2) * u_b + (pow(theta_t, 2) - pow(theta_b, 2)) * u_c + pow(theta_b, 2) * u_t) /
+                    (theta_b * theta_t * (theta_b + theta_t) * dy);
+            }
+        }
+        Kokkos::deep_copy(world.E, E_h);
     }
 };

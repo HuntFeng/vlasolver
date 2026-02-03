@@ -2,11 +2,6 @@
 #include "reduced/poisson_2nd_order.hpp"
 #include "reduced/world.hpp"
 #include "reduced/writer.hpp"
-#include <KokkosKernels_Handle.hpp>
-#include <KokkosSparse_CrsMatrix.hpp>
-#include <KokkosSparse_IOUtils.hpp>
-#include <KokkosSparse_Preconditioner.hpp>
-#include <KokkosSparse_gmres.hpp>
 #include <Kokkos_Core.hpp>
 
 struct ImmersedWorld : World<ImmersedWorld> {
@@ -24,8 +19,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
     KOKKOS_INLINE_FUNCTION
     double poisson_jump_condition_a(double x, double y) const { return -Kokkos::exp(-(x * x + y * y)); }
 
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_b(double x, double y) const {
+    KOKKOS_INLINE_FUNCTION double poisson_jump_condition_b(double x, double y) const {
         return 8.0 * (2 * x * x + 2 * y * y - x - y) * Kokkos::exp(-(x * x + y * y));
     }
 
@@ -58,7 +52,7 @@ int main(int argc, char** argv) {
     Grid grid(origin, size, ncells_intr, ngc);
     ImmersedWorld world(grid);
     PoissonSolver poisson_solver(world);
-    Writer writer(world, "data/poisson", "poisson", {"phi"});
+    Writer writer(world, "data/poisson", "poisson", {"phi", "Ex", "Ey"});
 
     using Kokkos::sin;
     using Kokkos::numbers::pi;
@@ -77,6 +71,7 @@ int main(int argc, char** argv) {
     Kokkos::Timer timer;
     double start_time = timer.seconds();
     poisson_solver.solve();
+    poisson_solver.compute_electric_field();
     double end_time = timer.seconds();
     Kokkos::printf("Total time taken: %f seconds\n", end_time - start_time);
 

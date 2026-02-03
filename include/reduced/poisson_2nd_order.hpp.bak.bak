@@ -61,7 +61,6 @@ class PoissonSolver {
     CRS A;
     Kokkos::View<double*> u;
     Kokkos::View<double*> rhs;
-    // rhs_h encodes jumps and boundary conditions
     Kokkos::View<double*, Kokkos::HostSpace> rhs_h;
 
     // jump conditions
@@ -135,8 +134,10 @@ class PoissonSolver {
     KOKKOS_INLINE_FUNCTION
     int index(int i, int j) const { return i * ny + j; }
 
-    inline bool isclose(double val1, double val2) { return Kokkos::abs(val1 - val2) < 1e-6 ? true : false; }
+    KOKKOS_INLINE_FUNCTION
+    bool isclose(double val1, double val2) { return Kokkos::abs(val1 - val2) < 1e-6 ? true : false; }
 
+    KOKKOS_FUNCTION
     double compute_theta(size_t direction, int i, int j) {
         using Kokkos::abs;
         using Kokkos::pow;
@@ -192,7 +193,39 @@ class PoissonSolver {
     /**
      * cubic interpolation
      */
+    KOKKOS_FUNCTION
     double interp(size_t direction, double theta, int i, int j, Kokkos::View<double**, Kokkos::HostSpace>& field) {
+        using Kokkos::pow;
+        double t_matrix[4]    = {1, theta, pow(theta, 2), pow(theta, 3)};
+        double c_matrix[4][4] = {
+            {0.0, 2.0, 0.0, 0.0},
+            {-1.0, 0.0, 1.0, 0.0},
+            {2.0, -5.0, 4.0, -1.0},
+            {-1.0, 3.0, -3.0, 1.0},
+        };
+        double points[4];
+        if (direction == Direction::R)
+            double points[4] = {field(i - 1, j), field(i, j), field(i + 1, j), field(i + 2, j)};
+        else if (direction == Direction::T)
+            double points[4] = {field(i, j - 1), field(i, j), field(i, j + 1), field(i, j + 2)};
+        else if (direction == Direction::L)
+            double points[4] = {field(i + 1, j), field(i, j), field(i - 1, j), field(i - 2, j)};
+        else if (direction == Direction::B)
+            double points[4] = {field(i, j + 1), field(i, j), field(i, j - 1), field(i, j - 2)};
+        else
+            Kokkos::abort("Interp invalid direction for interpolation");
+        double val_I = 0.0;
+        for (int p = 0; p < 4; ++p) {
+            for (int q = 0; q < 4; ++q) {
+                val_I += 0.5 * t_matrix[p] * c_matrix[p][q] * points[q];
+            }
+        }
+
+        return val_I;
+    }
+
+    KOKKOS_FUNCTION
+    double interp(size_t direction, double theta, int i, int j, Kokkos::View<double**>& field) {
         using Kokkos::pow;
         double t_matrix[4]    = {1, theta, pow(theta, 2), pow(theta, 3)};
         double c_matrix[4][4] = {
@@ -1160,14 +1193,16 @@ class PoissonSolver {
         }
     }
 
-    InterfaceValue interface_value_case0(int i, int j, const Kokkos::View<double*, Kokkos::HostSpace>& u) {
+    KOKKOS_FUNCTION
+    InterfaceValue interface_value_case0(int i, int j) const {
+
         return {
             u(index(i - 1, j)), u(index(i + 1, j)), u(index(i, j - 1)), u(index(i, j + 1)), 1.0, 1.0, 1.0, 1.0,
         };
     }
 
-    InterfaceValue
-    interface_value_case1(size_t direction, int i, int j, const Kokkos::View<double*, Kokkos::HostSpace>& u) {
+    KOKKOS_FUNCTION
+    InterfaceValue interface_value_case1(size_t direction, int i, int j) const {
         auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
         double eta          = world.surface(x, y);
 
@@ -1442,7 +1477,8 @@ class PoissonSolver {
     }
 
     InterfaceValue
-    interface_value_case2(size_t direction, int i, int j, const Kokkos::View<double*, Kokkos::HostSpace>& u) {
+    // interface_value_case2(size_t direction, int i, int j, const Kokkos::View<double*, Kokkos::HostSpace>& u) {
+    interface_value_case2(size_t direction, int i, int j, const Kokkos::View<double*>& u) const {
         auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
         double eta          = world.surface(x, y);
 
@@ -1988,28 +2024,21 @@ class PoissonSolver {
         gmres_handle->set_ortho(GMRESHandle::Ortho::CGS2);
         gmres_handle->set_verbose(verbose);
 
-        // auto rho_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.rho);
-        // for (int i = 0; i < nx; ++i)
-        //     for (int j = 0; j < ny; ++j)
-        //         rhs_h(index(i, j)) = rho_h(i, j);
+        auto rho_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.rho);
+        for (int i = 0; i < nx; ++i)
+            for (int j = 0; j < ny; ++j)
+                rhs_h(index(i, j)) = rho_h(i, j);
 
         construct_matrix();
 
-        // Kokkos::deep_copy(rhs, rhs_h);
         Kokkos::deep_copy(rhs, rhs_h);
-        int _ny    = ny;
-        int ngc    = world.grid.ngc;
-        auto& rho  = world.rho;
-        auto& _rhs = rhs;
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
-            KOKKOS_LAMBDA(const int i, const int j) { _rhs(i * _ny + j) += rho(i, j); });
 
         KokkosSparse::Experimental::gmres(&kh, A, rhs, u /*, precond */);
 
         // Note: capture these to access them in KOKKOS_LAMBDA
         // Note: don't use KOKKOS_CLASS_LAMBDA (although it captures nx, ny conveniently)
         // otherwise the class will be marked as __host__ __device__, it breaks the host only std::vector
+        int _ny   = ny;
         auto& _u  = u;
         auto& phi = world.phi;
         Kokkos::parallel_for(
@@ -2030,7 +2059,7 @@ class PoissonSolver {
     /**
      * Compute electric field E = -grad phi
      */
-    void compute_electric_field() {
+    void compute_electric_field_host() {
         using Kokkos::pow;
         auto E_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
         auto u_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), u);
@@ -2086,5 +2115,68 @@ class PoissonSolver {
             }
         }
         Kokkos::deep_copy(world.E, E_h);
+    }
+
+    /**
+     * Compute electric field E = -grad phi
+     */
+    void compute_electric_field() {
+        using Kokkos::pow;
+        auto& grid = world.grid;
+        int ngc    = world.grid.ngc;
+        auto& E    = world.E;
+
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                double eta          = world.surface(x, y);
+                double eta_l        = world.surface(x - dx, y);
+                double eta_r        = world.surface(x + dx, y);
+                double eta_b        = world.surface(x, y - dy);
+                double eta_t        = world.surface(x, y + dy);
+
+                size_t direction    = 0;
+                if (eta * eta_l < 0)
+                    direction |= Direction::L;
+                if (eta * eta_r < 0)
+                    direction |= Direction::R;
+                if (eta * eta_b < 0)
+                    direction |= Direction::B;
+                if (eta * eta_t < 0)
+                    direction |= Direction::T;
+
+                int ncuts = Kokkos::popcount(direction);
+                InterfaceValue ival;
+                if (ncuts == 1)
+                    ival = interface_value_case1(direction, i, j);
+                else
+                    ival = interface_value_case0(i, j);
+                // if (ncuts == 0) {
+                //     ival = interface_value_case0(i, j, u);
+                // } else if (ncuts == 1) {
+                //     ival = interface_value_case1(direction, i, j, u);
+                // } else if (ncuts == 2) {
+                //     ival = interface_value_case2(direction, i, j, u);
+                // } else {
+                //     Kokkos::abort("compute_electric_field(): More than 2 cuts not implemented yet.");
+                // }
+
+                double u_c     = u(index(i, j));
+                double u_l     = ival.u_l;
+                double u_r     = ival.u_r;
+                double u_b     = ival.u_b;
+                double u_t     = ival.u_t;
+                double theta_l = ival.theta_l;
+                double theta_r = ival.theta_r;
+                double theta_b = ival.theta_b;
+                double theta_t = ival.theta_t;
+
+                E(i, j, 0) =
+                    -(-pow(theta_r, 2) * u_l + (pow(theta_r, 2) - pow(theta_l, 2)) * u_c + pow(theta_l, 2) * u_r) /
+                    (theta_l * theta_r * (theta_l + theta_r) * dx);
+                E(i, j, 1) =
+                    -(-pow(theta_t, 2) * u_b + (pow(theta_t, 2) - pow(theta_b, 2)) * u_c + pow(theta_b, 2) * u_t) /
+                    (theta_b * theta_t * (theta_b + theta_t) * dy);
+            });
     }
 };

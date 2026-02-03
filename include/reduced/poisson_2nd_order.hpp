@@ -88,17 +88,21 @@ class PoissonSolver {
         a_tau = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
 
         // pre-compute fields
+        using Kokkos::pow;
+        using Kokkos::sqrt;
         int ngc = world.grid.ngc;
+
         for (int i = ngc; i < nx - ngc; ++i) {
             for (int j = ngc; j < ny - ngc; ++j) {
                 auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+
                 double dx_eta       = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
                                  8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
                                 (12 * dx);
                 double dy_eta = (-world.surface(x, y + 2 * dy) + 8 * world.surface(x, y + dy) -
                                  8 * world.surface(x, y - dy) + world.surface(x, y - 2 * dy)) /
                                 (12 * dy);
-                double norm = sqrt(dx_eta * dx_eta + dy_eta * dy_eta);
+                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
 
                 // normal field
                 if (isclose(norm, 0.0)) {
@@ -118,7 +122,7 @@ class PoissonSolver {
         for (int i = ngc; i < nx - ngc; ++i) {
             for (int j = ngc; j < ny - ngc; ++j) {
                 double dx_a = (-a(i + 2, j) + 8 * a(i + 1, j) - 8 * a(i - 1, j) + a(i - 2, j)) / (12 * dx);
-                double dy_a = (-a(i + 2, j) + 8 * a(i + 1, j) - 8 * a(i - 1, j) + a(i - 2, j)) / (12 * dy);
+                double dy_a = (-a(i, j + 2) + 8 * a(i, j + 1) - 8 * a(i, j - 1) + a(i, j - 2)) / (12 * dy);
                 a_tau(i, j) = -dx_a * n2(i, j) + dy_a * n1(i, j);
             }
         }
@@ -129,16 +133,21 @@ class PoissonSolver {
     inline bool isclose(double val1, double val2) { return Kokkos::abs(val1 - val2) < 1e-6 ? true : false; }
 
     void compute_normal_field() {
-        for (int i = 2; i < nx - 2; ++i) {
-            for (int j = 2; j < ny - 2; ++j) {
+        using Kokkos::pow;
+        using Kokkos::sqrt;
+        const int ngc = world.grid.ngc;
+
+        for (int i = ngc; i < nx - ngc; ++i) {
+            for (int j = ngc; j < ny - ngc; ++j) {
                 auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+
                 double dx_eta       = (-surface(x + 2 * dx, y) + 8 * surface(x + dx, y) - 8 * surface(x - dx, y) +
                                  surface(x - 2 * dx, y)) /
                                 (12 * dx);
                 double dy_eta = (-surface(x, y + 2 * dy) + 8 * surface(x, y + dy) - 8 * surface(x, y - dy) +
                                  surface(x, y - 2 * dy)) /
                                 (12 * dy);
-                double norm = sqrt(dx_eta * dx_eta + dy_eta * dy_eta);
+                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
                 if (isclose(norm, 0.0)) {
                     n1(i, j) = 0.0;
                     n2(i, j) = 0.0;

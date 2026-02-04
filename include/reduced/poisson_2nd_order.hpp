@@ -1,5 +1,5 @@
 /*
- * Solve -laplacian phi = rho
+ * Solve laplacian phi = -rho (Au=rhs)
  * This Poisson sovler uses the algorithm described in:
  * A Second-Order Boundary Condition Capturing Method for Solving the Elliptic Interface Problems on Irregular Domains
  * by Hyuntae Cho 2019, Journal of Scientific Computing, doi: https://doi.org/10.1007/s10915-019-01016-y
@@ -74,7 +74,7 @@ class PoissonSolver {
     Kokkos::View<double**, Kokkos::HostSpace> n2;
 
   public:
-    PoissonSolver(World& world, double tol = 1e-12, int gmres_m = 100, int max_restart = 10, bool verbose = false)
+    PoissonSolver(World& world, double tol = 1e-12, int gmres_m = 100, int max_restart = 30, bool verbose = false)
         : world(world),
           tol(tol),
           gmres_m(gmres_m),
@@ -130,6 +130,8 @@ class PoissonSolver {
                 a_tau(i, j) = -dx_a * n2(i, j) + dy_a * n1(i, j);
             }
         }
+
+        construct_matrix();
     }
 
     KOKKOS_INLINE_FUNCTION
@@ -1993,25 +1995,26 @@ class PoissonSolver {
         //     for (int j = 0; j < ny; ++j)
         //         rhs_h(index(i, j)) = rho_h(i, j);
 
-        construct_matrix();
+        // construct_matrix();
 
         // Kokkos::deep_copy(rhs, rhs_h);
-        Kokkos::deep_copy(rhs, rhs_h);
-        int _ny    = ny;
-        int ngc    = world.grid.ngc;
-        auto& rho  = world.rho;
-        auto& _rhs = rhs;
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
-            KOKKOS_LAMBDA(const int i, const int j) { _rhs(i * _ny + j) += rho(i, j); });
-
-        KokkosSparse::Experimental::gmres(&kh, A, rhs, u /*, precond */);
 
         // Note: capture these to access them in KOKKOS_LAMBDA
         // Note: don't use KOKKOS_CLASS_LAMBDA (although it captures nx, ny conveniently)
         // otherwise the class will be marked as __host__ __device__, it breaks the host only std::vector
-        auto& _u  = u;
-        auto& phi = world.phi;
+        Kokkos::deep_copy(rhs, rhs_h);
+        int ngc    = world.grid.ngc;
+        int _ny    = ny;
+        auto& rho  = world.rho;
+        auto& _rhs = rhs;
+        auto& _u   = u;
+        auto& phi  = world.phi;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
+            KOKKOS_LAMBDA(const int i, const int j) { _rhs(i * _ny + j) -= rho(i, j); });
+
+        KokkosSparse::Experimental::gmres(&kh, A, rhs, u /*, precond */);
+
         Kokkos::parallel_for(
             "unflatten_phi", nx * ny, KOKKOS_LAMBDA(const int idx) {
                 int i     = idx / _ny;

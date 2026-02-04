@@ -3,6 +3,7 @@ data/
 reports/
 .cache/
 .ipynb_checkpoints
+*.h5
 *.png
 *.svg
 *.mp4

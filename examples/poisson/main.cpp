@@ -3,6 +3,7 @@
 #include "reduced/world.hpp"
 #include "reduced/writer.hpp"
 #include <Kokkos_Core.hpp>
+#include <string>
 
 struct ImmersedWorld : World<ImmersedWorld> {
     ImmersedWorld(Grid& grid)
@@ -44,15 +45,17 @@ struct ImmersedWorld : World<ImmersedWorld> {
 int main(int argc, char** argv) {
     Kokkos::ScopeGuard kokkosScopeGuard(argc, argv);
 
+    const int n                         = (argc == 2) ? std::stoi(argv[1]) : 64;
+
     Kokkos::Array<double, DIM> origin   = {0.0, 0.0, 0.0, 0.0}; // origin of the grid
     Kokkos::Array<double, DIM> size     = {1.0, 1.0, 1.0, 1.0}; // size of the grid
-    Kokkos::Array<int, DIM> ncells_intr = {64, 64, 1, 1};       // number of interior cells
+    Kokkos::Array<int, DIM> ncells_intr = {n, n, 1, 1};         // number of interior cells
     const int ngc                       = 3;
 
     Grid grid(origin, size, ncells_intr, ngc);
     ImmersedWorld world(grid);
     PoissonSolver poisson_solver(world);
-    Writer writer(world, "data/poisson", "poisson", {"phi", "Ex", "Ey"});
+    Writer writer(world, "data/poisson", "poisson_" + std::to_string(n), {"phi", "Ex", "Ey"});
 
     using Kokkos::sin;
     using Kokkos::numbers::pi;
@@ -63,7 +66,7 @@ int main(int argc, char** argv) {
         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
             auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
             if (world.surface(x, y) <= 0.0)
-                rho(i, j) = 8 * (x * x + y * y - 1.0) * Kokkos::exp(-(x * x + y * y));
+                rho(i, j) = -8 * (x * x + y * y - 1.0) * Kokkos::exp(-(x * x + y * y));
             else
                 rho(i, j) = 0.0;
         });

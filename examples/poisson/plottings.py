@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-nx, ny = 64, 64
+nx = ny = 32
 Lx, Ly = 1.0, 1.0
 G = 3
 

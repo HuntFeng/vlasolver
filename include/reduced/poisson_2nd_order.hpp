@@ -9,8 +9,9 @@
 #include <KokkosKernels_Handle.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>
 #include <KokkosSparse_IOUtils.hpp>
-#include <KokkosSparse_Preconditioner.hpp>
+#include <KokkosSparse_LUPrec.hpp>
 #include <KokkosSparse_gmres.hpp>
+#include <KokkosSparse_par_ilut.hpp>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Macros.hpp>
 #include <bit>
@@ -39,6 +40,8 @@ class PoissonSolver {
     using CRS          = KokkosSparse::CrsMatrix<double, int, EXSP>;
     using KernelHandle = KokkosKernels::Experimental::KokkosKernelsHandle<int, int, double, EXSP, MESP, MESP>;
 
+    KernelHandle kh;
+
     // input params
     World& world;
     double tol;
@@ -57,8 +60,10 @@ class PoissonSolver {
     std::vector<int> cols_coo;
     std::vector<double> vals_coo;
 
-    // use to csr format for GMRES performance
+    // use to crs format for GMRES performance
     CRS A;
+    // KokkosSparse::Experimental::LUPrec<CRS, KernelHandle> prec;
+    std::unique_ptr<KokkosSparse::Experimental::LUPrec<CRS, KernelHandle>> prec;
     Kokkos::View<double*> u;
     Kokkos::View<double*> rhs;
     // rhs_h encodes jumps and boundary conditions
@@ -80,58 +85,17 @@ class PoissonSolver {
           gmres_m(gmres_m),
           max_restart(max_restart),
           verbose(verbose) {
-        u     = Kokkos::View<double*>("u", nx * ny);
-        rhs   = Kokkos::View<double*>("rhs", nx * ny);
-        rhs_h = Kokkos::View<double*, Kokkos::HostSpace>("rhs_h", nx * ny);
 
-        n1    = Kokkos::View<double**, Kokkos::HostSpace>("n1", nx, ny);
-        n2    = Kokkos::View<double**, Kokkos::HostSpace>("n2", nx, ny);
-        a     = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
-        b     = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
-        a_tau = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
-
-        // pre-compute fields
-        using Kokkos::pow;
-        using Kokkos::sqrt;
-        int ngc = world.grid.ngc;
-
-        for (int i = ngc; i < nx - ngc; ++i) {
-            for (int j = ngc; j < ny - ngc; ++j) {
-                auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
-
-                double dx_eta       = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
-                                 8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
-                                (12 * dx);
-                double dy_eta = (-world.surface(x, y + 2 * dy) + 8 * world.surface(x, y + dy) -
-                                 8 * world.surface(x, y - dy) + world.surface(x, y - 2 * dy)) /
-                                (12 * dy);
-                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
-
-                // normal field
-                if (isclose(norm, 0.0)) {
-                    n1(i, j) = 0.0;
-                    n2(i, j) = 0.0;
-                } else {
-                    n1(i, j) = dx_eta / norm;
-                    n2(i, j) = dy_eta / norm;
-                }
-
-                // jump conditions
-                a(i, j) = world.poisson_jump_condition_a(x, y);
-                b(i, j) = world.poisson_jump_condition_b(x, y);
-            }
-        }
-
-        // tangentual derivative of a
-        for (int i = ngc; i < nx - ngc; ++i) {
-            for (int j = ngc; j < ny - ngc; ++j) {
-                double dx_a = (-a(i + 2, j) + 8 * a(i + 1, j) - 8 * a(i - 1, j) + a(i - 2, j)) / (12 * dx);
-                double dy_a = (-a(i, j + 2) + 8 * a(i, j + 1) - 8 * a(i, j - 1) + a(i, j - 2)) / (12 * dy);
-                a_tau(i, j) = -dx_a * n2(i, j) + dy_a * n1(i, j);
-            }
-        }
-
+        construct_fields();
         construct_matrix();
+        construct_preconditioner();
+
+        // prepare gmres
+        kh.create_gmres_handle(gmres_m, tol, max_restart);
+        auto gmres_handle = kh.get_gmres_handle();
+        using GMRESHandle = typename std::remove_reference<decltype(*gmres_handle)>::type;
+        gmres_handle->set_ortho(GMRESHandle::Ortho::CGS2);
+        gmres_handle->set_verbose(verbose);
     }
 
     KOKKOS_INLINE_FUNCTION
@@ -1896,9 +1860,9 @@ class PoissonSolver {
     }
 
     /**
-     * Convert sparse matrix coo format to csr format
+     * Convert sparse matrix coo format to crs format
      */
-    void coo2csr() {
+    void coo2crs() {
         int nrows = nx * ny;
         int ncols = nx * ny;
         int nnz   = vals_coo.size();
@@ -1912,23 +1876,81 @@ class PoissonSolver {
             rowmap[i + 1] += rowmap[i]; // prefix sum
         }
 
-        // scatter coo into csr arrays (stable within row)
+        // scatter coo into crs arrays (stable within row)
         std::vector<int> cur = rowmap; // current write pointer per row
-        std::vector<int> cols_csr(nnz);
-        std::vector<double> vals_csr(nnz);
+        std::vector<int> cols_crs(nnz);
+        std::vector<double> vals_crs(nnz);
         for (size_t k = 0; k < rows_coo.size(); ++k) {
             int r          = rows_coo[k];
             int dest       = cur[r]++;
-            cols_csr[dest] = cols_coo[k];
-            vals_csr[dest] = vals_coo[k];
+            cols_crs[dest] = cols_coo[k];
+            vals_crs[dest] = vals_coo[k];
         }
 
         // constructor will deep-copy to device
-        A = CRS("A", nrows, ncols, nnz, vals_csr.data(), rowmap.data(), cols_csr.data());
+        A = CRS("A", nrows, ncols, nnz, vals_crs.data(), rowmap.data(), cols_crs.data());
+        // make sure A's rows are sorted, so we can build preconditioner later
+        KokkosSparse::sort_crs_matrix(A);
     }
 
     /**
-     * Construct the Laplacian matrix -nabla^2
+     * Construct all necessary fiels
+     * normal field, jump condition fields
+     */
+    void construct_fields() {
+        u     = Kokkos::View<double*>("u", nx * ny);
+        rhs   = Kokkos::View<double*>("rhs", nx * ny);
+        rhs_h = Kokkos::View<double*, Kokkos::HostSpace>("rhs_h", nx * ny);
+
+        n1    = Kokkos::View<double**, Kokkos::HostSpace>("n1", nx, ny);
+        n2    = Kokkos::View<double**, Kokkos::HostSpace>("n2", nx, ny);
+        a     = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
+        b     = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
+        a_tau = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
+        // pre-compute fields
+        using Kokkos::pow;
+        using Kokkos::sqrt;
+        int ngc = world.grid.ngc;
+
+        for (int i = ngc; i < nx - ngc; ++i) {
+            for (int j = ngc; j < ny - ngc; ++j) {
+                auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+
+                double dx_eta       = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
+                                 8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
+                                (12 * dx);
+                double dy_eta = (-world.surface(x, y + 2 * dy) + 8 * world.surface(x, y + dy) -
+                                 8 * world.surface(x, y - dy) + world.surface(x, y - 2 * dy)) /
+                                (12 * dy);
+                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
+
+                // normal field
+                if (isclose(norm, 0.0)) {
+                    n1(i, j) = 0.0;
+                    n2(i, j) = 0.0;
+                } else {
+                    n1(i, j) = dx_eta / norm;
+                    n2(i, j) = dy_eta / norm;
+                }
+
+                // jump conditions
+                a(i, j) = world.poisson_jump_condition_a(x, y);
+                b(i, j) = world.poisson_jump_condition_b(x, y);
+            }
+        }
+
+        // tangentual derivative of a
+        for (int i = ngc; i < nx - ngc; ++i) {
+            for (int j = ngc; j < ny - ngc; ++j) {
+                double dx_a = (-a(i + 2, j) + 8 * a(i + 1, j) - 8 * a(i - 1, j) + a(i - 2, j)) / (12 * dx);
+                double dy_a = (-a(i, j + 2) + 8 * a(i, j + 1) - 8 * a(i, j - 1) + a(i, j - 2)) / (12 * dy);
+                a_tau(i, j) = -dx_a * n2(i, j) + dy_a * n1(i, j);
+            }
+        }
+    }
+
+    /**
+     * Construct the Laplacian matrix nabla^2
      */
     void construct_matrix() {
         int ngc = world.grid.ngc;
@@ -1975,30 +1997,63 @@ class PoissonSolver {
                 }
             }
         }
-        coo2csr();
+        coo2crs();
+    }
+
+    /**
+     * Construct Parallel threshold incomplete LU factorization ILU(t) preconditioner
+     * This must be called after the laplacian matrix A has been constructed
+     */
+    void construct_preconditioner() {
+        // preconditioner
+        kh.create_par_ilut_handle();
+        auto par_ilut_handle = kh.get_par_ilut_handle();
+        par_ilut_handle->set_max_iter(100);
+        par_ilut_handle->set_residual_norm_delta_stop(1e-3);
+        par_ilut_handle->set_fill_in_limit(2.0);
+        par_ilut_handle->set_verbose(verbose);
+
+        // Pull out views from CRS
+        auto row_map = A.graph.row_map;
+        auto entries = A.graph.entries;
+        auto values  = A.values;
+
+        // Allocate L and U CRS views as outputs
+        Kokkos::View<int*> L_row_map("L_row_map", A.numRows() + 1);
+        Kokkos::View<int*> U_row_map("U_row_map", A.numRows() + 1);
+
+        // Initial L/U approximations for A
+        KokkosSparse::Experimental::par_ilut_symbolic(&kh, row_map, entries, L_row_map, U_row_map);
+
+        // estimates of nnz
+        const int nnzL_est = par_ilut_handle->get_nnzL();
+        const int nnzU_est = par_ilut_handle->get_nnzU();
+
+        Kokkos::View<int*> L_entries("L_entries", nnzL_est);
+        Kokkos::View<double*> L_values("L_values", nnzL_est);
+        Kokkos::View<int*> U_entries("U_entries", nnzU_est);
+        Kokkos::View<double*> U_values("U_values", nnzU_est);
+
+        KokkosSparse::Experimental::par_ilut_numeric(&kh, row_map, entries, values, L_row_map, L_entries, L_values,
+                                                     U_row_map, U_entries, U_values);
+
+        // the get_nnzL/U are only estimates, use the actual numbers
+        // otherwise it throws runtime annz != this->nnz()
+        const int nnzL      = L_values.extent(0);
+        const int nnzU      = U_values.extent(0);
+        CRS L               = CRS("L", A.numRows(), A.numCols(), nnzL, L_values, L_row_map, L_entries);
+        CRS U               = CRS("U", A.numRows(), A.numCols(), nnzU, U_values, U_row_map, U_entries);
+        prec                = std::make_unique<KokkosSparse::Experimental::LUPrec<CRS, KernelHandle>>(L, U);
+
+        const auto iters    = par_ilut_handle->get_num_iters();
+        const auto residual = par_ilut_handle->get_end_rel_res();
+        Kokkos::printf("par ILU status: iters=%d, residual=%e\n", iters, residual);
     }
 
     /**
      * Solve the potential field by sparse GMRES
      */
     void solve() {
-        KernelHandle kh;
-
-        kh.create_gmres_handle(gmres_m, tol, max_restart);
-        auto gmres_handle = kh.get_gmres_handle();
-        using GMRESHandle = typename std::remove_reference<decltype(*gmres_handle)>::type;
-        gmres_handle->set_ortho(GMRESHandle::Ortho::CGS2);
-        gmres_handle->set_verbose(verbose);
-
-        // auto rho_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.rho);
-        // for (int i = 0; i < nx; ++i)
-        //     for (int j = 0; j < ny; ++j)
-        //         rhs_h(index(i, j)) = rho_h(i, j);
-
-        // construct_matrix();
-
-        // Kokkos::deep_copy(rhs, rhs_h);
-
         // Note: capture these to access them in KOKKOS_LAMBDA
         // Note: don't use KOKKOS_CLASS_LAMBDA (although it captures nx, ny conveniently)
         // otherwise the class will be marked as __host__ __device__, it breaks the host only std::vector
@@ -2013,7 +2068,7 @@ class PoissonSolver {
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
             KOKKOS_LAMBDA(const int i, const int j) { _rhs(i * _ny + j) -= rho(i, j); });
 
-        KokkosSparse::Experimental::gmres(&kh, A, rhs, u /*, precond */);
+        KokkosSparse::Experimental::gmres(&kh, A, rhs, u, prec.get());
 
         Kokkos::parallel_for(
             "unflatten_phi", nx * ny, KOKKOS_LAMBDA(const int idx) {
@@ -2022,12 +2077,13 @@ class PoissonSolver {
                 phi(i, j) = _u(idx);
             });
 
+        auto gmres_handle   = kh.get_gmres_handle();
         const auto iters    = gmres_handle->get_num_iters();
         const auto conv     = gmres_handle->get_conv_flag_val();
         const auto residual = gmres_handle->get_end_rel_res();
-
+        using GMRESHandle   = typename std::remove_reference<decltype(*gmres_handle)>::type;
         Kokkos::printf("GMRES status: iters=%d, residual=%e, convergence=%s\n", iters, residual,
-                       (conv == GMRESHandle::Conv ? "Conv" : "NoConv/LOA/NotRun"));
+                       (conv == GMRESHandle::Conv ? "Conv" : "NoConv/LOA"));
     }
 
     /**

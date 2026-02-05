@@ -9,7 +9,7 @@ file_path = os.path.dirname(os.path.realpath(__file__))
 Lx, Ly = 1.0, 1.0
 G = 3
 
-n_range = 2 ** np.arange(3, 8, dtype=int)
+n_range = 2 ** np.arange(3, 9, dtype=int)
 errors_u = np.zeros(n_range.size)
 errors_du = np.zeros(n_range.size)
 for i, n in enumerate(n_range):

@@ -1,7 +1,30 @@
 #pragma once
 #include "grid.hpp"
 #include <KokkosCore_Config_SetupBackend.hpp>
+#include <Kokkos_Array.hpp>
 #include <Kokkos_Core.hpp>
+#include <decl/Kokkos_Declare_OPENMP.hpp>
+
+enum BCType : size_t {
+    Dirichlet = 1 << 0, // 0001
+    Neumann   = 1 << 1, // 0010
+    None      = 1 << 2, // 0100
+};
+
+struct BCPair {
+    BCType type;
+    double val;
+
+    KOKKOS_INLINE_FUNCTION
+    BCPair()
+        : type(BCType::None),
+          val(0.0) {}
+
+    KOKKOS_INLINE_FUNCTION
+    BCPair(BCType t, double v)
+        : type(t),
+          val(v) {}
+};
 
 /**
  * World struct contains physical properties of the particles, fields, and the immersed boundary.
@@ -26,6 +49,7 @@ struct World {
     Kokkos::View<double**> eps;    // permittivity field
     Kokkos::View<double**> a;      // jump condition for poisson
     Kokkos::View<double**> b;      // jump condition for poisson
+    Kokkos::View<BCPair**, Kokkos::HostSpace> poisson_bc_map;
 
     // simulation time control
     double dt           = 0.0; // time step size
@@ -42,20 +66,20 @@ struct World {
         // flux                    = Kokkos::View<double****>("flux", nx, ny, nvx, nvy);
         // flux_1st                = Kokkos::View<double****>("flux_1st", nx, ny, nvx, nvy);
         // ep                      = Kokkos::View<double****>("ep", nx, ny, nvx, nvy);
-        flux_l     = Kokkos::View<double****>("flux_l", nx, ny, nvx, nvy);
-        flux_r     = Kokkos::View<double****>("flux_r", nx, ny, nvx, nvy);
-        flux_1st_l = Kokkos::View<double****>("flux_1st_l", nx, ny, nvx, nvy);
-        flux_1st_r = Kokkos::View<double****>("flux_1st_r", nx, ny, nvx, nvy);
-        ep_l       = Kokkos::View<double****>("ep_l", nx, ny, nvx, nvy);
-        ep_r       = Kokkos::View<double****>("ep_r", nx, ny, nvx, nvy);
-        n          = Kokkos::View<double**>("n", nx, ny);
-        rho        = Kokkos::View<double**>("rho", nx, ny);
-        phi        = Kokkos::View<double**>("phi", nx, ny);
-        E          = Kokkos::View<double***>("E", nx, ny, 2);
-        eps        = Kokkos::View<double**>("eps", nx, ny);
-        a          = Kokkos::View<double**>("a", nx, ny); // jump condition for poisson
-        b          = Kokkos::View<double**>("b", nx, ny); // jump condition for poisson
-        Kokkos::deep_copy(f, 0.0);
+        flux_l         = Kokkos::View<double****>("flux_l", nx, ny, nvx, nvy);
+        flux_r         = Kokkos::View<double****>("flux_r", nx, ny, nvx, nvy);
+        flux_1st_l     = Kokkos::View<double****>("flux_1st_l", nx, ny, nvx, nvy);
+        flux_1st_r     = Kokkos::View<double****>("flux_1st_r", nx, ny, nvx, nvy);
+        ep_l           = Kokkos::View<double****>("ep_l", nx, ny, nvx, nvy);
+        ep_r           = Kokkos::View<double****>("ep_r", nx, ny, nvx, nvy);
+        n              = Kokkos::View<double**>("n", nx, ny);
+        rho            = Kokkos::View<double**>("rho", nx, ny);
+        phi            = Kokkos::View<double**>("phi", nx, ny);
+        E              = Kokkos::View<double***>("E", nx, ny, 2);
+        eps            = Kokkos::View<double**>("eps", nx, ny);
+        a              = Kokkos::View<double**>("a", nx, ny); // jump condition for poisson
+        b              = Kokkos::View<double**>("b", nx, ny); // jump condition for poisson
+        poisson_bc_map = Kokkos::View<BCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
         // Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_l, 0.0);
         Kokkos::deep_copy(flux_r, 0.0);

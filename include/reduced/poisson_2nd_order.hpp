@@ -6,6 +6,7 @@
  *
  **/
 #pragma once
+#include "reduced/world.hpp"
 #include <KokkosKernels_Handle.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>
 #include <KokkosSparse_IOUtils.hpp>
@@ -1956,44 +1957,52 @@ class PoissonSolver {
         int ngc = world.grid.ngc;
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
-                int row_idx = index(i, j);
-                // TODO: assume dirichlet for now, let users modify this later
-                if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
+                int row_idx   = index(i, j);
+                BCPair bc_map = world.poisson_bc_map(i, j);
+                if (bc_map.type == BCType::None) {
+
+                    // Detect interface cuts
+                    auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+                    double eta          = world.surface(x, y);
+                    double eta_l        = world.surface(x - dx, y);
+                    double eta_r        = world.surface(x + dx, y);
+                    double eta_b        = world.surface(x, y - dy);
+                    double eta_t        = world.surface(x, y + dy);
+
+                    size_t direction    = 0;
+                    if (eta * eta_l < 0)
+                        direction |= Direction::L; // L
+                    if (eta * eta_r < 0)
+                        direction |= Direction::R; // R
+                    if (eta * eta_b < 0)
+                        direction |= Direction::B; // B
+                    if (eta * eta_t < 0)
+                        direction |= Direction::T; // T
+
+                    int ncuts = std::popcount(direction);
+                    if (ncuts == 0) {
+                        coeff_case0(i, j);
+                    } else if (ncuts == 1) {
+                        coeff_case1(direction, i, j);
+                    } else if (ncuts == 2) {
+                        coeff_case2(direction, i, j);
+                    } else {
+                        // Not implemented for >2 cuts
+                        throw std::runtime_error("More than 2 cuts not implemented yet.");
+                    }
+                } else {
+                    // TODO: assume dirichlet for now, let users modify this later
                     vals_coo.push_back(1.0);
                     rows_coo.push_back(row_idx);
                     cols_coo.push_back(row_idx);
-                    rhs_h(row_idx) = 0.0;
-                    continue;
-                }
-
-                // Detect interface cuts
-                auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
-                double eta          = world.surface(x, y);
-                double eta_l        = world.surface(x - dx, y);
-                double eta_r        = world.surface(x + dx, y);
-                double eta_b        = world.surface(x, y - dy);
-                double eta_t        = world.surface(x, y + dy);
-
-                size_t direction    = 0;
-                if (eta * eta_l < 0)
-                    direction |= Direction::L; // L
-                if (eta * eta_r < 0)
-                    direction |= Direction::R; // R
-                if (eta * eta_b < 0)
-                    direction |= Direction::B; // B
-                if (eta * eta_t < 0)
-                    direction |= Direction::T; // T
-
-                int ncuts = std::popcount(direction);
-                if (ncuts == 0) {
-                    coeff_case0(i, j);
-                } else if (ncuts == 1) {
-                    coeff_case1(direction, i, j);
-                } else if (ncuts == 2) {
-                    coeff_case2(direction, i, j);
-                } else {
-                    // Not implemented for >2 cuts
-                    throw std::runtime_error("More than 2 cuts not implemented yet.");
+                    rhs_h(row_idx) = bc_map.val;
+                    // if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
+                    //     vals_coo.push_back(1.0);
+                    //     rows_coo.push_back(row_idx);
+                    //     cols_coo.push_back(row_idx);
+                    //     rhs_h(row_idx) = 0.0;
+                    //     continue;
+                    // }
                 }
             }
         }

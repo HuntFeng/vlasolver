@@ -7,7 +7,21 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+        : World<ImmersedWorld>(grid) {
+
+        int ngc = grid.ngc;
+        int nx  = grid.ncells[0];
+        int ny  = grid.ncells[1];
+        for (int i = 0; i < nx; ++i) {
+            for (int j = 0; j < ny; ++j) {
+                if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
+                    poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, 0.0);
+                } else {
+                    poisson_bc_map(i, j) = BCPair(BCType::None, 0.0);
+                }
+            }
+        }
+    }
 
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
@@ -22,23 +36,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     KOKKOS_INLINE_FUNCTION double poisson_jump_condition_b(double x, double y) const {
         return 8.0 * (2 * x * x + 2 * y * y - x - y) * Kokkos::exp(-(x * x + y * y));
-    }
-
-    void potential_boundary_conditions(Kokkos::View<double**>& u) {
-        // TODO: not used in solver for now
-        using Kokkos::abs;
-        auto& grid = this->grid;
-        int ngc    = grid.ngc;
-        int nx     = u.extent(0);
-        int ny     = u.extent(1);
-
-        for (int k = 0; k < ngc; ++k) {
-            // dirichlet
-            Kokkos::deep_copy(Kokkos::subview(u, k, Kokkos::ALL), 0.0);
-            Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL), 0.0);
-            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), 0.0);
-            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1), 0.0);
-        }
     }
 };
 

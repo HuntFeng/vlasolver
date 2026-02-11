@@ -13,6 +13,7 @@
 #include <KokkosSparse_LUPrec.hpp>
 #include <KokkosSparse_gmres.hpp>
 #include <KokkosSparse_par_ilut.hpp>
+#include <Kokkos_Abort.hpp>
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Macros.hpp>
 #include <bit>
@@ -1954,7 +1955,9 @@ class PoissonSolver {
      * Construct the Laplacian matrix nabla^2
      */
     void construct_matrix() {
-        int ngc = world.grid.ngc;
+        int ngc    = world.grid.ngc;
+        double dx2 = dx * dx;
+        double dy2 = dy * dy;
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 int row_idx   = index(i, j);
@@ -1991,18 +1994,37 @@ class PoissonSolver {
                         throw std::runtime_error("More than 2 cuts not implemented yet.");
                     }
                 } else {
-                    // TODO: assume dirichlet for now, let users modify this later
-                    vals_coo.push_back(1.0);
-                    rows_coo.push_back(row_idx);
-                    cols_coo.push_back(row_idx);
-                    rhs_h(row_idx) = bc_map.val;
-                    // if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
-                    //     vals_coo.push_back(1.0);
-                    //     rows_coo.push_back(row_idx);
-                    //     cols_coo.push_back(row_idx);
-                    //     rhs_h(row_idx) = 0.0;
-                    //     continue;
-                    // }
+
+                    if (i < ngc) {
+                        vals_coo.push_back(1.0);
+                        rows_coo.push_back(row_idx);
+                        cols_coo.push_back(row_idx);
+                        rhs_h(row_idx) = bc_map.val;
+                    } else if (i >= nx - ngc) {
+                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(i - 1, j)});
+                        rhs_h(row_idx) = -bc_map.val;
+                    } else if (j < ngc) {
+                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j + 1)});
+                        rhs_h(row_idx) = bc_map.val;
+                    } else if (j >= ny - ngc) {
+                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j - 1)});
+                        rhs_h(row_idx) = -bc_map.val;
+                    } else {
+                        if (bc_map.type != BCType::Dirichlet) {
+                            Kokkos::printf("Invalid BC type %d for poisson at cell (%d, %d)", bc_map.type, i, j);
+                            Kokkos::abort("Terminated");
+                        }
+                        vals_coo.push_back(1.0);
+                        rows_coo.push_back(row_idx);
+                        cols_coo.push_back(row_idx);
+                        rhs_h(row_idx) = bc_map.val;
+                    }
                 }
             }
         }
@@ -2086,13 +2108,19 @@ class PoissonSolver {
                 phi(i, j) = _u(idx);
             });
 
-        auto gmres_handle   = kh.get_gmres_handle();
+        auto gmres_handle      = kh.get_gmres_handle();
+        const auto max_restart = gmres_handle->get_max_restart();
+        const auto gmres_m     = gmres_handle->get_m();
+        Kokkos::printf("GMRES handle: max_restart=%d, m=%d\n", max_restart, gmres_m);
+
         const auto iters    = gmres_handle->get_num_iters();
         const auto conv     = gmres_handle->get_conv_flag_val();
         const auto residual = gmres_handle->get_end_rel_res();
         using GMRESHandle   = typename std::remove_reference<decltype(*gmres_handle)>::type;
         Kokkos::printf("GMRES status: iters=%d, residual=%e, convergence=%s\n", iters, residual,
-                       (conv == GMRESHandle::Conv ? "Conv" : "NoConv/LOA"));
+                       (conv == GMRESHandle::Conv     ? "Conv"
+                        : conv == GMRESHandle::NoConv ? "NoConv"
+                                                      : "LOA"));
     }
 
     /**

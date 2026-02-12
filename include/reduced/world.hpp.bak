@@ -32,14 +32,23 @@ struct BCPair {
 template <typename WorldType>
 struct World {
     Grid& grid;
-    Kokkos::View<double****> f;        // distribution function f(x,y,vx,vy) of ion
-    Kokkos::View<double****> flux;     // storing fluxes at cell interfaces
-    Kokkos::View<double****> flux_1st; // storing first order fluxes at cell interfaces
-    Kokkos::View<double****> ep;       // storing flux limiters at cell interfaces
-    Kokkos::View<double**> n;          // number density of ion
-    Kokkos::View<double**> rho;        // ion charge density
-    Kokkos::View<double**> phi;        // potential field (assuming Boltzmann distribution for electron)
-    Kokkos::View<double***> E;         // Ex(x,y), E_y(x,y)
+    Kokkos::View<double****> f; // distribution function f(x,y,vx,vy) of ion
+    // Kokkos::View<double****> flux; // storing fluxes to update distribution function
+    Kokkos::View<double****> flux_l; // storing fluxes to update distribution function
+    Kokkos::View<double****> flux_r; // storing fluxes to update distribution function
+    // Kokkos::View<double****> flux_1st; // storing first order fluxes to update distribution function
+    Kokkos::View<double****> flux_1st_l; // storing first order fluxes to update distribution function
+    Kokkos::View<double****> flux_1st_r; // storing first order fluxes to update distribution function
+    // Kokkos::View<double****> ep; // storing first order fluxes to update distribution function
+    Kokkos::View<double****> ep_l; // storing first order fluxes to update distribution function
+    Kokkos::View<double****> ep_r; // storing first order fluxes to update distribution function
+    Kokkos::View<double**> n;      // number density of ion
+    Kokkos::View<double**> rho;    // ion charge density
+    Kokkos::View<double**> phi;    // potential field (assuming Boltzmann distribution for electron)
+    Kokkos::View<double***> E;     // Ex(x,y), E_y(x,y)
+    // Kokkos::View<double**> eps;    // permittivity field
+    // Kokkos::View<double**> a;      // jump condition for poisson
+    // Kokkos::View<double**> b;      // jump condition for poisson
     Kokkos::View<BCPair**, Kokkos::HostSpace> poisson_bc_map;
 
     // simulation time control
@@ -54,20 +63,36 @@ struct World {
         // Initialize the views with appropriate dimensions
         auto [nx, ny, nvx, nvy] = grid.ncells;
         f                       = Kokkos::View<double****>("f", nx, ny, nvx, nvy);
-        flux                    = Kokkos::View<double****>("flux", nx, ny, nvx, nvy);
-        flux_1st                = Kokkos::View<double****>("flux_1st", nx, ny, nvx, nvy);
-        ep                      = Kokkos::View<double****>("ep", nx, ny, nvx, nvy);
-        n                       = Kokkos::View<double**>("n", nx, ny);
-        rho                     = Kokkos::View<double**>("rho", nx, ny);
-        phi                     = Kokkos::View<double**>("phi", nx, ny);
-        E                       = Kokkos::View<double***>("E", nx, ny, 2);
-        poisson_bc_map          = Kokkos::View<BCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
-        Kokkos::deep_copy(flux, 0.0);
-        Kokkos::deep_copy(flux_1st, 0.0);
-        Kokkos::deep_copy(ep, 0.0);
+        // flux                    = Kokkos::View<double****>("flux", nx, ny, nvx, nvy);
+        // flux_1st                = Kokkos::View<double****>("flux_1st", nx, ny, nvx, nvy);
+        // ep                      = Kokkos::View<double****>("ep", nx, ny, nvx, nvy);
+        flux_l     = Kokkos::View<double****>("flux_l", nx, ny, nvx, nvy);
+        flux_r     = Kokkos::View<double****>("flux_r", nx, ny, nvx, nvy);
+        flux_1st_l = Kokkos::View<double****>("flux_1st_l", nx, ny, nvx, nvy);
+        flux_1st_r = Kokkos::View<double****>("flux_1st_r", nx, ny, nvx, nvy);
+        ep_l       = Kokkos::View<double****>("ep_l", nx, ny, nvx, nvy);
+        ep_r       = Kokkos::View<double****>("ep_r", nx, ny, nvx, nvy);
+        n          = Kokkos::View<double**>("n", nx, ny);
+        rho        = Kokkos::View<double**>("rho", nx, ny);
+        phi        = Kokkos::View<double**>("phi", nx, ny);
+        E          = Kokkos::View<double***>("E", nx, ny, 2);
+        // eps            = Kokkos::View<double**>("eps", nx, ny);
+        // a              = Kokkos::View<double**>("a", nx, ny); // jump condition for poisson
+        // b              = Kokkos::View<double**>("b", nx, ny); // jump condition for poisson
+        poisson_bc_map = Kokkos::View<BCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
+        // Kokkos::deep_copy(flux, 0.0);
+        Kokkos::deep_copy(flux_l, 0.0);
+        Kokkos::deep_copy(flux_r, 0.0);
+        Kokkos::deep_copy(flux_1st_l, 0.0);
+        Kokkos::deep_copy(flux_1st_r, 0.0);
+        Kokkos::deep_copy(ep_l, 0.0);
+        Kokkos::deep_copy(ep_r, 0.0);
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::deep_copy(phi, 0.0);
         Kokkos::deep_copy(E, 0.0);
+        // Kokkos::deep_copy(eps, 1.0);
+        // Kokkos::deep_copy(a, 0.0);
+        // Kokkos::deep_copy(b, 0.0);
     }
     /**
      * Expression of the immersed boundary.

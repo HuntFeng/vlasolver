@@ -9,20 +9,32 @@ struct ImmersedWorld : World<ImmersedWorld> {
     ImmersedWorld(Grid& grid)
         : World<ImmersedWorld>(grid) {
 
-        int ngc = grid.ngc;
-        int nx  = grid.ncells[0];
-        int ny  = grid.ncells[1];
+        double phi_w = -20.0 / 0.3;
+        int ngc      = grid.ngc;
+        int nx       = grid.ncells[0];
+        int ny       = grid.ncells[1];
+        double dx    = grid.spacing[0];
+        double dy    = grid.spacing[1];
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
+                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                double eta          = surface(x, y);
+                double eta_l        = surface(x - dx, y);
+                double eta_r        = surface(x + dx, y);
+                double eta_b        = surface(x, y - dy);
+                double eta_t        = surface(x, y + dy);
+
                 if (i < ngc)
-                    poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, -20 / 0.3);
+                    poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, 0.0);
                 else if (i >= nx - ngc)
                     poisson_bc_map(i, j) = BCPair(BCType::Neumann, 0.0);
                 else if (j < ngc)
                     poisson_bc_map(i, j) = BCPair(BCType::Neumann, 0.0);
                 else if (j >= ny - ngc)
                     poisson_bc_map(i, j) = BCPair(BCType::Neumann, 0.0);
-                else
+                else if (eta <= 0) {
+                    poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, phi_w);
+                } else
                     poisson_bc_map(i, j) = BCPair(BCType::None, 0.0);
 
                 // if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
@@ -36,18 +48,16 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
-        return Kokkos::pow(x - 0.5, 2) + Kokkos::pow(y - 0.5, 2) - Kokkos::pow(0.25, 2);
+        return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
     }
 
     KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) const { return surface(x, y) <= 0.0 ? 2.0 : 1.0; }
+    double permittivity(double x, double y) const { return surface(x, y) <= 0.0 ? 1000.0 : 1.0; }
 
     KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_a(double x, double y) const { return -Kokkos::exp(-(x * x + y * y)); }
+    double poisson_jump_condition_a(double x, double y) const { return 0.0; }
 
-    KOKKOS_INLINE_FUNCTION double poisson_jump_condition_b(double x, double y) const {
-        return 8.0 * (2 * x * x + 2 * y * y - x - y) * Kokkos::exp(-(x * x + y * y));
-    }
+    KOKKOS_INLINE_FUNCTION double poisson_jump_condition_b(double x, double y) const { return 0.0; }
 };
 
 int main(int argc, char** argv) {
@@ -56,28 +66,29 @@ int main(int argc, char** argv) {
     const int n                         = (argc == 2) ? std::stoi(argv[1]) : 64;
 
     Kokkos::Array<double, DIM> origin   = {0.0, 0.0, 0.0, 0.0}; // origin of the grid
-    Kokkos::Array<double, DIM> size     = {1.0, 1.0, 1.0, 1.0}; // size of the grid
-    Kokkos::Array<int, DIM> ncells_intr = {n, n, 1, 1};         // number of interior cells
+    Kokkos::Array<double, DIM> size     = {1.0, 0.5, 1.0, 1.0}; // size of the grid
+    Kokkos::Array<int, DIM> ncells_intr = {2 * n, n, 1, 1};     // number of interior cells
     const int ngc                       = 3;
 
     Grid grid(origin, size, ncells_intr, ngc);
     ImmersedWorld world(grid);
-    PoissonSolver poisson_solver(world);
+    double tol      = 1e-12;
+    int gmres_m     = 100;
+    int max_restart = 30;
+    PoissonSolver poisson_solver(world, tol, gmres_m, max_restart);
     Writer writer(world, "data/poisson", "poisson_" + std::to_string(n), {"phi", "Ex", "Ey"});
 
-    using Kokkos::sin;
-    using Kokkos::numbers::pi;
-    auto& rho    = world.rho;
-    const int nx = grid.ncells[0];
-    const int ny = grid.ncells[1];
-    Kokkos::parallel_for(
-        Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
-            auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
-            if (world.surface(x, y) <= 0.0)
-                rho(i, j) = -8 * (x * x + y * y - 1.0) * Kokkos::exp(-(x * x + y * y));
-            else
-                rho(i, j) = 0.0;
-        });
+    // using Kokkos::sin;
+    // using Kokkos::numbers::pi;
+    // auto& rho    = world.rho;
+    // const int nx = grid.ncells[0];
+    // const int ny = grid.ncells[1];
+
+    // Kokkos::parallel_for(
+    //     Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
+    //         // auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+    //         rho(i, j) = 0.0;
+    //     });
 
     Kokkos::Timer timer;
     double start_time = timer.seconds();

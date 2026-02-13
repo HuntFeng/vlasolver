@@ -21,6 +21,7 @@ class PoissonSolver {
     double omega;
     Kokkos::View<double**> a;
     Kokkos::View<double**> b;
+    Kokkos::View<double**> eps;
     int max_iter; // max iterations for the solver
     int levels;   // default multigrid levels
 
@@ -43,6 +44,25 @@ class PoissonSolver {
 
         // If using multigrid method, omega should be set to 1.0 or less
         // omega = 1.0;
+        //
+        //
+        construct_fields();
+    }
+
+    void construct_fields() {
+        auto& grid = world.grid;
+        int nx     = world.grid.ncells[0];
+        int ny     = world.grid.ncells[1];
+        a          = Kokkos::View<double**>("a", nx, ny);
+        b          = Kokkos::View<double**>("b", nx, ny);
+        eps        = Kokkos::View<double**>("eps", nx, ny);
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                a(i, j)             = world.poisson_jump_condition_a(x, y);
+                b(i, j)             = world.poisson_jump_condition_b(x, y);
+                eps(i, j)           = world.permittivity(x, y);
+            });
     }
 
     /**
@@ -178,6 +198,86 @@ class PoissonSolver {
             });
     }
 
+    void compute_electric_field() const {
+        auto& E    = world.E;
+        auto& phi  = world.phi;
+        auto& grid = world.grid;
+        double dx  = grid.spacing[0];
+        double dy  = grid.spacing[1];
+        int nx     = grid.ncells[0];
+        int ny     = grid.ncells[1];
+        int ngc    = grid.ngc;
+        using Kokkos::abs;
+
+        Kokkos::deep_copy(E, 0.0);
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                // for non-boundary cells, compute electric field using central difference
+                E(i, j, 0) = -(phi(i + 1, j) - phi(i - 1, j)) / (2.0 * dx);
+                E(i, j, 1) = -(phi(i, j + 1) - phi(i, j - 1)) / (2.0 * dy);
+
+                // for boundary cells, compute electric field using jump conditions
+                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                double eta          = world.surface(x, y);
+                double eta_l        = world.surface(x - dx, y);
+                double eta_r        = world.surface(x + dx, y);
+                double eta_b        = world.surface(x, y - dy);
+                double eta_t        = world.surface(x, y + dy);
+                if (eta * eta_l <= 0.0) {
+                    double eps_c      = eps(i, j);
+                    double eps_l      = eps(i - 1, j);
+                    double theta      = abs(eta_l) / (abs(eta) + abs(eta_l));
+                    auto [n1, n2]     = world.normal(x, y, dx, dy);
+                    auto [n1_l, n2_l] = world.normal(x - dx, y, dx, dy);
+                    double b_gamma =
+                        (b(i, j) * n1 * abs(eta_l) + b(i - 1, j) * n1_l * abs(eta)) / (abs(eta) + abs(eta_l));
+                    double phi_I = eps_c * theta * phi(i, j) + eps_l * (1 - theta) * phi(i - 1, j);
+                    phi_I += ((eta <= 0.0) ? 1 : -1) * b_gamma * theta * (1 - theta) * dx;
+                    phi_I /= eps_c * theta + eps_l * (1 - theta);
+                    E(i, j, 0) = -(phi(i, j) - phi_I) / ((1 - theta) * dx);
+                }
+                if (eta * eta_r <= 0.0) {
+                    double eps_c      = eps(i, j);
+                    double eps_r      = eps(i + 1, j);
+                    auto [n1, n2]     = world.normal(x, y, dx, dy);
+                    auto [n1_r, n2_r] = world.normal(x + dx, y, dx, dy);
+                    double theta      = abs(eta_r) / (abs(eta) + abs(eta_r));
+                    double b_gamma =
+                        (b(i, j) * n1 * abs(eta_r) + b(i + 1, j) * n1_r * abs(eta)) / (abs(eta) + abs(eta_r));
+                    double phi_I = eps_c * theta * phi(i, j) + eps_r * (1 - theta) * phi(i + 1, j);
+                    phi_I += ((eta <= 0.0) ? -1 : 1) * b_gamma * theta * (1 - theta) * dx;
+                    phi_I /= eps_c * theta + eps_r * (1 - theta);
+                    E(i, j, 0) = -(phi_I - phi(i, j)) / ((1 - theta) * dx);
+                }
+                if (eta * eta_b <= 0.0) {
+                    double eps_c      = eps(i, j);
+                    double eps_b      = eps(i, j - 1);
+                    auto [n1, n2]     = world.normal(x, y, dx, dy);
+                    auto [n1_b, n2_b] = world.normal(x, y - dy, dx, dy);
+                    double theta      = abs(eta_b) / (abs(eta) + abs(eta_b));
+                    double b_gamma =
+                        (b(i, j) * n2 * abs(eta_b) + b(i, j - 1) * n2_b * abs(eta)) / (abs(eta) + abs(eta_b));
+                    double phi_I = eps_c * theta * phi(i, j) + eps_b * (1 - theta) * phi(i, j - 1);
+                    phi_I += ((eta <= 0.0) ? 1 : -1) * b_gamma * theta * (1 - theta) * dy;
+                    phi_I /= eps_c * theta + eps_b * (1 - theta);
+                    E(i, j, 1) = -(phi(i, j) - phi_I) / ((1 - theta) * dy);
+                }
+                if (eta * eta_t <= 0.0) {
+                    double eps_c      = eps(i, j);
+                    double eps_t      = eps(i, j + 1);
+                    auto [n1, n2]     = world.normal(x, y, dx, dy);
+                    auto [n1_t, n2_t] = world.normal(x, y + dy, dx, dy);
+                    double theta      = abs(eta_t) / (abs(eta) + abs(eta_t));
+                    double b_gamma =
+                        (b(i, j) * n2 * abs(eta_t) + b(i, j + 1) * n2_t * abs(eta)) / (abs(eta) + abs(eta_t));
+                    double phi_I = eps_c * theta * phi(i, j) + eps_t * (1 - theta) * phi(i, j + 1);
+                    phi_I += ((eta <= 0.0) ? -1 : 1) * b_gamma * theta * (1 - theta) * dy;
+                    phi_I /= eps_c * theta + eps_t * (1 - theta);
+                    E(i, j, 1) = -(phi_I - phi(i, j)) / ((1 - theta) * dy);
+                }
+            });
+    }
+
     /**
      * Compute infinity norm of the difference between the old and new potential fields.
      */
@@ -213,7 +313,8 @@ class PoissonSolver {
         for (int iter = 0; iter < max_iter; ++iter) {
             Kokkos::deep_copy(phi_old, world.phi);
             // v_cycle(world.phi, g, world.eps, world.a, world.b, 0);
-            gauss_seidel(world.phi, g, world.eps, world.a, world.b, 1);
+            // gauss_seidel(world.phi, g, world.eps, world.a, world.b, 1);
+            gauss_seidel(world.phi, g, eps, a, b, 1);
             double err = compute_error();
             if (iter % 1000 == 0 || iter == max_iter - 1) {
                 Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);

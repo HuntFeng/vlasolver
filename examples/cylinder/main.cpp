@@ -1,5 +1,5 @@
 #include "reduced/grid.hpp"
-#include "reduced/poisson_2nd_order.hpp"
+#include "reduced/poisson_1st_order.hpp"
 #include "reduced/vlasov.hpp"
 #include "reduced/world.hpp"
 #include "reduced/writer.hpp"
@@ -48,23 +48,14 @@ struct ImmersedWorld : World<ImmersedWorld> {
             });
     };
 
-    void poisson_jump_conditions() {
-        auto& grid = this->grid;
-        int nx     = grid.ncells[0];
-        int ny     = grid.ncells[1];
+    KOKKOS_INLINE_FUNCTION
+    double poisson_jump_condition_a(double x, double y) const { return 0.0; }
 
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                // potential is continuous
-                a(i, j) = 0.0;
-                // electric field is not continuous but this works??
-                b(i, j) = 0.0;
+    KOKKOS_INLINE_FUNCTION
+    double poisson_jump_condition_b(double x, double y) const { return 0.0; }
 
-                // the immersed cylinder is a conductor, set a high permittivity
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
-                eps(i, j)           = (surface(x, y) < 0.0) ? 1000.0 : 1.0;
-            });
-    }
+    KOKKOS_INLINE_FUNCTION
+    double permittivity(double x, double y) const { return surface(x, y) < 0.0 ? 1000.0 : 1.0; }
 
     void potential_boundary_conditions(Kokkos::View<double**>& u) {
         using Kokkos::abs;

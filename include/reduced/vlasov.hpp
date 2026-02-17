@@ -15,6 +15,7 @@
  * where mu = m_i / m_e is the mass ratio of the ion to the electron.
  */
 #include "poisson_2nd_order.hpp"
+// #include "poisson_1st_order.hpp"
 #include "writer.hpp"
 #include <Kokkos_Abort.hpp>
 #include <Kokkos_Core.hpp>

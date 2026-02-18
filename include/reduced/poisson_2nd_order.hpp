@@ -13,12 +13,8 @@
 #include <KokkosSparse_LUPrec.hpp>
 #include <KokkosSparse_gmres.hpp>
 #include <KokkosSparse_par_ilut.hpp>
-#include <Kokkos_Abort.hpp>
 #include <Kokkos_Core.hpp>
-#include <Kokkos_Macros.hpp>
 #include <bit>
-#include <decl/Kokkos_Declare_OPENMP.hpp>
-#include <impl/Kokkos_Profiling.hpp>
 #include <vector>
 
 enum Direction : size_t {
@@ -162,22 +158,40 @@ class PoissonSolver {
      */
     double interp(size_t direction, double theta, int i, int j, Kokkos::View<double**, Kokkos::HostSpace>& field) {
         using Kokkos::pow;
-        double t_matrix[4]    = {1, theta, pow(theta, 2), pow(theta, 3)};
-        double c_matrix[4][4] = {
+        // double t_matrix[4]    = {1, theta, pow(theta, 2), pow(theta, 3)};
+        // double c_matrix[4][4] = {
+        //     {0.0, 2.0, 0.0, 0.0},
+        //     {-1.0, 0.0, 1.0, 0.0},
+        //     {2.0, -5.0, 4.0, -1.0},
+        //     {-1.0, 3.0, -3.0, 1.0},
+        // };
+        // double points[4];
+        // if (direction == Direction::R)
+        //     double points[4] = {field(i - 1, j), field(i, j), field(i + 1, j), field(i + 2, j)};
+        // else if (direction == Direction::T)
+        //     double points[4] = {field(i, j - 1), field(i, j), field(i, j + 1), field(i, j + 2)};
+        // else if (direction == Direction::L)
+        //     double points[4] = {field(i + 1, j), field(i, j), field(i - 1, j), field(i - 2, j)};
+        // else if (direction == Direction::B)
+        //     double points[4] = {field(i, j + 1), field(i, j), field(i, j - 1), field(i, j - 2)};
+        // else
+        //     Kokkos::abort("Interp invalid direction for interpolation");
+        Kokkos::Array<double, 4> t_matrix{1, theta, pow(theta, 2), pow(theta, 3)};
+        Kokkos::Array<Kokkos::Array<double, 4>, 4> c_matrix{{
             {0.0, 2.0, 0.0, 0.0},
             {-1.0, 0.0, 1.0, 0.0},
             {2.0, -5.0, 4.0, -1.0},
             {-1.0, 3.0, -3.0, 1.0},
-        };
-        double points[4];
+        }};
+        Kokkos::Array<double, 4> points;
         if (direction == Direction::R)
-            double points[4] = {field(i - 1, j), field(i, j), field(i + 1, j), field(i + 2, j)};
+            points = {field(i - 1, j), field(i, j), field(i + 1, j), field(i + 2, j)};
         else if (direction == Direction::T)
-            double points[4] = {field(i, j - 1), field(i, j), field(i, j + 1), field(i, j + 2)};
+            points = {field(i, j - 1), field(i, j), field(i, j + 1), field(i, j + 2)};
         else if (direction == Direction::L)
-            double points[4] = {field(i + 1, j), field(i, j), field(i - 1, j), field(i - 2, j)};
+            points = {field(i + 1, j), field(i, j), field(i - 1, j), field(i - 2, j)};
         else if (direction == Direction::B)
-            double points[4] = {field(i, j + 1), field(i, j), field(i, j - 1), field(i, j - 2)};
+            points = {field(i, j + 1), field(i, j), field(i, j - 1), field(i, j - 2)};
         else
             Kokkos::abort("Interp invalid direction for interpolation");
         double val_I = 0.0;
@@ -2111,12 +2125,10 @@ class PoissonSolver {
         auto gmres_handle      = kh.get_gmres_handle();
         const auto max_restart = gmres_handle->get_max_restart();
         const auto gmres_m     = gmres_handle->get_m();
-        Kokkos::printf("GMRES handle: max_restart=%d, m=%d\n", max_restart, gmres_m);
-
-        const auto iters    = gmres_handle->get_num_iters();
-        const auto conv     = gmres_handle->get_conv_flag_val();
-        const auto residual = gmres_handle->get_end_rel_res();
-        using GMRESHandle   = typename std::remove_reference<decltype(*gmres_handle)>::type;
+        const auto iters       = gmres_handle->get_num_iters();
+        const auto conv        = gmres_handle->get_conv_flag_val();
+        const auto residual    = gmres_handle->get_end_rel_res();
+        using GMRESHandle      = typename std::remove_reference<decltype(*gmres_handle)>::type;
         Kokkos::printf("GMRES status: iters=%d, residual=%e, convergence=%s\n", iters, residual,
                        (conv == GMRESHandle::Conv     ? "Conv"
                         : conv == GMRESHandle::NoConv ? "NoConv"

@@ -14,7 +14,8 @@
  * d^2phi/dx^2 = -int (fi - fe) dv
  * where mu = m_i / m_e is the mass ratio of the ion to the electron.
  */
-#include "poisson.hpp"
+// #include "poisson.hpp"
+#include "poisson_2nd_order.hpp"
 #include "writer.hpp"
 #include <Kokkos_Core.hpp>
 
@@ -126,86 +127,87 @@ class Vlasolver {
             });
     }
 
-    void compute_electric_field() const {
-        auto& b    = world.b;
-        auto& E    = world.E;
-        auto& phi  = world.phi;
-        auto& eps  = world.eps;
-        auto& grid = world.grid;
-        double dx  = grid.spacing[0][0]; // species does not matter here
-        double dy  = grid.spacing[0][1];
-        int nx     = grid.ncells[0];
-        int ny     = grid.ncells[1];
-        int ngc    = grid.ngc;
+    // void compute_electric_field() const {
+    //     auto& b    = world.b;
+    //     auto& E    = world.E;
+    //     auto& phi  = world.phi;
+    //     auto& eps  = world.eps;
+    //     auto& grid = world.grid;
+    //     double dx  = grid.spacing[0][0]; // species does not matter here
+    //     double dy  = grid.spacing[0][1];
+    //     int nx     = grid.ncells[0];
+    //     int ny     = grid.ncells[1];
+    //     int ngc    = grid.ngc;
+    //
+    //     Kokkos::deep_copy(E, 0.0);
+    //     Kokkos::parallel_for(
+    //         Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+    //             // for non-boundary cells, compute electric field using central difference
+    //             E(i, j, 0) = -(phi(i + 1, j) - phi(i - 1, j)) / (2.0 * dx);
+    //             E(i, j, 1) = -(phi(i, j + 1) - phi(i, j - 1)) / (2.0 * dy);
+    //
+    //             // for boundary cells, compute electric field using jump conditions
+    //             auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, 0); // species does not matter here
+    //             double eta          = world.surface(x, y);
+    //             double eta_l        = world.surface(x - dx, y);
+    //             double eta_r        = world.surface(x + dx, y);
+    //             double eta_b        = world.surface(x, y - dy);
+    //             double eta_t        = world.surface(x, y + dy);
+    //             if (eta * eta_l <= 0.0) {
+    //                 double eps_c      = eps(i, j);
+    //                 double eps_l      = eps(i - 1, j);
+    //                 double theta      = abs(eta_l) / (abs(eta) + abs(eta_l));
+    //                 auto [n1, n2]     = world.normal(x, y, dx, dy);
+    //                 auto [n1_l, n2_l] = world.normal(x - dx, y, dx, dy);
+    //                 double b_gamma =
+    //                     (b(i, j) * n1 * abs(eta_l) + b(i - 1, j) * n1_l * abs(eta)) / (abs(eta) + abs(eta_l));
+    //                 double phi_I = eps_c * theta * phi(i, j) + eps_l * (1 - theta) * phi(i - 1, j);
+    //                 phi_I += ((eta <= 0.0) ? 1 : -1) * b_gamma * theta * (1 - theta) * dx;
+    //                 phi_I /= eps_c * theta + eps_l * (1 - theta);
+    //                 E(i, j, 0) = -(phi(i, j) - phi_I) / ((1 - theta) * dx);
+    //             }
+    //             if (eta * eta_r <= 0.0) {
+    //                 double eps_c      = eps(i, j);
+    //                 double eps_r      = eps(i + 1, j);
+    //                 auto [n1, n2]     = world.normal(x, y, dx, dy);
+    //                 auto [n1_r, n2_r] = world.normal(x + dx, y, dx, dy);
+    //                 double theta      = abs(eta_r) / (abs(eta) + abs(eta_r));
+    //                 double b_gamma =
+    //                     (b(i, j) * n1 * abs(eta_r) + b(i + 1, j) * n1_r * abs(eta)) / (abs(eta) + abs(eta_r));
+    //                 double phi_I = eps_c * theta * phi(i, j) + eps_r * (1 - theta) * phi(i + 1, j);
+    //                 phi_I += ((eta <= 0.0) ? -1 : 1) * b_gamma * theta * (1 - theta) * dx;
+    //                 phi_I /= eps_c * theta + eps_r * (1 - theta);
+    //                 E(i, j, 0) = -(phi_I - phi(i, j)) / ((1 - theta) * dx);
+    //             }
+    //             if (eta * eta_b <= 0.0) {
+    //                 double eps_c      = eps(i, j);
+    //                 double eps_b      = eps(i, j - 1);
+    //                 auto [n1, n2]     = world.normal(x, y, dx, dy);
+    //                 auto [n1_b, n2_b] = world.normal(x, y - dy, dx, dy);
+    //                 double theta      = abs(eta_b) / (abs(eta) + abs(eta_b));
+    //                 double b_gamma =
+    //                     (b(i, j) * n2 * abs(eta_b) + b(i, j - 1) * n2_b * abs(eta)) / (abs(eta) + abs(eta_b));
+    //                 double phi_I = eps_c * theta * phi(i, j) + eps_b * (1 - theta) * phi(i, j - 1);
+    //                 phi_I += ((eta <= 0.0) ? 1 : -1) * b_gamma * theta * (1 - theta) * dy;
+    //                 phi_I /= eps_c * theta + eps_b * (1 - theta);
+    //                 E(i, j, 1) = -(phi(i, j) - phi_I) / ((1 - theta) * dy);
+    //             }
+    //             if (eta * eta_t <= 0.0) {
+    //                 double eps_c      = eps(i, j);
+    //                 double eps_t      = eps(i, j + 1);
+    //                 auto [n1, n2]     = world.normal(x, y, dx, dy);
+    //                 auto [n1_t, n2_t] = world.normal(x, y + dy, dx, dy);
+    //                 double theta      = abs(eta_t) / (abs(eta) + abs(eta_t));
+    //                 double b_gamma =
+    //                     (b(i, j) * n2 * abs(eta_t) + b(i, j + 1) * n2_t * abs(eta)) / (abs(eta) + abs(eta_t));
+    //                 double phi_I = eps_c * theta * phi(i, j) + eps_t * (1 - theta) * phi(i, j + 1);
+    //                 phi_I += ((eta <= 0.0) ? -1 : 1) * b_gamma * theta * (1 - theta) * dy;
+    //                 phi_I /= eps_c * theta + eps_t * (1 - theta);
+    //                 E(i, j, 1) = -(phi_I - phi(i, j)) / ((1 - theta) * dy);
+    //             }
+    //         });
+    // }
 
-        Kokkos::deep_copy(E, 0.0);
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                // for non-boundary cells, compute electric field using central difference
-                E(i, j, 0) = -(phi(i + 1, j) - phi(i - 1, j)) / (2.0 * dx);
-                E(i, j, 1) = -(phi(i, j + 1) - phi(i, j - 1)) / (2.0 * dy);
-
-                // for boundary cells, compute electric field using jump conditions
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, 0); // species does not matter here
-                double eta          = world.surface(x, y);
-                double eta_l        = world.surface(x - dx, y);
-                double eta_r        = world.surface(x + dx, y);
-                double eta_b        = world.surface(x, y - dy);
-                double eta_t        = world.surface(x, y + dy);
-                if (eta * eta_l <= 0.0) {
-                    double eps_c      = eps(i, j);
-                    double eps_l      = eps(i - 1, j);
-                    double theta      = abs(eta_l) / (abs(eta) + abs(eta_l));
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_l, n2_l] = world.normal(x - dx, y, dx, dy);
-                    double b_gamma =
-                        (b(i, j) * n1 * abs(eta_l) + b(i - 1, j) * n1_l * abs(eta)) / (abs(eta) + abs(eta_l));
-                    double phi_I = eps_c * theta * phi(i, j) + eps_l * (1 - theta) * phi(i - 1, j);
-                    phi_I += ((eta <= 0.0) ? 1 : -1) * b_gamma * theta * (1 - theta) * dx;
-                    phi_I /= eps_c * theta + eps_l * (1 - theta);
-                    E(i, j, 0) = -(phi(i, j) - phi_I) / ((1 - theta) * dx);
-                }
-                if (eta * eta_r <= 0.0) {
-                    double eps_c      = eps(i, j);
-                    double eps_r      = eps(i + 1, j);
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_r, n2_r] = world.normal(x + dx, y, dx, dy);
-                    double theta      = abs(eta_r) / (abs(eta) + abs(eta_r));
-                    double b_gamma =
-                        (b(i, j) * n1 * abs(eta_r) + b(i + 1, j) * n1_r * abs(eta)) / (abs(eta) + abs(eta_r));
-                    double phi_I = eps_c * theta * phi(i, j) + eps_r * (1 - theta) * phi(i + 1, j);
-                    phi_I += ((eta <= 0.0) ? -1 : 1) * b_gamma * theta * (1 - theta) * dx;
-                    phi_I /= eps_c * theta + eps_r * (1 - theta);
-                    E(i, j, 0) = -(phi_I - phi(i, j)) / ((1 - theta) * dx);
-                }
-                if (eta * eta_b <= 0.0) {
-                    double eps_c      = eps(i, j);
-                    double eps_b      = eps(i, j - 1);
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_b, n2_b] = world.normal(x, y - dy, dx, dy);
-                    double theta      = abs(eta_b) / (abs(eta) + abs(eta_b));
-                    double b_gamma =
-                        (b(i, j) * n2 * abs(eta_b) + b(i, j - 1) * n2_b * abs(eta)) / (abs(eta) + abs(eta_b));
-                    double phi_I = eps_c * theta * phi(i, j) + eps_b * (1 - theta) * phi(i, j - 1);
-                    phi_I += ((eta <= 0.0) ? 1 : -1) * b_gamma * theta * (1 - theta) * dy;
-                    phi_I /= eps_c * theta + eps_b * (1 - theta);
-                    E(i, j, 1) = -(phi(i, j) - phi_I) / ((1 - theta) * dy);
-                }
-                if (eta * eta_t <= 0.0) {
-                    double eps_c      = eps(i, j);
-                    double eps_t      = eps(i, j + 1);
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_t, n2_t] = world.normal(x, y + dy, dx, dy);
-                    double theta      = abs(eta_t) / (abs(eta) + abs(eta_t));
-                    double b_gamma =
-                        (b(i, j) * n2 * abs(eta_t) + b(i, j + 1) * n2_t * abs(eta)) / (abs(eta) + abs(eta_t));
-                    double phi_I = eps_c * theta * phi(i, j) + eps_t * (1 - theta) * phi(i, j + 1);
-                    phi_I += ((eta <= 0.0) ? -1 : 1) * b_gamma * theta * (1 - theta) * dy;
-                    phi_I /= eps_c * theta + eps_t * (1 - theta);
-                    E(i, j, 1) = -(phi_I - phi(i, j)) / ((1 - theta) * dy);
-                }
-            });
-    }
     void pfc_update(double dt, int axis, int sp) const {
         auto& grid              = world.grid;
         auto& f                 = world.f;
@@ -432,9 +434,9 @@ class Vlasolver {
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
         compute_charge_density();
-        world.poisson_jump_conditions();
+        // world.poisson_jump_conditions();
         poisson_solver.solve();
-        compute_electric_field();
+        poisson_solver.compute_electric_field();
         Kokkos::printf("(VlasovSolver) PFC update along velocity by dt\n");
         for (int sp = 0; sp < 2; ++sp) {
             pfc_update(dt, 2, sp);
@@ -457,9 +459,9 @@ class Vlasolver {
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
         compute_charge_density();
-        world.poisson_jump_conditions();
+        // world.poisson_jump_conditions();
         poisson_solver.solve();
-        compute_electric_field();
+        poisson_solver.compute_electric_field();
         writer.write(0);
 
         for (world.current_step = 1; world.current_step <= world.total_steps; ++world.current_step) {

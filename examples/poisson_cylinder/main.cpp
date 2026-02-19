@@ -36,12 +36,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, phi_w);
                 } else
                     poisson_bc_map(i, j) = BCPair(BCType::None, 0.0);
-
-                // if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
-                //     poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, 0.0);
-                // } else {
-                //     poisson_bc_map(i, j) = BCPair(BCType::None, 0.0);
-                // }
             }
         }
     }
@@ -76,19 +70,7 @@ int main(int argc, char** argv) {
     int gmres_m     = 100;
     int max_restart = 30;
     PoissonSolver poisson_solver(world, tol, gmres_m, max_restart);
-    Writer writer(world, "data/poisson", "poisson_" + std::to_string(n), {"phi", "Ex", "Ey"});
-
-    // using Kokkos::sin;
-    // using Kokkos::numbers::pi;
-    // auto& rho    = world.rho;
-    // const int nx = grid.ncells[0];
-    // const int ny = grid.ncells[1];
-
-    // Kokkos::parallel_for(
-    //     Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
-    //         // auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
-    //         rho(i, j) = 0.0;
-    //     });
+    Writer writer(world, "data/poisson_cylinder", "output_" + std::to_string(n), {"phi", "Ex", "Ey"});
 
     Kokkos::Timer timer;
     double start_time = timer.seconds();

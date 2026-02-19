@@ -10,9 +10,10 @@ file_path = os.path.dirname(os.path.realpath(__file__))
 Lx, Ly = 1.0, 0.5
 G = 3
 
+_, ax_profile = plt.subplots(figsize=(6, 3))
 n = 2**7
 with h5py.File(
-    f"{file_path}/poisson_{n}_0.h5",
+    f"{file_path}/output_{n}_0.h5",
     "r",
 ) as f:
     nx = 2 * n
@@ -32,6 +33,7 @@ with h5py.File(
     interp_phi = RegularGridInterpolator((x_f, y_f), phi_exact)
     interp_Ex = RegularGridInterpolator((x_f, y_f), Ex_exact)
     interp_Ey = RegularGridInterpolator((x_f, y_f), Ey_exact)
+    ax_profile.plot(x_f[G:-G], Ex_exact[G:-G, G], "o-", label=f"n={n}")
 
     fig, ax = plt.subplots(figsize=(6, 3))
     c = ax.contourf(X_f, Y_f, Ex_exact, cmap="jet", levels=50)
@@ -155,7 +157,7 @@ for i, n in enumerate(n_range):
     x = np.arange(dx / 2 - G * dx, Lx + G * dx, dx)
     y = np.arange(dy / 2 - G * dy, Ly + G * dy, dy)
     with h5py.File(
-        f"{file_path}/poisson_{n}_0.h5",
+        f"{file_path}/output_{n}_0.h5",
         "r",
     ) as f:
         phi = f["VTKHDF/CellData/phi"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -164,9 +166,9 @@ for i, n in enumerate(n_range):
 
     X, Y = np.meshgrid(x, y, indexing="ij")
     mask = (X[G:-G, G:-G] - 0.375) ** 2 + Y[G:-G, G:-G] ** 2 < 0.125**2
-    # u_exact = interp_phi((X[G:-G, G:-G], Y[G:-G, G:-G]))
-    # dudx_exact = interp_Ex((X[G:-G, G:-G], Y[G:-G, G:-G]))
-    # dudy_exact = interp_Ey((X[G:-G, G:-G], Y[G:-G, G:-G]))
+    u_exact = interp_phi((X[G:-G, G:-G], Y[G:-G, G:-G]))
+    dudx_exact = interp_Ex((X[G:-G, G:-G], Y[G:-G, G:-G]))
+    dudy_exact = interp_Ey((X[G:-G, G:-G], Y[G:-G, G:-G]))
     # u_exact = restrict(
     #     phi_exact[G:-G, G:-G], phi[G:-G, G:-G], X_f[G:-G, G:-G], Y_f[G:-G, G:-G]
     # )
@@ -176,73 +178,90 @@ for i, n in enumerate(n_range):
     # dudy_exact = restrict(
     #     Ey_exact[G:-G, G:-G], Ey[G:-G, G:-G], X_f[G:-G, G:-G], Y_f[G:-G, G:-G]
     # )
-    u_exact = evaluate(
-        phi_exact[G:-G, G:-G],
-        x_f[G:-G],
-        y_f[G:-G],
-        X[G:-G, G:-G],
-        Y[G:-G, G:-G],
-        mask_f,
-    )
-    dudx_exact = evaluate(
-        Ex_exact[G:-G, G:-G],
-        x_f[G:-G],
-        y_f[G:-G],
-        X[G:-G, G:-G],
-        Y[G:-G, G:-G],
-        mask_f,
-    )
-    dudy_exact = evaluate(
-        Ey_exact[G:-G, G:-G],
-        x_f[G:-G],
-        y_f[G:-G],
-        X[G:-G, G:-G],
-        Y[G:-G, G:-G],
-        mask_f,
-    )
+    # u_exact = evaluate(
+    #     phi_exact[G:-G, G:-G],
+    #     x_f[G:-G],
+    #     y_f[G:-G],
+    #     X[G:-G, G:-G],
+    #     Y[G:-G, G:-G],
+    #     mask_f,
+    # )
+    # dudx_exact = evaluate(
+    #     Ex_exact[G:-G, G:-G],
+    #     x_f[G:-G],
+    #     y_f[G:-G],
+    #     X[G:-G, G:-G],
+    #     Y[G:-G, G:-G],
+    #     mask_f,
+    # )
+    # dudy_exact = evaluate(
+    #     Ey_exact[G:-G, G:-G],
+    #     x_f[G:-G],
+    #     y_f[G:-G],
+    #     X[G:-G, G:-G],
+    #     Y[G:-G, G:-G],
+    #     mask_f,
+    # )
 
-    plt.figure()
-    plt.subplot(231)
-    plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], Ex[G:-G, G:-G])
-    plt.title("Ex")
-    plt.colorbar()
-    plt.subplot(232)
-    plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], dudx_exact)
-    plt.title("Ex exact")
-    plt.colorbar()
-    plt.subplot(233)
-    plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], (Ex[G:-G, G:-G] - dudx_exact))
-    plt.title("Ex err")
-    plt.colorbar()
-    plt.subplot(234)
-    plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], Ey[G:-G, G:-G])
-    plt.title("Ey")
-    plt.colorbar()
-    plt.subplot(235)
-    plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], dudy_exact)
-    plt.title("Ey exact")
-    plt.colorbar()
-    plt.subplot(236)
-    plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], (Ey[G:-G, G:-G] - dudy_exact))
-    plt.title("Ey err")
-    plt.colorbar()
-    plt.suptitle(f"{nx}x{ny}")
+    # plt.figure()
+    # plt.subplot(231)
+    # plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], Ex[G:-G, G:-G])
+    # plt.title("Ex")
+    # plt.colorbar()
+    # plt.subplot(232)
+    # plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], dudx_exact)
+    # plt.title("Ex exact")
+    # plt.colorbar()
+    # plt.subplot(233)
+    # plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], (Ex[G:-G, G:-G] - dudx_exact))
+    # plt.title("Ex err")
+    # plt.colorbar()
+    # plt.subplot(234)
+    # plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], Ey[G:-G, G:-G])
+    # plt.title("Ey")
+    # plt.colorbar()
+    # plt.subplot(235)
+    # plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], dudy_exact)
+    # plt.title("Ey exact")
+    # plt.colorbar()
+    # plt.subplot(236)
+    # plt.pcolormesh(X[G:-G, G:-G], Y[G:-G, G:-G], (Ey[G:-G, G:-G] - dudy_exact))
+    # plt.title("Ey err")
+    # plt.colorbar()
+    # plt.suptitle(f"{nx}x{ny}")
     u_err = (phi[G:-G, G:-G] - u_exact)[~mask]
     if np.isnan(u_err).any():
         breakpoint()
+    # errors_u[i] = np.linalg.norm(
+    #     (phi[G:-G, G:-G] - u_exact).flat,
+    #     # (phi[G:-G, G:-G] - u_exact)[~mask].flat,
+    #     np.inf,
+    # )
+    # errors_du[i] = np.linalg.norm(
+    #     # (Ex[G:-G, G:-G] - dudx_exact).flat,
+    #     # (Ey[G:-G, G:-G] - dudy_exact).flat,
+    #     np.append(
+    #         (Ex[G:-G, G:-G] - dudx_exact).flat,
+    #         (Ey[G:-G, G:-G] - dudy_exact).flat,
+    #     ),
+    #     # np.append(
+    #     #     (Ex[G:-G, G:-G] - dudx_exact)[~mask].flat,
+    #     #     (Ey[G:-G, G:-G] - dudy_exact)[~mask].flat,
+    #     # ),
+    #     np.inf,
+    # )
     errors_u[i] = np.linalg.norm(
-        (phi[G:-G, G:-G] - u_exact)[~mask].flat,
+        phi[G:-G, G] - u_exact[:, 0],
         np.inf,
     )
     errors_du[i] = np.linalg.norm(
-        # (Ex[G:-G, G:-G] - dudx_exact).flat,
-        # (Ey[G:-G, G:-G] - dudy_exact).flat,
-        np.append(
-            (Ex[G:-G, G:-G] - dudx_exact)[~mask].flat,
-            (Ey[G:-G, G:-G] - dudy_exact)[~mask].flat,
-        ),
+        Ex[G:-G, G] - dudx_exact[:, 0],
         np.inf,
     )
+    ax_profile.plot(x[G:-G], Ex[G:-G, G], "o-", label=f"n={n}")
+ax_profile.set_xlabel("$x/L_x$")
+ax_profile.set_ylabel("$E_x$ profiles")
+ax_profile.legend()
 
 # convergence table
 print(f"Convergence (norm = {np.inf}):")

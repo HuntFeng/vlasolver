@@ -33,8 +33,8 @@ target_compile_features(vlasolver INTERFACE cxx_std_20)
 # target_link_libraries(poisson PRIVATE vlasolver)
 add_executable(poisson_cylinder examples/poisson_cylinder/main.cpp)
 target_link_libraries(poisson_cylinder PRIVATE vlasolver)
-add_executable(cylinder_2nd_order examples/cylinder_2nd_order/main.cpp)
-target_link_libraries(cylinder_2nd_order PRIVATE vlasolver)
+# add_executable(cylinder_2nd_order examples/cylinder_2nd_order/main.cpp)
+# target_link_libraries(cylinder_2nd_order PRIVATE vlasolver)
 
 # Print helpful information when configuration is done
 message(STATUS "")

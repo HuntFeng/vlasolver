@@ -13,6 +13,7 @@
 #include <KokkosSparse_LUPrec.hpp>
 #include <KokkosSparse_gmres.hpp>
 #include <KokkosSparse_par_ilut.hpp>
+#include <KokkosSparse_spiluk.hpp>
 #include <Kokkos_Core.hpp>
 #include <bit>
 #include <vector>
@@ -86,7 +87,8 @@ class PoissonSolver {
 
         construct_fields();
         construct_matrix();
-        construct_preconditioner();
+        // construct_preconditioner();
+        construct_preconditioner_spiluk();
 
         // prepare gmres
         kh.create_gmres_handle(gmres_m, tol, max_restart);
@@ -2055,8 +2057,8 @@ class PoissonSolver {
         auto par_ilut_handle = kh.get_par_ilut_handle();
         par_ilut_handle->set_max_iter(100);
         par_ilut_handle->set_residual_norm_delta_stop(1e-3);
-        par_ilut_handle->set_fill_in_limit(2.0);
-        par_ilut_handle->set_verbose(verbose);
+        par_ilut_handle->set_fill_in_limit(5.0);
+        par_ilut_handle->set_verbose(true);
 
         // Pull out views from CRS
         auto row_map = A.graph.row_map;
@@ -2093,6 +2095,36 @@ class PoissonSolver {
         const auto iters    = par_ilut_handle->get_num_iters();
         const auto residual = par_ilut_handle->get_end_rel_res();
         Kokkos::printf("par ILU status: iters=%d, residual=%e\n", iters, residual);
+    }
+
+    void construct_preconditioner_spiluk() {
+        kh.create_spiluk_handle(KokkosSparse::Experimental::SPILUKAlgorithm::SEQLVLSCHD_TP1, A.numRows() + 1,
+                                A.numRows() + 1, A.numRows() + 1);
+
+        auto spiluk_handle = kh.get_spiluk_handle();
+
+        // estimates of nnz
+        const int nnzL_est = spiluk_handle->get_nnzL();
+        const int nnzU_est = spiluk_handle->get_nnzU();
+
+        Kokkos::View<int*> L_row_map("L_row_map", A.numRows() + 1);
+        Kokkos::View<int*> U_row_map("U_row_map", A.numRows() + 1);
+        Kokkos::View<int*> L_entries("L_entries", nnzL_est);
+        Kokkos::View<double*> L_values("L_values", nnzL_est);
+        Kokkos::View<int*> U_entries("U_entries", nnzU_est);
+        Kokkos::View<double*> U_values("U_values", nnzU_est);
+        const int fill_level = 5;
+
+        KokkosSparse::spiluk_numeric(&kh, fill_level, A.graph.row_map, A.graph.entries, A.values, L_row_map, L_entries,
+                                     L_values, U_row_map, U_entries, U_values);
+
+        // the get_nnzL/U are only estimates, use the actual numbers
+        // otherwise it throws runtime annz != this->nnz()
+        const int nnzL = L_values.extent(0);
+        const int nnzU = U_values.extent(0);
+        CRS L          = CRS("L", A.numRows(), A.numCols(), nnzL, L_values, L_row_map, L_entries);
+        CRS U          = CRS("U", A.numRows(), A.numCols(), nnzU, U_values, U_row_map, U_entries);
+        prec           = std::make_unique<KokkosSparse::Experimental::LUPrec<CRS, KernelHandle>>(L, U);
     }
 
     /**

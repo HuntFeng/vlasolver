@@ -2098,32 +2098,30 @@ class PoissonSolver {
         Kokkos::printf("par ILU status: iters=%d, residual=%e\n", iters, residual);
     }
 
+    void construct_rhs() {
+        auto rho_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.rho);
+        for (int i = 0; i < nx; ++i) {
+            for (int j = 0; j < ny; ++j) {
+                PoissonBCPair bc_map = world.poisson_bc_map(i, j);
+                if (bc_map.type == PoissonBCType::None) {
+                    rhs_h(index(i, j)) = -rho_h(i, j);
+                } else {
+                    rhs_h(index(i, j)) = bc_map.val;
+                }
+            }
+        }
+        Kokkos::deep_copy(rhs, rhs_h);
+    }
+
     /**
      * Solve the potential field by sparse GMRES
      */
     void solve() {
-        // Note: capture these to access them in KOKKOS_LAMBDA
-        // Note: don't use KOKKOS_CLASS_LAMBDA (although it captures nx, ny conveniently)
-        // otherwise the class will be marked as __host__ __device__, it breaks the host only std::vector
-        Kokkos::deep_copy(rhs, rhs_h);
-        int ngc    = world.grid.ngc;
-        int _ny    = ny;
-        auto& rho  = world.rho;
-        auto& _rhs = rhs;
-        auto& _u   = u;
-        auto& phi  = world.phi;
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
-            KOKKOS_LAMBDA(const int i, const int j) { _rhs(i * _ny + j) -= rho(i, j); });
+        construct_rhs();
 
         KokkosSparse::Experimental::gmres(&kh, A, rhs, u, prec.get());
-
-        Kokkos::parallel_for(
-            "unflatten_phi", nx * ny, KOKKOS_LAMBDA(const int idx) {
-                int i     = idx / _ny;
-                int j     = idx % _ny;
-                phi(i, j) = _u(idx);
-            });
+        Kokkos::View<double**, Kokkos::LayoutRight, Kokkos::MemoryTraits<Kokkos::Unmanaged>> u_2d(u.data(), nx, ny);
+        Kokkos::deep_copy(world.phi, u_2d);
 
         auto gmres_handle      = kh.get_gmres_handle();
         const auto max_restart = gmres_handle->get_max_restart();

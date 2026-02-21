@@ -5,23 +5,29 @@
 #include <Kokkos_Core.hpp>
 #include <decl/Kokkos_Declare_OPENMP.hpp>
 
-enum BCType : size_t {
-    Dirichlet = 1 << 0, // 0001
-    Neumann   = 1 << 1, // 0010
-    None      = 1 << 2, // 0100
+enum PoissonBCType {
+    Dirichlet,
+    Neumann,
+    Periodic,
+    None,
 };
 
-struct BCPair {
-    BCType type;
+struct PoissonBCPair {
+    PoissonBCType type;
     double val;
 
     KOKKOS_INLINE_FUNCTION
-    BCPair()
-        : type(BCType::None),
+    PoissonBCPair()
+        : type(PoissonBCType::None),
           val(0.0) {}
 
     KOKKOS_INLINE_FUNCTION
-    BCPair(BCType t, double v)
+    PoissonBCPair(PoissonBCType t)
+        : type(t),
+          val(0.0) {}
+
+    KOKKOS_INLINE_FUNCTION
+    PoissonBCPair(PoissonBCType t, double v)
         : type(t),
           val(v) {}
 };
@@ -40,7 +46,7 @@ struct World {
     Kokkos::View<double**> rho;        // ion charge density
     Kokkos::View<double**> phi;        // potential field (assuming Boltzmann distribution for electron)
     Kokkos::View<double***> E;         // Ex(x,y), E_y(x,y)
-    Kokkos::View<BCPair**, Kokkos::HostSpace> poisson_bc_map;
+    Kokkos::View<PoissonBCPair**, Kokkos::HostSpace> poisson_bc_map;
 
     // simulation time control
     double dt           = 0.0; // time step size
@@ -61,7 +67,7 @@ struct World {
         rho                     = Kokkos::View<double**>("rho", nx, ny);
         phi                     = Kokkos::View<double**>("phi", nx, ny);
         E                       = Kokkos::View<double***>("E", nx, ny, 2);
-        poisson_bc_map          = Kokkos::View<BCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
+        poisson_bc_map          = Kokkos::View<PoissonBCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
         Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_1st, 0.0);
         Kokkos::deep_copy(ep, 0.0);

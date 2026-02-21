@@ -2,24 +2,29 @@
 #include "grid.hpp"
 #include <Kokkos_Core.hpp>
 
-enum BCType : size_t {
-    Dirichlet = 1 << 0, // 0001
-    Neumann   = 1 << 1, // 0010
-    Periodic  = 1 << 2, // 0100
-    None      = 1 << 3, // 1000
+enum PoissonBCType {
+    Dirichlet,
+    Neumann,
+    Periodic,
+    None,
 };
 
-struct BCPair {
-    BCType type;
+struct PoissonBCPair {
+    PoissonBCType type;
     double val;
 
     KOKKOS_INLINE_FUNCTION
-    BCPair()
-        : type(BCType::None),
+    PoissonBCPair()
+        : type(PoissonBCType::None),
           val(0.0) {}
 
     KOKKOS_INLINE_FUNCTION
-    BCPair(BCType t, double v)
+    PoissonBCPair(PoissonBCType t)
+        : type(t),
+          val(0.0) {}
+
+    KOKKOS_INLINE_FUNCTION
+    PoissonBCPair(PoissonBCType t, double v)
         : type(t),
           val(v) {}
 };
@@ -44,7 +49,7 @@ struct World {
     Kokkos::View<double**> rho;    // ion charge density
     Kokkos::View<double**> phi;    // potential field (assuming Boltzmann distribution for electron)
     Kokkos::View<double***> E;     // Ex(x,y), E_y(x,y)
-    Kokkos::View<BCPair**, Kokkos::HostSpace> poisson_bc_map;
+    Kokkos::View<PoissonBCPair**, Kokkos::HostSpace> poisson_bc_map;
     // Kokkos::View<double**> eps;                     // permittivity field
     // Kokkos::View<double**> a;                       // jump condition for poisson
     // Kokkos::View<double**> b;                       // jump condition for poisson
@@ -77,7 +82,7 @@ struct World {
         rho            = Kokkos::View<double**>("rho", nx, ny);
         phi            = Kokkos::View<double**>("phi", nx, ny);
         E              = Kokkos::View<double***>("E", nx, ny, 2);
-        poisson_bc_map = Kokkos::View<BCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
+        poisson_bc_map = Kokkos::View<PoissonBCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
         // eps        = Kokkos::View<double**>("eps", nx, ny);
         // a          = Kokkos::View<double**>("a", nx, ny); // jump condition for poisson
         // b          = Kokkos::View<double**>("b", nx, ny); // jump condition for poisson

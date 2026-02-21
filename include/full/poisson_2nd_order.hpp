@@ -1974,15 +1974,67 @@ class PoissonSolver {
         double dy2 = dy * dy;
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
-                int row_idx   = index(i, j);
-                BCPair bc_map = world.poisson_bc_map(i, j);
+                int row_idx          = index(i, j);
+                PoissonBCPair bc_map = world.poisson_bc_map(i, j);
 
-                // TODO: implement periodic bc
-                // TODO need to construct rhs each time step since the boundary is time dependent
-                if (bc_map.type == BCType::None) {
-
-                    // Detect interface cuts
-                    auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+                if (bc_map.type == PoissonBCType::Dirichlet) {
+                    vals_coo.push_back(1.0);
+                    rows_coo.push_back(row_idx);
+                    cols_coo.push_back(row_idx);
+                    rhs_h(row_idx) = bc_map.val;
+                } else if (bc_map.type == PoissonBCType::Neumann) {
+                    if (i < ngc) {
+                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(i + 1, j)});
+                        rhs_h(row_idx) = bc_map.val;
+                    } else if (i >= nx - ngc) {
+                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(i - 1, j)});
+                        rhs_h(row_idx) = -bc_map.val;
+                    } else if (j < ngc) {
+                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j + 1)});
+                        rhs_h(row_idx) = bc_map.val;
+                    } else if (j >= ny - ngc) {
+                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j - 1)});
+                        rhs_h(row_idx) = -bc_map.val;
+                    } else {
+                        Kokkos::printf("Neumann BC can only be applied at ghost cells");
+                        Kokkos::abort("Terminated");
+                    }
+                } else if (bc_map.type == PoissonBCType::Periodic) {
+                    if (i < ngc) {
+                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(nx - 2 * ngc + i, j)});
+                        rhs_h(row_idx) = 0.0;
+                    } else if (i >= nx - ngc) {
+                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(i - nx + ngc, j)});
+                        rhs_h(row_idx) = 0.0;
+                    } else if (j < ngc) {
+                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, ny - 2 * ngc + j)});
+                        rhs_h(row_idx) = 0.0;
+                    } else if (j >= ny - ngc) {
+                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
+                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
+                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j - nx + ngc)});
+                        rhs_h(row_idx) = 0.0;
+                    } else {
+                        Kokkos::printf("Periodic BC can only be applied at ghost cells");
+                        Kokkos::abort("Terminated");
+                    }
+                } else {
+                    // bc_map.type == BCType::None
+                    auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0}, 0); // species doesn't matter
                     double eta          = world.surface(x, y);
                     double eta_l        = world.surface(x - dx, y);
                     double eta_r        = world.surface(x + dx, y);
@@ -2009,38 +2061,6 @@ class PoissonSolver {
                     } else {
                         // Not implemented for >2 cuts
                         throw std::runtime_error("More than 2 cuts not implemented yet.");
-                    }
-                } else {
-
-                    if (i < ngc) {
-                        vals_coo.push_back(1.0);
-                        rows_coo.push_back(row_idx);
-                        cols_coo.push_back(row_idx);
-                        rhs_h(row_idx) = bc_map.val;
-                    } else if (i >= nx - ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i - 1, j)});
-                        rhs_h(row_idx) = -bc_map.val;
-                    } else if (j < ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j + 1)});
-                        rhs_h(row_idx) = bc_map.val;
-                    } else if (j >= ny - ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j - 1)});
-                        rhs_h(row_idx) = -bc_map.val;
-                    } else {
-                        if (bc_map.type != BCType::Dirichlet) {
-                            Kokkos::printf("Invalid BC type %d for poisson at cell (%d, %d)", bc_map.type, i, j);
-                            Kokkos::abort("Terminated");
-                        }
-                        vals_coo.push_back(1.0);
-                        rows_coo.push_back(row_idx);
-                        cols_coo.push_back(row_idx);
-                        rhs_h(row_idx) = bc_map.val;
                     }
                 }
             }

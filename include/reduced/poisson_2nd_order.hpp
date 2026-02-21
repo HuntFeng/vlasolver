@@ -87,8 +87,8 @@ class PoissonSolver {
 
         construct_fields();
         construct_matrix();
-        // construct_preconditioner();
-        construct_preconditioner_spiluk();
+        construct_preconditioner();
+        // construct_preconditioner_spiluk();
 
         // prepare gmres
         kh.create_gmres_handle(gmres_m, tol, max_restart);
@@ -1144,14 +1144,13 @@ class PoissonSolver {
         }
     }
 
-    InterfaceValue interface_value_case0(int i, int j, const Kokkos::View<double*, Kokkos::HostSpace>& u) {
+    InterfaceValue interface_value_case0(int i, int j, const auto& u) {
         return {
-            u(index(i - 1, j)), u(index(i + 1, j)), u(index(i, j - 1)), u(index(i, j + 1)), 1.0, 1.0, 1.0, 1.0,
+            u(i - 1, j), u(i + 1, j), u(i, j - 1), u(i, j + 1), 1.0, 1.0, 1.0, 1.0,
         };
     }
 
-    InterfaceValue
-    interface_value_case1(size_t direction, int i, int j, const Kokkos::View<double*, Kokkos::HostSpace>& u) {
+    InterfaceValue interface_value_case1(size_t direction, int i, int j, const auto& u) {
         auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
         double eta          = world.surface(x, y);
 
@@ -1216,8 +1215,8 @@ class PoissonSolver {
 
                                -eps_jump * n1_I * n2_I * theta_r * dx / dy};
 
-            double u_arr[7] = {u(index(i, j)),     u(index(i + 1, j)), u(index(i + 2, j)),    u(index(i - 1, j)),
-                               u(index(i, j - 1)), u(index(i, j + 1)), u(index(i - 1, j - 1))};
+            double u_arr[7] = {u(i, j),     u(i + 1, j), u(i + 2, j),    u(i - 1, j),
+                               u(i, j - 1), u(i, j + 1), u(i - 1, j - 1)};
 
             double dot      = 0.0;
             for (int k = 0; k < 7; k++) {
@@ -1226,8 +1225,7 @@ class PoissonSolver {
 
             double u_I = (dot + d) / M;
 
-            return {
-                u(index(i - 1, j)), u_I, u(index(i, j - 1)), u(index(i, j + 1)), theta_l, theta_r, theta_b, theta_t};
+            return {u(i - 1, j), u_I, u(i, j - 1), u(i, j + 1), theta_l, theta_r, theta_b, theta_t};
         } else if (direction == Direction::T) {
 
             theta_l = 1.0;
@@ -1279,8 +1277,8 @@ class PoissonSolver {
 
                                -eps_jump * n1_I * n2_I * theta_t * dy / dx};
 
-            double u_arr[7] = {u(index(i, j)),     u(index(i, j + 1)), u(index(i, j + 2)),    u(index(i, j - 1)),
-                               u(index(i - 1, j)), u(index(i + 1, j)), u(index(i - 1, j - 1))};
+            double u_arr[7] = {u(i, j),     u(i, j + 1), u(i, j + 2),    u(i, j - 1),
+                               u(i - 1, j), u(i + 1, j), u(i - 1, j - 1)};
 
             double dot      = 0.0;
             for (int k = 0; k < 7; k++) {
@@ -1289,8 +1287,7 @@ class PoissonSolver {
 
             double u_I = (dot + d) / M;
 
-            return {
-                u(index(i - 1, j)), u(index(i + 1, j)), u(index(i, j - 1)), u_I, theta_l, theta_r, theta_b, theta_t};
+            return {u(i - 1, j), u(i + 1, j), u(i, j - 1), u_I, theta_l, theta_r, theta_b, theta_t};
         } else if (direction == Direction::L) {
 
             theta_l = theta;
@@ -1342,8 +1339,8 @@ class PoissonSolver {
 
                                -eps_jump * n1_I * n2_I * theta_l * dx / dy};
 
-            double u_arr[7] = {u(index(i, j)),     u(index(i - 1, j)), u(index(i - 2, j)),    u(index(i + 1, j)),
-                               u(index(i, j - 1)), u(index(i, j + 1)), u(index(i + 1, j - 1))};
+            double u_arr[7] = {u(i, j),     u(i - 1, j), u(i - 2, j),    u(i + 1, j),
+                               u(i, j - 1), u(i, j + 1), u(i + 1, j - 1)};
 
             double dot      = 0.0;
             for (int k = 0; k < 7; k++) {
@@ -1352,8 +1349,7 @@ class PoissonSolver {
 
             double u_I = (dot + d) / M;
 
-            return {u_I,    u(index(i + 1, j)), u(index(i, j - 1)), u(index(i, j + 1)), theta_l, theta_r, theta_b,
-                    theta_t};
+            return {u_I, u(i + 1, j), u(i, j - 1), u(i, j + 1), theta_l, theta_r, theta_b, theta_t};
         } else if (direction == Direction::B) {
 
             theta_l = 1.0;
@@ -1405,8 +1401,8 @@ class PoissonSolver {
 
                                -eps_jump * n1_I * n2_I * theta_b * dy / dx};
 
-            double u_arr[7] = {u(index(i, j)),     u(index(i, j - 1)), u(index(i, j - 2)),    u(index(i, j + 1)),
-                               u(index(i - 1, j)), u(index(i + 1, j)), u(index(i - 1, j + 1))};
+            double u_arr[7] = {u(i, j),     u(i, j - 1), u(i, j - 2),    u(i, j + 1),
+                               u(i - 1, j), u(i + 1, j), u(i - 1, j + 1)};
 
             double dot      = 0.0;
             for (int k = 0; k < 7; k++) {
@@ -1415,8 +1411,7 @@ class PoissonSolver {
 
             double u_I = (dot + d) / M;
 
-            return {
-                u(index(i - 1, j)), u(index(i + 1, j)), u_I, u(index(i, j + 1)), theta_l, theta_r, theta_b, theta_t};
+            return {u(i - 1, j), u(i + 1, j), u_I, u(i, j + 1), theta_l, theta_r, theta_b, theta_t};
         }
 
         else {
@@ -1425,8 +1420,7 @@ class PoissonSolver {
         }
     }
 
-    InterfaceValue
-    interface_value_case2(size_t direction, int i, int j, const Kokkos::View<double*, Kokkos::HostSpace>& u) {
+    InterfaceValue interface_value_case2(size_t direction, int i, int j, const auto& u) {
         auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
         double eta          = world.surface(x, y);
 
@@ -1437,7 +1431,7 @@ class PoissonSolver {
         double u_arr[25] = {};
         for (int ox = -2; ox <= 2; ++ox) {
             for (int oy = -2; oy <= 2; ++oy) {
-                u_arr[offset(ox, oy)] = u(index(i + ox, j + oy));
+                u_arr[offset(ox, oy)] = u(i + ox, j + oy);
             }
         }
 
@@ -1547,7 +1541,7 @@ class PoissonSolver {
 
             double u_I1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
             return {
-                u(index(i - 1, j)), u_I0, u(index(i, j - 1)), u_I1, theta_l, theta_r, theta_b, theta_t,
+                u(i - 1, j), u_I0, u(i, j - 1), u_I1, theta_l, theta_r, theta_b, theta_t,
             };
         } else if (direction == (Direction::L | Direction::T)) {
             double theta_l = compute_theta(Direction::L, i, j);
@@ -1656,7 +1650,7 @@ class PoissonSolver {
             double u_I1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
 
             return {
-                u_I0, u(index(i + 1, j)), u(index(i, j - 1)), u_I1, theta_l, theta_r, theta_b, theta_t,
+                u_I0, u(i + 1, j), u(i, j - 1), u_I1, theta_l, theta_r, theta_b, theta_t,
             };
         } else if (direction == (Direction::R | Direction::B)) {
             double theta_r = compute_theta(Direction::R, i, j);
@@ -1763,7 +1757,7 @@ class PoissonSolver {
 
             double uI1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
 
-            return {u[index(i - 1, j)], uI0, uI1, u[index(i, j + 1)], theta_l, theta_r, theta_b, theta_t};
+            return {u(i - 1, j), uI0, uI1, u(i, j + 1), theta_l, theta_r, theta_b, theta_t};
         } else if (direction == (Direction::L | Direction::B)) {
 
             double theta_l = compute_theta(Direction::L, i, j);
@@ -1870,7 +1864,7 @@ class PoissonSolver {
 
             double uI1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
 
-            return {uI0, u[index(i + 1, j)], uI1, u[index(i, j + 1)], theta_l, theta_r, theta_b, theta_t};
+            return {uI0, u(i + 1, j), uI1, u(i, j + 1), theta_l, theta_r, theta_b, theta_t};
         } else {
             Kokkos::printf("interface_value_case2(): Invalid direction", direction);
             Kokkos::abort("Exit");
@@ -2081,7 +2075,7 @@ class PoissonSolver {
         par_ilut_handle->set_max_iter(100);
         par_ilut_handle->set_residual_norm_delta_stop(1e-3);
         par_ilut_handle->set_fill_in_limit(5.0);
-        par_ilut_handle->set_verbose(true);
+        par_ilut_handle->set_verbose(verbose);
 
         // Pull out views from CRS
         auto row_map = A.graph.row_map;
@@ -2192,9 +2186,9 @@ class PoissonSolver {
      */
     void compute_electric_field() {
         using Kokkos::pow;
-        auto E_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
-        auto u_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), u);
-        int ngc  = world.grid.ngc;
+        auto E_h   = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
+        auto phi_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
+        int ngc    = world.grid.ngc;
 
         for (int i = ngc; i < nx - ngc; ++i) {
             for (int j = ngc; j < ny - ngc; ++j) {
@@ -2218,16 +2212,16 @@ class PoissonSolver {
                 int ncuts = std::popcount(direction);
                 InterfaceValue ival;
                 if (ncuts == 0) {
-                    ival = interface_value_case0(i, j, u_h);
+                    ival = interface_value_case0(i, j, phi_h);
                 } else if (ncuts == 1) {
-                    ival = interface_value_case1(direction, i, j, u_h);
+                    ival = interface_value_case1(direction, i, j, phi_h);
                 } else if (ncuts == 2) {
-                    ival = interface_value_case2(direction, i, j, u_h);
+                    ival = interface_value_case2(direction, i, j, phi_h);
                 } else {
                     Kokkos::abort("compute_electric_field(): More than 2 cuts not implemented yet.");
                 }
 
-                double u_c     = u_h(index(i, j));
+                double u_c     = phi_h(i, j);
                 double u_l     = ival.u_l;
                 double u_r     = ival.u_r;
                 double u_b     = ival.u_b;

@@ -168,6 +168,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
             Kokkos::subview(f, Kokkos::make_pair(ngc, 2 * ngc), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
     };
 
+    double permittivity(double x, double y) { return surface(x, y) <= 0.0 ? 1000.0 : 1.0; }
+
     double poisson_jump_condition_a(double x, double y) { return 0.0; }
 
     double poisson_jump_condition_b(double x, double y) { return 0.0; }
@@ -188,17 +190,17 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, 0); // species doesn't matter here
 
                 if (i < ngc)
-                    poisson_bc_map(i, j) = BCPair(BCType::Periodic, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Periodic, 0.0);
                 else if (i >= nx - ngc)
-                    poisson_bc_map(i, j) = BCPair(BCType::Periodic, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Periodic, 0.0);
                 else if (j < ngc)
-                    poisson_bc_map(i, j) = BCPair(BCType::Neumann, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
                 else if (j >= ny - ngc)
-                    poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
                 else if (surface(x, y) < 0) {
-                    poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, phi_w);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_w);
                 } else
-                    poisson_bc_map(i, j) = BCPair(BCType::None, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
             }
         }
         // top boundary, dirichlet

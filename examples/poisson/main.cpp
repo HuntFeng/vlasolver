@@ -15,9 +15,9 @@ struct ImmersedWorld : World<ImmersedWorld> {
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
-                    poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
                 } else {
-                    poisson_bc_map(i, j) = BCPair(BCType::None, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
                 }
             }
         }

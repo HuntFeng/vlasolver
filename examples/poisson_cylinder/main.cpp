@@ -25,17 +25,17 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 double eta_t        = surface(x, y + dy);
 
                 if (i < ngc)
-                    poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
                 else if (i >= nx - ngc)
-                    poisson_bc_map(i, j) = BCPair(BCType::Neumann, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
                 else if (j < ngc)
-                    poisson_bc_map(i, j) = BCPair(BCType::Neumann, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
                 else if (j >= ny - ngc)
-                    poisson_bc_map(i, j) = BCPair(BCType::Neumann, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
                 else if (eta <= 0) {
-                    poisson_bc_map(i, j) = BCPair(BCType::Dirichlet, phi_w);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_w);
                 } else
-                    poisson_bc_map(i, j) = BCPair(BCType::None, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
             }
         }
     }

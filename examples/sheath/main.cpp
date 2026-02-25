@@ -1,11 +1,11 @@
 #include "full/grid.hpp"
-#include "full/poisson.hpp"
+#include "full/poisson_1st_order.hpp"
 #include "full/vlasov.hpp"
 #include "full/world.hpp"
 #include "full/writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
-// #include <fstream>
+#include <decl/Kokkos_Declare_OPENMP.hpp>
 #include <iostream>
 #include <string>
 
@@ -151,7 +151,14 @@ struct ImmersedWorld : World<ImmersedWorld> {
             Kokkos::subview(f, Kokkos::make_pair(ngc, 2 * ngc), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
     };
 
-    void poisson_jump_conditions() {}
+    KOKKOS_INLINE_FUNCTION
+    double poisson_jump_condition_a(double x, double y) { return 0.0; }
+
+    KOKKOS_INLINE_FUNCTION
+    double poisson_jump_condition_b(double x, double y) { return 0.0; }
+
+    KOKKOS_INLINE_FUNCTION
+    double permittivity(double x, double y) { return 0.0; }
 
     void potential_boundary_conditions() {
         using Kokkos::abs;
@@ -164,6 +171,13 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         double dy               = grid.spacing[0][1]; // species does not matter here
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                if (Kokkos::isnan(phi(i, j)) || Kokkos::isinf(phi(i, j))) {
+                    Kokkos::abort("NaN or Inf detected in phi in potential_boundary_conditions()");
+                }
+            });
+        Kokkos::fence();
 
         // top boundary, dirichlet
         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
@@ -172,6 +186,18 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), phi);
         double flux_e = exp(phi_host(nx_mid, ngc)) * v_th_e / sqrt(2 * pi);
         double flux_i = 1 * u0; // n0 * u0 (const)
+        if (Kokkos::isnan(flux_e) || Kokkos::isinf(flux_e)) {
+            if (Kokkos::isnan(v_th_e) || Kokkos::isinf(v_th_e)) {
+                Kokkos::abort("NaN or Inf detected in v_th_e");
+            }
+            if (Kokkos::isnan(phi_host(nx_mid, ngc)) || Kokkos::isinf(phi_host(nx_mid, ngc))) {
+                Kokkos::abort("NaN or Inf detected in phi_host");
+            }
+            Kokkos::abort("NaN or Inf detected in flux_e");
+        }
+        if (Kokkos::isnan(flux_i) || Kokkos::isinf(flux_i)) {
+            Kokkos::abort("NaN or Inf detected in flux_i");
+        }
         E_w += (flux_i - flux_e) * dt;
         // double dE_w = 0.0;
         // Kokkos::parallel_reduce(

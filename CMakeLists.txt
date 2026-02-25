@@ -23,6 +23,8 @@ target_link_libraries(vlasolver INTERFACE Kokkos::kokkos KokkosKernels::kokkoske
 target_compile_features(vlasolver INTERFACE cxx_std_20)
 
 # Build provided examples
+add_executable(advection examples/advection/main.cpp)
+target_link_libraries(advection PRIVATE vlasolver)
 add_executable(cylinder examples/cylinder/main.cpp)
 target_link_libraries(cylinder PRIVATE vlasolver)
 add_executable(sheath examples/sheath/main.cpp)

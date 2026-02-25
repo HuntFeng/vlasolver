@@ -5,7 +5,6 @@
 #include "full/writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
-#include <decl/Kokkos_Declare_OPENMP.hpp>
 #include <iostream>
 #include <string>
 
@@ -62,27 +61,35 @@ struct ImmersedWorld : World<ImmersedWorld> {
         //         phi(i, j)           = phi_w * Kokkos::exp(-y / 2.5);
         //     });
 
+        auto f_local        = this->f;
+        auto phi_local      = this->phi;
+        auto m_local        = this->m;
+        double phi_w_local  = this->phi_w;
+        double v_th_e_local = this->v_th_e;
+        double v_th_i_local = this->v_th_i;
+        double u0_local     = this->u0;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+            KOKKOS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 0);
-                    double v_ce         = sqrt(2 * (phi(i, j) - phi_w) / m[0]);
-                    f(i, j, iv, jv, 0)  = (vy <= v_ce)
-                                              ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
-                                                   (2.0 * pi * pow(v_th_e, 2))
-                                              : 0.0;
+                    double v_ce         = sqrt(2 * (phi_local(i, j) - phi_w_local) / m_local[0]);
+                    f_local(i, j, iv, jv, 0) =
+                        (vy <= v_ce)
+                            ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e_local, 2)) + phi_local(i, j)) /
+                                  (2.0 * pi * pow(v_th_e_local, 2))
+                            : 0.0;
                 };
                 // ion
                 {
                     auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 1);
-                    double v_ci         = -sqrt(2 * abs(phi(i, j)) / m[1]); // ion cutoff velocity
-                    f(i, j, iv, jv, 1)  = (vy <= v_ci)
-                                              ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
-                                                    (2.0 * pow(v_th_i, 2))) /
-                                                   (2.0 * pi * pow(v_th_i, 2))
-                                              : 0.0;
+                    double v_ci         = -sqrt(2 * abs(phi_local(i, j)) / m_local[1]); // ion cutoff velocity
+                    f_local(i, j, iv, jv, 1) =
+                        (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0_local, 2)) /
+                                           (2.0 * pow(v_th_i_local, 2))) /
+                                           (2.0 * pi * pow(v_th_i_local, 2))
+                                     : 0.0;
                 };
             });
 
@@ -107,22 +114,33 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
+        auto f_local            = this->f;
+        auto phi_local          = this->phi;
+        auto n_local            = this->n;
+        auto m_local            = this->m;
+        double phi_w_local      = this->phi_w;
+        double v_th_e_local     = this->v_th_e;
+        double v_th_i_local     = this->v_th_i;
+        double u0_local         = this->u0;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+            KOKKOS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 0);
-                    double v_ce         = sqrt(2 * (0.0 - phi_w) / m[0]); // electron cutoff velocity
+                    double v_ce         = sqrt(2 * (0.0 - phi_w_local) / m_local[0]); // electron cutoff velocity
                     if (j < ngc && vy > 0.0) {
-                        f(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
+                        f_local(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
                         // dynamic electron density adjustment
-                        double ne = (n(i, ny - ngc - 1, 0) > 0.0) ? n(i, ny - ngc - 1, 1) / n(i, ny - ngc - 1, 0) : 1.0;
-                        f(i, j, iv, jv, 0) =
-                            (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
-                                               (2.0 * pi * pow(v_th_e, 2)) * ne
-                                         : 0.0;
+                        double ne = (n_local(i, ny - ngc - 1, 0) > 0.0)
+                                        ? n_local(i, ny - ngc - 1, 1) / n_local(i, ny - ngc - 1, 0)
+                                        : 1.0;
+                        f_local(i, j, iv, jv, 0) =
+                            (vy <= v_ce)
+                                ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e_local, 2)) + phi_local(i, j)) /
+                                      (2.0 * pi * pow(v_th_e_local, 2)) * ne
+                                : 0.0;
                     }
                 };
                 // ion
@@ -130,13 +148,13 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 1);
                     double v_ci         = 0.0; // ion cutoff velocity, since phi(y=Lx) = 0
                     if (j < ngc && vy > 0.0) {
-                        f(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
+                        f_local(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
-                        f(i, j, iv, jv, 1) = (vy <= v_ci)
-                                                 ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
-                                                       (2.0 * pow(v_th_i, 2))) /
-                                                       (2.0 * pi * pow(v_th_i, 2))
-                                                 : 0.0;
+                        f_local(i, j, iv, jv, 1) =
+                            (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0_local, 2)) /
+                                               (2.0 * pow(v_th_i_local, 2))) /
+                                               (2.0 * pi * pow(v_th_i_local, 2))
+                                         : 0.0;
                     }
                 };
             });
@@ -158,7 +176,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
     double poisson_jump_condition_b(double x, double y) { return 0.0; }
 
     KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) { return 0.0; }
+    double permittivity(double x, double y) { return 1.0; }
 
     void potential_boundary_conditions() {
         using Kokkos::abs;
@@ -171,13 +189,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         double dy               = grid.spacing[0][1]; // species does not matter here
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                if (Kokkos::isnan(phi(i, j)) || Kokkos::isinf(phi(i, j))) {
-                    Kokkos::abort("NaN or Inf detected in phi in potential_boundary_conditions()");
-                }
-            });
-        Kokkos::fence();
 
         // top boundary, dirichlet
         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
@@ -186,18 +197,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), phi);
         double flux_e = exp(phi_host(nx_mid, ngc)) * v_th_e / sqrt(2 * pi);
         double flux_i = 1 * u0; // n0 * u0 (const)
-        if (Kokkos::isnan(flux_e) || Kokkos::isinf(flux_e)) {
-            if (Kokkos::isnan(v_th_e) || Kokkos::isinf(v_th_e)) {
-                Kokkos::abort("NaN or Inf detected in v_th_e");
-            }
-            if (Kokkos::isnan(phi_host(nx_mid, ngc)) || Kokkos::isinf(phi_host(nx_mid, ngc))) {
-                Kokkos::abort("NaN or Inf detected in phi_host");
-            }
-            Kokkos::abort("NaN or Inf detected in flux_e");
-        }
-        if (Kokkos::isnan(flux_i) || Kokkos::isinf(flux_i)) {
-            Kokkos::abort("NaN or Inf detected in flux_i");
-        }
         E_w += (flux_i - flux_e) * dt;
         // double dE_w = 0.0;
         // Kokkos::parallel_reduce(
@@ -229,11 +228,13 @@ struct ImmersedWorld : World<ImmersedWorld> {
         //     },
         //     dE_w);
         // E_w += dE_w;
+        auto phi_local   = this->phi;
+        double E_w_local = this->E_w;
         Kokkos::parallel_for(
-            Kokkos::RangePolicy(0, nx), KOKKOS_CLASS_LAMBDA(const int i) {
+            Kokkos::RangePolicy(0, nx), KOKKOS_LAMBDA(const int i) {
                 // Ey = (flux_i - flux_e) = -dphi/dy
                 for (int j = 0; j < ngc; ++j) {
-                    phi(i, j) = phi(i, ngc + 1) + E_w * 2 * dy;
+                    phi_local(i, j) = phi_local(i, ngc + 1) + E_w_local * 2 * dy;
                 }
             });
 
@@ -323,7 +324,7 @@ int main(int argc, char* argv[]) {
     world.v_th_i      = v_th_i;
     world.u0          = u0;
 
-    PoissonSolver poisson_solver(world, 1e-6);
+    PoissonSolver1stOrder poisson_solver(world, 1e-6);
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi", "fi", "fe"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

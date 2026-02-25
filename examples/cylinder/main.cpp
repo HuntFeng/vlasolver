@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
     world.total_steps = total_steps; // number of total_steps
     world.diag_steps  = diag_steps;  // number of steps between diagnostics
 
-    PoissonSolver poisson_solver(world, 1e-6, 1e6);
+    PoissonSolver1stOrder poisson_solver(world, 1e-6, 1e6);
     Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

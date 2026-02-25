@@ -1,4 +1,5 @@
 #pragma once
+#include "poisson.hpp"
 #include <Kokkos_Core.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
 #include <impl/Kokkos_Profiling.hpp>
@@ -10,7 +11,7 @@
  *
  **/
 template <typename World>
-class PoissonSolver {
+class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
   private:
     World& world;
     double tol;
@@ -24,7 +25,7 @@ class PoissonSolver {
     Kokkos::View<double**> eps;
 
   public:
-    PoissonSolver(World& world, double tol = 1e-6, int max_iter = 1e5, int levels = 4)
+    PoissonSolver1stOrder(World& world, double tol = 1e-6, int max_iter = 1e5, int levels = 4)
         : world(world),
           tol(tol),
           levels(levels),
@@ -309,15 +310,6 @@ class PoissonSolver {
             Kokkos::MDRangePolicy({0, 0}, {rho.extent(0), rho.extent(1)}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j); });
 
-        auto& phi = world.phi;
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {phi.extent(0), phi.extent(1)}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                if (Kokkos::isnan(phi(i, j)) || Kokkos::isinf(phi(i, j))) {
-                    Kokkos::abort("NaN or Inf detected in phi before world.potential_boundary_conditions()");
-                }
-            });
-        Kokkos::fence();
         // apply_boundary(world.phi);
         world.potential_boundary_conditions();
         for (int iter = 0; iter < max_iter; ++iter) {

@@ -4,12 +4,10 @@
 /**
  * World struct contains physical properties of the particles, fields, and the immersed boundary.
  */
-template <typename World, typename PoissonSolverType>
-struct PoissonSolver {
-    World& world;
-
-    PoissonSolver(World& world)
-        : world(world) {}
+template <typename PoissonSolverType>
+class PoissonSolver {
+  public:
+    PoissonSolver() {}
     /**
      * Solve for the potential field phi using the Poisson equation.
      */

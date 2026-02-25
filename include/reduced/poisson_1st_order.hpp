@@ -4,6 +4,7 @@
  * by Xu-Dong Liu 2000, Jornal of Computational Physics, doi:10.1006/jcph.2000.6444
  **/
 #pragma once
+#include "reduced/poisson.hpp"
 #include <Kokkos_Core.hpp>
 
 /**
@@ -13,7 +14,7 @@
  *
  **/
 template <typename World>
-class PoissonSolver {
+class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
   private:
     World& world;
     double tol;
@@ -27,7 +28,7 @@ class PoissonSolver {
 
   public:
     // PoissonSolver(World& world, double tol = 1e-6, int max_iter = 1e5, int levels = 4);
-    PoissonSolver(World& world, double tol = 1e-6, int max_iter = 1e5, int levels = 4)
+    PoissonSolver1stOrder(World& world, double tol = 1e-6, int max_iter = 1e5, int levels = 4)
         : world(world),
           tol(tol),
           levels(levels),

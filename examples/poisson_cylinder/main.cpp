@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
     double tol      = 1e-12;
     int gmres_m     = 100;
     int max_restart = 30;
-    PoissonSolver poisson_solver(world, tol, gmres_m, max_restart);
+    PoissonSolver2ndOrder poisson_solver(world, tol, gmres_m, max_restart);
     Writer writer(world, "data/poisson_cylinder", "output_" + std::to_string(n), {"phi", "Ex", "Ey"});
 
     Kokkos::Timer timer;

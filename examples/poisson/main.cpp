@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 
     Grid grid(origin, size, ncells_intr, ngc);
     ImmersedWorld world(grid);
-    PoissonSolver poisson_solver(world);
+    PoissonSolver2ndOrder poisson_solver(world);
     Writer writer(world, "data/poisson", "poisson_" + std::to_string(n), {"phi", "Ex", "Ey"});
 
     using Kokkos::sin;

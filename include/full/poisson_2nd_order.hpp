@@ -6,6 +6,7 @@
  *
  **/
 #pragma once
+#include "full/poisson.hpp"
 #include "full/world.hpp"
 #include <KokkosKernels_Handle.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>
@@ -30,7 +31,7 @@ struct InterfaceValue {
 };
 
 template <typename World>
-class PoissonSolver {
+class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
   private:
     // some types
     using EXSP         = Kokkos::DefaultExecutionSpace;
@@ -77,7 +78,8 @@ class PoissonSolver {
     Kokkos::View<double**, Kokkos::HostSpace> n2;
 
   public:
-    PoissonSolver(World& world, double tol = 1e-12, int gmres_m = 100, int max_restart = 30, bool verbose = false)
+    PoissonSolver2ndOrder(
+        World& world, double tol = 1e-12, int gmres_m = 100, int max_restart = 30, bool verbose = false)
         : world(world),
           tol(tol),
           gmres_m(gmres_m),

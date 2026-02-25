@@ -310,7 +310,7 @@ int main(int argc, char* argv[]) {
     world.v_th_i      = v_th_i;
     world.u0          = u0;
 
-    PoissonSolver poisson_solver(world, 1e-6, 5e3);
+    PoissonSolver1stOrder poisson_solver(world, 1e-6, 5e3);
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

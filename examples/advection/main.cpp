@@ -12,22 +12,22 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
-        // No immersed boundary for pure advection test
-        return 1.0; // always outside, so no masking
+        // return 1.0;
+        return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
     }
 
     KOKKOS_INLINE_FUNCTION Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
-        // Dummy normal, not used
-        return {1.0, 0.0};
+        // return {1.0, 0.0};
+        double norm = Kokkos::sqrt(Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2));
+        return {(x - 0.375) / norm, y / norm};
     }
 
     void initialize_distribution() {
-        // User-defined center for the vertical strip
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
-        double x0               = 0.5;
+        double x0               = 0.2;
         double sigma_x          = 0.1;
         int ivx_peak            = ngc + 1;
         int ivy_peak            = ngc;
@@ -39,7 +39,9 @@ struct ImmersedWorld : World<ImmersedWorld> {
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-                double f0           = Kokkos::exp(-Kokkos::pow((x - x0) / sigma_x, 2));
+                if (surface(x, y) <= 0.0)
+                    return;
+                double f0 = Kokkos::exp(-Kokkos::pow((x - x0) / sigma_x, 2));
                 if (iv == ivx_peak && jv == ivy_peak) {
                     f(i, j, iv, jv) = f0;
                 } else {

@@ -14,21 +14,21 @@
  * d^2phi/dx^2 = -int (fi - fe) dv
  * where mu = m_i / m_e is the mass ratio of the ion to the electron.
  */
-#include "poisson_2nd_order.hpp"
+// #include "poisson_2nd_order.hpp"
 // #include "poisson_1st_order.hpp"
 #include "writer.hpp"
 #include <Kokkos_Abort.hpp>
 #include <Kokkos_Core.hpp>
 
-template <typename World>
+template <typename World, typename PoissonSolver>
 class Vlasolver {
   private:
     World& world;
-    PoissonSolver<World>& poisson_solver;
+    PoissonSolver& poisson_solver;
     Writer<World>& writer;
 
   public:
-    Vlasolver(World& world, PoissonSolver<World>& poisson_solver, Writer<World>& writer)
+    Vlasolver(World& world, PoissonSolver& poisson_solver, Writer<World>& writer)
         : world(world),
           poisson_solver(poisson_solver),
           writer(writer) {}

@@ -14,20 +14,18 @@
  * d^2phi/dx^2 = -int (fi - fe) dv
  * where mu = m_i / m_e is the mass ratio of the ion to the electron.
  */
-// #include "poisson.hpp"
-#include "poisson_2nd_order.hpp"
 #include "writer.hpp"
 #include <Kokkos_Core.hpp>
 
-template <typename World>
+template <typename World, typename PoissonSolver>
 class Vlasolver {
   private:
     World& world;
-    PoissonSolver<World>& poisson_solver;
+    PoissonSolver& poisson_solver;
     Writer<World>& writer;
 
   public:
-    Vlasolver(World& world, PoissonSolver<World>& poisson_solver, Writer<World>& writer)
+    Vlasolver(World& world, PoissonSolver& poisson_solver, Writer<World>& writer)
         : world(world),
           poisson_solver(poisson_solver),
           writer(writer) {}
@@ -456,10 +454,27 @@ class Vlasolver {
     void solve() {
         Kokkos::printf("Step %zu:\n", 0);
         world.initialize_distribution();
+        auto& phi = world.phi;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {phi.extent(0), phi.extent(1)}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                if (Kokkos::isnan(phi(i, j)) || Kokkos::isinf(phi(i, j))) {
+                    Kokkos::abort("NaN or Inf detected in phi in solve() before bc");
+                }
+            });
+        Kokkos::fence();
         world.particle_boundary_conditions();
         extrapolate_distribution_function();
         compute_charge_density();
         // world.poisson_jump_conditions();
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {phi.extent(0), phi.extent(1)}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                if (phi(i, j) != 0.0)
+                    Kokkos::abort("Non-zero phi before solving Poisson's equation. Please check");
+            });
+        Kokkos::fence();
+
         poisson_solver.solve();
         poisson_solver.compute_electric_field();
         writer.write(0);

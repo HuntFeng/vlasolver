@@ -17,7 +17,7 @@ plt.rcParams.update(
     }
 )
 
-n = 32
+n = 128
 nx, ny = 2 * n, n
 Lx, Ly = 1, 0.5
 G = 3
@@ -25,7 +25,7 @@ is_include_circle = True
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/output_{n}_02.h5",
+    f"{file_path}/output_{n}_000.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)

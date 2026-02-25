@@ -22,30 +22,29 @@ struct ImmersedWorld : World<ImmersedWorld> {
     }
 
     void initialize_distribution() {
-        // Smooth, periodic initial condition: Gaussian modulated by a cosine in x
+        // User-defined center for the vertical strip
         auto& grid              = this->grid;
-        auto& f                 = this->f;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double x0 = 0.5 * (grid.origin[0] + grid.origin[0] + grid.size[0]);
-        double y0 = 0.5 * (grid.origin[1] + grid.origin[1] + grid.size[1]);
-        double vx0 = 0.5 * (grid.origin[2] + grid.origin[2] + grid.size[2]);
-        double vy0 = 0.5 * (grid.origin[3] + grid.origin[3] + grid.size[3]);
-        double sigma_x = 0.1 * grid.size[0];
-        double sigma_y = 0.1 * grid.size[1];
-        double sigma_vx = 0.2 * grid.size[2];
-        double sigma_vy = 0.2 * grid.size[3];
+
+        double x0               = 0.5;
+        double sigma_x          = 0.1;
+        int ivx_peak            = ngc + 1;
+        int ivy_peak            = ngc;
+        double vx_peak          = grid.origin[2] + (ivx_peak + 0.5) * grid.size[2] / nvx;
+        double vy_peak          = grid.origin[3] + (ivy_peak + 0.5) * grid.size[3] / nvy;
+        printf("Velocity of peak: (%f, %f)\n", vx_peak, vy_peak);
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
-                double f0 = Kokkos::exp(-Kokkos::pow((x - x0) / sigma_x, 2) 
-                                        - Kokkos::pow((y - y0) / sigma_y, 2)
-                                        - Kokkos::pow((vx - vx0) / sigma_vx, 2)
-                                        - Kokkos::pow((vy - vy0) / sigma_vy, 2));
-                // Add a periodic modulation in x for convergence study
-                f(i, j, iv, jv) = f0 * (1.0 + 0.5 * Kokkos::cos(2 * M_PI * (x - grid.origin[0]) / grid.size[0]));
+                double f0           = Kokkos::exp(-Kokkos::pow((x - x0) / sigma_x, 2));
+                if (iv == ivx_peak && jv == ivy_peak) {
+                    f(i, j, iv, jv) = f0;
+                } else {
+                    f(i, j, iv, jv) = 0.0;
+                }
             });
     };
 
@@ -69,21 +68,21 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ngc, nvx, nvy}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                f(i, j, iv, jv) = f(i, ny - 2 * ngc + j, iv, jv);
+                f(i, j, iv, jv)            = f(i, ny - 2 * ngc + j, iv, jv);
                 f(i, ny - ngc + j, iv, jv) = f(i, ngc + j, iv, jv);
             });
         // vx-direction
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, ngc, nvy}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                f(i, j, iv, jv) = f(i, j, nvx - 2 * ngc + iv, jv);
+                f(i, j, iv, jv)             = f(i, j, nvx - 2 * ngc + iv, jv);
                 f(i, j, nvx - ngc + iv, jv) = f(i, j, ngc + iv, jv);
             });
         // vy-direction
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                f(i, j, iv, jv) = f(i, j, iv, nvy - 2 * ngc + jv);
+                f(i, j, iv, jv)             = f(i, j, iv, nvy - 2 * ngc + jv);
                 f(i, j, iv, nvy - ngc + jv) = f(i, j, iv, ngc + jv);
             });
         Kokkos::fence();
@@ -115,10 +114,10 @@ int main(int argc, char* argv[]) {
     int nvx           = 10;
     int nvy           = 1;
     int ngc           = 3;
-    double dt         = 0.1;
+    double dt         = 0.005; // < 1/128
     double total_time = 1.0;
-    int total_steps   = 10;
-    int diag_steps    = 1;
+    int total_steps   = 200;
+    int diag_steps    = 200;
     Kokkos::printf("Phase space (x,y,vx,vy): [%f, %f, %f, %f]x[%f, %f, %f, %f]\n", x_min, y_min, vx_min, vy_min,
                    x_min + Lx, y_min + Ly, vx_min + Lvx, vy_min + Lvy);
     Kokkos::printf("Grid size, interior (nx,ny,nvx,nvy): [%d, %d, %d, %d]\n", nx, ny, nvx, nvy);

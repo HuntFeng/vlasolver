@@ -1,5 +1,5 @@
 #include "full/grid.hpp"
-#include "full/poisson.hpp"
+#include "full/poisson_1st_order.hpp"
 #include "full/vlasov.hpp"
 #include "full/world.hpp"
 #include "full/writer.hpp"
@@ -168,9 +168,14 @@ struct ImmersedWorld : World<ImmersedWorld> {
             Kokkos::subview(f, Kokkos::make_pair(ngc, 2 * ngc), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
     };
 
-    void poisson_jump_conditions() {
-        // skip
-    }
+    KOKKOS_INLINE_FUNCTION
+    double poisson_jump_condition_a(double x, double y) { return 0.0; }
+
+    KOKKOS_INLINE_FUNCTION
+    double poisson_jump_condition_b(double x, double y) { return 0.0; }
+
+    KOKKOS_INLINE_FUNCTION
+    double permittivity(double x, double y) { return surface(x, y) <= 0 ? 1000.0 : 0.0; }
 
     void potential_boundary_conditions() {
         using Kokkos::abs;
@@ -305,7 +310,7 @@ int main(int argc, char* argv[]) {
     world.v_th_i      = v_th_i;
     world.u0          = u0;
 
-    PoissonSolver poisson_solver(world, 1e-6, 5e3);
+    PoissonSolver1stOrder poisson_solver(world, 1e-6, 5e3);
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

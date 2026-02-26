@@ -1,5 +1,5 @@
 #include "reduced/grid.hpp"
-#include "reduced/poisson_1st_order.hpp"
+#include "reduced/poisson_2nd_order.hpp"
 #include "reduced/vlasov.hpp"
 #include "reduced/world.hpp"
 #include "reduced/writer.hpp"
@@ -10,7 +10,37 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+        : World<ImmersedWorld>(grid) {
+        double phi_w = -20.0 / 0.3;
+        int ngc      = grid.ngc;
+        int nx       = grid.ncells[0];
+        int ny       = grid.ncells[1];
+        double dx    = grid.spacing[0];
+        double dy    = grid.spacing[1];
+        for (int i = 0; i < nx; ++i) {
+            for (int j = 0; j < ny; ++j) {
+                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                double eta          = surface(x, y);
+                double eta_l        = surface(x - dx, y);
+                double eta_r        = surface(x + dx, y);
+                double eta_b        = surface(x, y - dy);
+                double eta_t        = surface(x, y + dy);
+
+                if (i < ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
+                else if (i >= nx - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
+                else if (j < ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
+                else if (j >= ny - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
+                else if (eta <= 0) {
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_w);
+                } else
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
+            }
+        }
+    }
 
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
@@ -49,46 +79,12 @@ struct ImmersedWorld : World<ImmersedWorld> {
     };
 
     KOKKOS_INLINE_FUNCTION
+    double permittivity(double x, double y) const { return surface(x, y) <= 0.0 ? 1000.0 : 1.0; }
+
+    KOKKOS_INLINE_FUNCTION
     double poisson_jump_condition_a(double x, double y) const { return 0.0; }
 
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_b(double x, double y) const { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) const { return surface(x, y) < 0.0 ? 1000.0 : 1.0; }
-
-    void potential_boundary_conditions(Kokkos::View<double**>& u) {
-        using Kokkos::abs;
-        auto& grid   = this->grid;
-        int ngc      = grid.ngc;
-        int nx       = u.extent(0);
-        int ny       = u.extent(1);
-        double dx    = grid.size[0] / (nx - 2 * ngc);
-        double dy    = grid.size[1] / (ny - 2 * ngc);
-        double phi_w = -20.0 / (2 * 0.15); // cylinder potential normalized to electron quantities
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                double x   = (i - ngc + 0.5) * dx;
-                double y   = (j - ngc + 0.5) * dy;
-                double eta = surface(x, y);
-                if (eta < 0.0) {
-                    u(i, j) = phi_w; // inside the immersed object, set potential to a constant value
-                }
-            });
-
-        for (int k = 0; k < ngc; ++k) {
-            // left boundary, dirichlet
-            Kokkos::deep_copy(Kokkos::subview(u, k, Kokkos::ALL), 0.0);
-            // right boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL),
-                              Kokkos::subview(u, nx - 2 * ngc + k, Kokkos::ALL));
-            // bottom boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, 2 * ngc - k - 1));
-            // top boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1),
-                              Kokkos::subview(u, Kokkos::ALL, ny - 2 * ngc + k));
-        }
-    }
+    KOKKOS_INLINE_FUNCTION double poisson_jump_condition_b(double x, double y) const { return 0.0; }
 };
 
 int main(int argc, char* argv[]) {
@@ -143,7 +139,7 @@ int main(int argc, char* argv[]) {
     world.total_steps = total_steps; // number of total_steps
     world.diag_steps  = diag_steps;  // number of steps between diagnostics
 
-    PoissonSolver1stOrder poisson_solver(world, 1e-6, 1e6);
+    PoissonSolver2ndOrder poisson_solver(world, 1e-12);
     Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

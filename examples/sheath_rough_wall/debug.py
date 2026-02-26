@@ -2,13 +2,26 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Grid parameters
-nx, ny = 160, 50
-Lx, Ly = 1.0, 0.5
+nx, ny = 50, 100
+Lx = Ly = 1.0
 G = 3
+x0 = 0.13 * Lx  # x center of the first wedget
+xs = 0.24 * Lx  # spacing between wedget
+R = 0.06 * Lx  # radius of the wedget
 dx = Lx / nx
 dy = Ly / ny
 x = np.arange((0.5 - G) * dx, Lx + G * dx, dx)
 y = np.arange((0.5 - G) * dy, Ly + G * dy, dy)
+
+
+def phi(x: float, y: float) -> float:
+    xc = x0
+    for n in range(4):
+        xc = x0 + n * xs
+        if abs(x - xc) <= xs / 2:
+            break
+    return (x - xc) ** 2 + y * y - R * R
+
 
 # Number of cells
 nx_cells = len(x)
@@ -24,9 +37,7 @@ for j in range(ny_cells):
         # Cell center coordinates
         cell_x = x[i]
         cell_y = y[j]
-        # Check if the cell is inside the half circle: (x-0.375)^2 + y^2 <= 0.125^2
-        # AND if y >= 0 (to make it a half circle)
-        if (cell_x - 0.375) ** 2 + cell_y**2 < 0.125**2:
+        if phi(cell_x, cell_y) < 0 and cell_y > 0.0:
             cylinder_mask[j, i] = True
 
 # Mark cells in the cylinder
@@ -44,14 +55,16 @@ mesh = ax.pcolormesh(x_idx, y_idx, img, cmap="Greys", edgecolors="black", linewi
 ax.pcolormesh(np.arange(nx_cells), np.arange(ny_cells), img, alpha=0.5)
 
 # Add circle outline in the index space
-center_x_idx = 0.375 / dx + G - 0.5
-center_y_idx = 0 / dy + G - 0.5
-radius_x_idx = 0.125 / dx
-radius_y_idx = 0.125 / dy
 theta = np.linspace(0, np.pi, 1000)
-circle_x = center_x_idx + radius_x_idx * np.cos(theta)
-circle_y = center_y_idx + radius_y_idx * np.sin(theta)
-ax.plot(circle_x, circle_y, "r-", linewidth=2)
+for n in range(4):
+    xc = x0 + n * xs
+    center_x_idx = xc / dx + G - 0.5
+    center_y_idx = 0 / dy + G - 0.5
+    radius_x_idx = R / dx
+    radius_y_idx = R / dy
+    circle_x = center_x_idx + radius_x_idx * np.cos(theta)
+    circle_y = center_y_idx + radius_y_idx * np.sin(theta)
+    ax.plot(circle_x, circle_y, "r-", linewidth=2)
 
 # Set axis labels and title
 ax.set_xlabel("X Index")
@@ -66,7 +79,6 @@ ax.set_yticks(np.arange(0, ny_cells, 5))
 text_info = (
     f"Physical grid: x ∈ [{x.min():.3f}, {x.max():.3f}], "
     f"y ∈ [{y.min():.3f}, {y.max():.3f}]\n"
-    f"Center of cylinder at physical (0.375, 0) → index ({center_x_idx}, {center_y_idx})"
 )
 plt.figtext(0.5, 0.01, text_info, ha="center", fontsize=10)
 

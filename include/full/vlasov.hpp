@@ -14,6 +14,7 @@
  * d^2phi/dx^2 = -int (fi - fe) dv
  * where mu = m_i / m_e is the mass ratio of the ion to the electron.
  */
+#include "matrix/solve.hpp"
 #include "writer.hpp"
 #include <Kokkos_Core.hpp>
 
@@ -30,7 +31,7 @@ class Vlasolver {
           poisson_solver(poisson_solver),
           writer(writer) {}
 
-    void extrapolate_distribution_function() const {
+    void extrapolate_distribution_1st_order() const {
         auto& grid              = world.grid;
         auto& f                 = world.f;
         auto [nx, ny, nvx, nvy] = grid.ncells;
@@ -96,6 +97,84 @@ class Vlasolver {
                 }
             });
     }
+
+    void extrapolate_distribution_2nd_order() const {
+        using Kokkos::abs;
+        using Kokkos::sqrt;
+        auto& grid              = world.grid;
+        auto& f                 = world.f;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        int ngc                 = grid.ngc;
+        double dx               = grid.spacing[0][0]; // species doesn't matter here
+        double dy               = grid.spacing[0][1];
+        // search region range from -offset_range to +offset_range
+        const int offset_range = 5;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+                for (int sp = 0; sp < 2; ++sp) {
+                    auto [x0, y0, vx, vy] = grid.center({i, j, iv, jv}, sp);
+
+                    // always extrapolate dist function from the interior of the immersed object
+                    double eta = world.surface(x0, y0);
+                    if (eta >= 0.0)
+                        return;
+
+                    // now (x0,y0) is the interior of the immersed object
+                    double eta_l   = world.surface(x0 - dx, y0);
+                    double eta_r   = world.surface(x0 + dx, y0);
+                    double eta_b   = world.surface(x0, y0 - dy);
+                    double eta_t   = world.surface(x0, y0 + dy);
+                    auto [n1, n2]  = world.normal(x0, y0, dx, dy);
+                    double v_dot_n = vx * n1 + vy * n2;
+
+                    // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
+                    if (v_dot_n >= 0) {
+                        f(i, j, iv, jv, sp) = 0.0;
+                        return;
+                    }
+                    if (eta * eta_l < 0.0 || eta * eta_r < 0.0 || eta * eta_b < 0.0 || eta * eta_t < 0.0) {
+                        Kokkos::Array<Kokkos::Array<double, 3>, 3> A{}; // use list init to initialize elements to 0
+                        Kokkos::Array<double, 3> b{};
+
+                        // compute A^T @ A and A^T @ b manually to save memory
+                        for (int x_offset = -offset_range; x_offset <= offset_range; ++x_offset) {
+                            for (int y_offset = -offset_range; y_offset <= offset_range; ++y_offset) {
+                                int I               = i + x_offset;
+                                int J               = j + y_offset;
+                                auto [x, y, vx, vy] = grid.center({I, J, iv, jv}, sp);
+                                // skip ghost cells
+                                if (I < ngc || I > nx - ngc - 1 || J < ngc || J > ny - ngc - 1 ||
+                                    world.surface(x, y) < 0)
+                                    continue;
+
+                                // only extrapolate using fluid cells
+                                double z = f(I, J, iv, jv, sp);
+                                A[0][0] += x * x;
+                                A[1][1] += y * y;
+                                A[2][2] += 1.0;
+                                A[1][0] += x * y;
+                                A[0][1] += x * y;
+                                A[2][0] += x;
+                                A[0][2] += x;
+                                A[1][2] += y;
+                                A[2][1] += y;
+
+                                b[0] += x * z;
+                                b[1] += y * z;
+                                b[2] += z;
+                            }
+                        }
+                        solve_linear_system(A, b);
+
+                        // extrapolate using best-fit plane
+                        f(i, j, iv, jv, sp) = b[0] * x0 + b[1] * y0 + b[2];
+                        f(i, j, iv, jv, sp) = Kokkos::max(f(i, j, iv, jv, sp), 0.0);
+                    }
+                }
+            });
+    }
+
     void compute_charge_density() const {
         auto& phi               = world.phi;
         auto& rho               = world.rho;
@@ -430,7 +509,7 @@ class Vlasolver {
         }
         Kokkos::printf("(VlasovSolver) Solving electric field\n");
         world.particle_boundary_conditions();
-        extrapolate_distribution_function();
+        extrapolate_distribution_2nd_order();
         compute_charge_density();
         // world.poisson_jump_conditions();
         poisson_solver.solve();
@@ -441,21 +520,21 @@ class Vlasolver {
             pfc_update(dt, 3, sp);
         }
         world.particle_boundary_conditions();
-        extrapolate_distribution_function();
+        extrapolate_distribution_2nd_order();
         Kokkos::printf("(VlasovSolver) PFC update along space by dt/2\n");
         for (int sp = 0; sp < 2; ++sp) {
             pfc_update(dt / 2.0, 0, sp);
             pfc_update(dt / 2.0, 1, sp);
         }
         world.particle_boundary_conditions();
-        extrapolate_distribution_function();
+        extrapolate_distribution_2nd_order();
     }
 
     void solve() {
         Kokkos::printf("Step %zu:\n", 0);
         world.initialize_distribution();
         world.particle_boundary_conditions();
-        extrapolate_distribution_function();
+        extrapolate_distribution_2nd_order();
         compute_charge_density();
         // world.poisson_jump_conditions();
         poisson_solver.solve();

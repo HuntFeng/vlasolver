@@ -14,6 +14,7 @@
  * d^2phi/dx^2 = -int (fi - fe) dv
  * where mu = m_i / m_e is the mass ratio of the ion to the electron.
  */
+#include "matrix/solve.hpp"
 #include "writer.hpp"
 #include <Kokkos_Core.hpp>
 
@@ -96,7 +97,7 @@ class Vlasolver {
             });
     }
 
-    void extrapolate_distribution_2nd_order() const {
+    void extrapolate_distribution_2nd_order_normal() const {
         using Kokkos::abs;
         using Kokkos::sqrt;
         auto& grid              = world.grid;
@@ -202,6 +203,80 @@ class Vlasolver {
                     //     (v_dot_n < 0.0) ? (s2 - abs(eta)) / (s2 - s1) * f_F1 + (abs(eta) - s1) / (s2 - s1) * f_F2 :
                     //     0.0;
                     // f(i, j, iv, jv) = s1 / (s1 - abs(eta)) * f_I - abs(eta) / (s1 - abs(eta)) * f_F1;
+                    f(i, j, iv, jv) = Kokkos::max(f(i, j, iv, jv), 0.0);
+                }
+            });
+    }
+
+    void extrapolate_distribution_2nd_order() const {
+        using Kokkos::abs;
+        using Kokkos::sqrt;
+        auto& grid              = world.grid;
+        auto& f                 = world.f;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        int ngc                 = grid.ngc;
+        double dx               = grid.spacing[0];
+        double dy               = grid.spacing[1];
+        // search region range from -offset_range to +offset_range
+        const int offset_range = 5;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+                auto [x0, y0, vx, vy] = grid.center({i, j, iv, jv});
+
+                // always extrapolate dist function from the interior of the immersed object
+                double eta = world.surface(x0, y0);
+                if (eta >= 0.0)
+                    return;
+
+                // now (x0,y0) is the interior of the immersed object
+                double eta_l   = world.surface(x0 - dx, y0);
+                double eta_r   = world.surface(x0 + dx, y0);
+                double eta_b   = world.surface(x0, y0 - dy);
+                double eta_t   = world.surface(x0, y0 + dy);
+                auto [n1, n2]  = world.normal(x0, y0, dx, dy);
+                double v_dot_n = vx * n1 + vy * n2;
+
+                // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
+                if (v_dot_n >= 0) {
+                    f(i, j, iv, jv) = 0.0;
+                    return;
+                }
+                if (eta * eta_l < 0.0 || eta * eta_r < 0.0 || eta * eta_b < 0.0 || eta * eta_t < 0.0) {
+                    Kokkos::Array<Kokkos::Array<double, 3>, 3> A{}; // use list init to initialize elements to 0
+                    Kokkos::Array<double, 3> b{};
+
+                    // compute A^T @ A and A^T @ b manually to save memory
+                    for (int x_offset = -offset_range; x_offset <= offset_range; ++x_offset) {
+                        for (int y_offset = -offset_range; y_offset <= offset_range; ++y_offset) {
+                            int I               = i + x_offset;
+                            int J               = j + y_offset;
+                            auto [x, y, vx, vy] = grid.center({I, J, iv, jv});
+                            // skip ghost cells
+                            if (I < ngc || I > nx - ngc - 1 || J < ngc || J > ny - ngc - 1 || world.surface(x, y) < 0)
+                                continue;
+
+                            // only extrapolate using fluid cells
+                            double z = f(I, J, iv, jv);
+                            A[0][0] += x * x;
+                            A[1][1] += y * y;
+                            A[2][2] += 1.0;
+                            A[1][0] += x * y;
+                            A[0][1] += x * y;
+                            A[2][0] += x;
+                            A[0][2] += x;
+                            A[1][2] += y;
+                            A[2][1] += y;
+
+                            b[0] += x * z;
+                            b[1] += y * z;
+                            b[2] += z;
+                        }
+                    }
+                    solve_linear_system(A, b);
+
+                    // extrapolate using best-fit plane
+                    f(i, j, iv, jv) = b[0] * x0 + b[1] * y0 + b[2];
                     f(i, j, iv, jv) = Kokkos::max(f(i, j, iv, jv), 0.0);
                 }
             });

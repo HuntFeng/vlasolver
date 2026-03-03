@@ -31,9 +31,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
         double sigma_x          = 0.1;
         int ivx_peak            = ngc + 1;
         int ivy_peak            = ngc;
-        double vx_peak          = grid.origin[2] + (ivx_peak + 0.5) * grid.size[2] / nvx;
-        double vy_peak          = grid.origin[3] + (ivy_peak + 0.5) * grid.size[3] / nvy;
-        printf("Velocity of peak: (%f, %f)\n", vx_peak, vy_peak);
+        auto [x, y, vx, vy]     = grid.center({0, 0, ivx_peak, ivy_peak});
+        Kokkos::printf("Velocity of peak: (%f, %f)\n", vx, vy);
+
+        auto [dx, dy, dvx, dvy] = grid.spacing;
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
@@ -41,7 +42,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
                 if (surface(x, y) <= 0.0)
                     return;
-                double f0 = Kokkos::exp(-Kokkos::pow((x - x0) / sigma_x, 2));
+                double f0 = Kokkos::exp(-Kokkos::pow((x - x0) / sigma_x, 2)) / (dvx * dvy);
                 if (iv == ivx_peak && jv == ivy_peak) {
                     f(i, j, iv, jv) = f0;
                 } else {
@@ -103,28 +104,22 @@ int main(int argc, char* argv[]) {
 
     const int n = (argc == 2) ? std::stoi(argv[1]) : 64;
     Kokkos::printf("Input parameters:\n");
-    double x_min      = 0.0;
-    double y_min      = 0.0;
-    double Lx         = 1.0;
-    double Ly         = 0.5;
-    double vx_min     = 0.0;
-    double vy_min     = 0.0;
-    double Lvx        = 1.0;
-    double Lvy        = 1.0;
-    int nx            = 2 * n;
-    int ny            = n;
-    int nvx           = 10;
-    int nvy           = 1;
-    int ngc           = 3;
-    double dt         = 0.005; // < 1/128
-    double total_time = 1.0;
-    int total_steps   = 200;
-    int diag_steps    = 200;
+    double x_min  = 0.0;
+    double y_min  = 0.0;
+    double Lx     = 1.0;
+    double Ly     = 0.5;
+    double vx_min = 0.0;
+    double vy_min = -0.5;
+    double Lvx    = 1.0;
+    double Lvy    = 1.0;
+    int nx        = 2 * n;
+    int ny        = n;
+    int nvx       = 10;
+    int nvy       = 1;
+    int ngc       = 3;
     Kokkos::printf("Phase space (x,y,vx,vy): [%f, %f, %f, %f]x[%f, %f, %f, %f]\n", x_min, y_min, vx_min, vy_min,
                    x_min + Lx, y_min + Ly, vx_min + Lvx, vy_min + Lvy);
     Kokkos::printf("Grid size, interior (nx,ny,nvx,nvy): [%d, %d, %d, %d]\n", nx, ny, nvx, nvy);
-    Kokkos::printf("Simulation control: dt: %f, total_time: %f, total_steps: %d, diag_steps: %d\n", dt, total_time,
-                   total_steps, diag_steps);
 
     Kokkos::Array<double, DIM> origin   = {x_min, y_min, vx_min, vy_min}; // origin of the grid
     Kokkos::Array<double, DIM> size     = {Lx, Ly, Lvx, Lvy};             // size of the grid
@@ -132,6 +127,13 @@ int main(int argc, char* argv[]) {
 
     Grid grid(origin, size, ncells_intr, ngc);
     ImmersedWorld world(grid);
+    double total_time = 1.0;
+    double CFL        = 0.9;
+    double dt         = CFL * grid.spacing[0] / (vx_min + Lvx);
+    int total_steps   = total_time / dt;
+    int diag_steps    = total_steps;
+    Kokkos::printf("Simulation control: dt: %f, total_time: %f, total_steps: %d, diag_steps: %d\n", dt, total_time,
+                   total_steps, diag_steps);
 
     world.dt          = dt;          // time step size
     world.total_time  = total_time;  // total simulation time

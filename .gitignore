@@ -16,3 +16,4 @@ reports/
 *.out
 dev.sh
 .venv/
+__pycache__/

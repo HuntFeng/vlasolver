@@ -14,10 +14,7 @@
  * d^2phi/dx^2 = -int (fi - fe) dv
  * where mu = m_i / m_e is the mass ratio of the ion to the electron.
  */
-// #include "poisson_2nd_order.hpp"
-// #include "poisson_1st_order.hpp"
 #include "writer.hpp"
-#include <Kokkos_Abort.hpp>
 #include <Kokkos_Core.hpp>
 
 template <typename World, typename PoissonSolver>
@@ -471,6 +468,7 @@ class Vlasolver {
         world.particle_boundary_conditions();
         // extrapolate_distribution_1st_order();
         extrapolate_distribution_2nd_order();
+        compute_charge_density();
     }
 
     void solve() {

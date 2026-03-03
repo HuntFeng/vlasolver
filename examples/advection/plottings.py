@@ -17,11 +17,11 @@ plt.rcParams.update(
     }
 )
 
-n = 128
+n = 64
 nx, ny = 2 * n, n
 Lx, Ly = 1, 0.5
 G = 3
-is_include_circle = False
+is_include_circle = True
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(

@@ -6,6 +6,8 @@ for n in 8 16 32 64 128 256; do
     build/advection "$n"
 
     echo "Copying results for n=${n}..."
-    rm data/advection/output_${n}_*0.h5
+    if [ $n != 256 ]; then
+      rm data/advection/output_${n}_*0.h5
+    fi
     cp -r data/advection/*.h5 examples/advection/
 done

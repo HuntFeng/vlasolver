@@ -519,6 +519,7 @@ class Vlasolver {
             });
         Kokkos::fence();
     }
+
     void advance(double dt) {
         Kokkos::printf("(VlasovSolver) PFC update along space by dt/2\n");
         pfc_update(dt / 2.0, 0);

@@ -28,7 +28,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         int ngc                 = grid.ngc;
 
         double x0               = 0.2;
-        double sigma_x          = 0.1;
+        double sigma_x          = 0.05;
         int ivx_peak            = ngc + 1;
         int ivy_peak            = ngc;
         auto [x, y, vx, vy]     = grid.center({0, 0, ivx_peak, ivy_peak});
@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
     double y_min  = 0.0;
     double Lx     = 1.0;
     double Ly     = 0.5;
-    double vx_min = 0.0;
+    double vx_min = -0.05;
     double vy_min = -0.5;
     double Lvx    = 1.0;
     double Lvy    = 1.0;
@@ -128,8 +128,8 @@ int main(int argc, char* argv[]) {
     Grid grid(origin, size, ncells_intr, ngc);
     ImmersedWorld world(grid);
     double total_time = 1.0;
-    double CFL        = 0.9;
-    double dt         = CFL * grid.spacing[0] / (vx_min + Lvx);
+    double CFL        = 1.0; // I know vx is 0.1, so CFL=1.0 is enough
+    double dt         = CFL * grid.spacing[0] / Lvx;
     int total_steps   = total_time / dt;
     int diag_steps    = total_steps;
     Kokkos::printf("Simulation control: dt: %f, total_time: %f, total_steps: %d, diag_steps: %d\n", dt, total_time,

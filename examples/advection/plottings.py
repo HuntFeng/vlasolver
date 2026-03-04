@@ -17,7 +17,7 @@ plt.rcParams.update(
     }
 )
 
-n = 64
+n = 256
 nx, ny = 2 * n, n
 Lx, Ly = 1, 0.5
 G = 3
@@ -25,7 +25,7 @@ is_include_circle = True
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/output_{n}_200.h5",
+    f"{file_path}/output_{n}_512.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -60,8 +60,8 @@ plt.tight_layout()
 # plt.savefig(f"{file_path}/density.svg")
 
 plt.figure()
-plt.plot(x, ni[:, G], "o-", label="$y=0$")
-plt.plot(x, ni[:, -G - 1], "o-", label="$y=0.5$")
+plt.plot(x, ni[:, G], "-", label="$y=0$")
+plt.plot(x, ni[:, ny // 2 + G], "-", label="$y=0.25$")
 plt.xlabel("$x/L_x$")
 plt.ylabel("$n$")
 plt.legend()

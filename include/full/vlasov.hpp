@@ -501,6 +501,7 @@ class Vlasolver {
                 }
             });
     }
+
     void advance(double dt) {
         Kokkos::printf("(VlasovSolver) PFC update along space by dt/2\n");
         for (int sp = 0; sp < 2; ++sp) {
@@ -528,6 +529,7 @@ class Vlasolver {
         }
         world.particle_boundary_conditions();
         extrapolate_distribution_2nd_order();
+        compute_charge_density();
     }
 
     void solve() {

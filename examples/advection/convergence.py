@@ -10,7 +10,7 @@ G = 3
 
 outputs = list(filter(lambda name: name.startswith("output"), os.listdir(file_path)))
 outputs = sorted(outputs, key=lambda name: int(name.split("_")[1]))
-n_range = 2 ** np.arange(3, 8, dtype=int)
+n_range = 2 ** np.arange(4, 9, dtype=int)
 errors_ni_0 = np.zeros(n_range.size)
 errors_ni_mid = np.zeros(n_range.size)
 
@@ -93,6 +93,7 @@ plt.loglog(
 )
 plt.xlabel("h")
 plt.ylabel("err")
+plt.xlim(1 / 2**9, 1 / 2**3)
 plt.legend()
 plt.title("Convergence of $n_i$")
 plt.show()

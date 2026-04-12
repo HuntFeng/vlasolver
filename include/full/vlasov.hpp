@@ -17,6 +17,7 @@
 #include "matrix/solve.hpp"
 #include "writer.hpp"
 #include <Kokkos_Core.hpp>
+#include <Kokkos_MinMax.hpp>
 
 template <typename World, typename PoissonSolver>
 class Vlasolver {
@@ -128,16 +129,16 @@ class Vlasolver {
                     auto [n1, n2]  = world.normal(x0, y0, dx, dy);
                     double v_dot_n = vx * n1 + vy * n2;
 
-                    // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
-                    if (v_dot_n >= 0) {
-                        f(i, j, iv, jv, sp) = 0.0;
-                        return;
-                    }
                     if (eta * eta_l < 0.0 || eta * eta_r < 0.0 || eta * eta_b < 0.0 || eta * eta_t < 0.0) {
                         Kokkos::Array<Kokkos::Array<double, 3>, 3> A{}; // use list init to initialize elements to 0
                         Kokkos::Array<double, 3> b{};
 
-                        // compute A^T @ A and A^T @ b manually to save memory
+                        // We assume f near the boundary can be approximated by a plane: f(x,y) = c0 * x + c1 * y + c2
+                        // solve least square problem A @ c = b (where c = [c0, c1, c2])
+                        // the normal equation is A^T @ A @ c = A^T @ b
+                        // sum x_i^2 * c0 + sum x_i*y_i * c1 + sum x_i * c2 = sum x_i*f_i
+                        // sum x_i*y_i * c0 + sum y_i^2 * c1 + sum y_i * c2 = sum y_i*f_i
+                        // sum x_i * c0 + sum y_i * c1 + sum 1 * c2 = sum f_i
                         for (int x_offset = -offset_range; x_offset <= offset_range; ++x_offset) {
                             for (int y_offset = -offset_range; y_offset <= offset_range; ++y_offset) {
                                 int I               = i + x_offset;
@@ -165,11 +166,26 @@ class Vlasolver {
                                 b[2] += z;
                             }
                         }
+                        // For inflow, we force zero-inflow condition. i.e. f(x_b, y_b) = 0,
+                        // where (x_b, y_b) is the intersection point between the normal line and the boundary
+                        // now the last row of normal equation becomes
+                        // sum x_i^2 * c0 + sum x_i*y_i * c1 + 0 = sum x_i*f_i
+                        // sum x_i*y_i * c0 + sum y_i^2 * c1 + 0 = sum y_i*f_i
+                        // b[0] * x_b + b[1] * y_b + b[2] = 0
+                        if (v_dot_n >= 0.0) {
+                            double x_b = x0 + eta * n1;
+                            double y_b = y0 + eta * n2;
+                            A[0][2]    = 0.0;
+                            A[1][2]    = 0.0;
+                            A[2][0]    = x_b;
+                            A[2][1]    = y_b;
+                            A[2][2]    = 1.0;
+                            b[2]       = 0.0;
+                        }
                         solve_linear_system(A, b);
 
                         // extrapolate using best-fit plane
                         f(i, j, iv, jv, sp) = b[0] * x0 + b[1] * y0 + b[2];
-                        f(i, j, iv, jv, sp) = Kokkos::max(f(i, j, iv, jv, sp), 0.0);
                     }
                 }
             });
@@ -496,9 +512,7 @@ class Vlasolver {
                     f(i, j, iv, jv, sp) += flux_hat_l - flux_hat_r;
                 }
                 // fix any negative value due to numerical error
-                if (f(i, j, iv, jv, sp) < 0.0) {
-                    f(i, j, iv, jv, sp) = 0.0;
-                }
+                f(i, j, iv, jv, sp) = Kokkos::max(0.0, f(i, j, iv, jv, sp));
             });
     }
 

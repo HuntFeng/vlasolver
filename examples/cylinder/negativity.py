@@ -59,6 +59,19 @@ def calculate_ep_r(df):
     return ep_r
 
 
+def calculate_ep(df):
+    ep = []
+    for i in range(len(df)):
+        # at surface cell, don't consider limiter from the ghost cell
+        if i == 3:
+            ep.append(df["ep_r"].get(i, np.nan))
+        else:
+            ep.append(
+                np.min([df["ep_r"].get(i, np.nan), df["ep_l"].get(i + 1, np.nan)])
+            )
+    return ep
+
+
 non_negative_extrapolation = False
 nu = 0.1
 df = pd.DataFrame({"f_i": [1.0, 1.0, 1.0, 0.0, 0.0, 0.0]})
@@ -100,10 +113,7 @@ df["p_i"] = [
 ]
 df["ep_l"] = calculate_ep_l(df)
 df["ep_r"] = calculate_ep_r(df)
-df["ep_{i+1/2}"] = [
-    np.min([df["ep_r"].get(i, np.nan), df["ep_l"].get(i + 1, np.nan)])
-    for i in range(len(df))
-]
+df["ep_{i+1/2}"] = calculate_ep(df)
 df["F^hat_{i+1/2}"] = (
     df["ep_{i+1/2}"] * (df["F_{i+1/2}"] - df["f_{i+1/2}"]) + df["f_{i+1/2}"]
 )

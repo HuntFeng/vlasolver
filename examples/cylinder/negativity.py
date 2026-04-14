@@ -59,7 +59,7 @@ def calculate_ep_r(df):
     return ep_r
 
 
-non_negative_extrapolation = True
+non_negative_extrapolation = False
 nu = 0.1
 df = pd.DataFrame({"f_i": [1.0, 1.0, 1.0, 0.0, 0.0, 0.0]})
 # extrapolation
@@ -108,9 +108,9 @@ df["F^hat_{i+1/2}"] = (
     df["ep_{i+1/2}"] * (df["F_{i+1/2}"] - df["f_{i+1/2}"]) + df["f_{i+1/2}"]
 )
 df["f_i_new"] = [
-    -df["f_i"].get(i, np.nan)
-    - df["F^hat_{i+1/2}"].get(i - 1, np.nan)
-    + df["F^hat_{i+1/2}"].get(i, np.nan)
+    df["f_i"].get(i, np.nan)
+    + df["F^hat_{i+1/2}"].get(i - 1, np.nan)
+    - df["F^hat_{i+1/2}"].get(i, np.nan)
     for i in range(len(df))
 ]
 

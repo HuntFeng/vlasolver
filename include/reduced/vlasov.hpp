@@ -332,7 +332,8 @@ class Vlasolver {
         auto& E                 = world.E;
         auto& flux              = world.flux;
         auto& flux_1st          = world.flux_1st;
-        auto& ep                = world.ep;
+        auto& ep_l              = world.ep_l;
+        auto& ep_r              = world.ep_r;
 
         auto [dx, dy, dvx, dvy] = grid.spacing;
         auto [nx, ny, nvx, nvy] = grid.ncells;
@@ -340,7 +341,8 @@ class Vlasolver {
 
         Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_1st, 0.0);
-        Kokkos::deep_copy(ep, 1.0);
+        Kokkos::deep_copy(ep_l, 1.0);
+        Kokkos::deep_copy(ep_r, 1.0);
 
         // Step 1: Compute fluxes at cell interfaces
         Kokkos::parallel_for(
@@ -399,48 +401,43 @@ class Vlasolver {
                     flux_val *= nu;
                 }
 
+                double flux_shift = 0.0;
                 if (axis == 0) {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= i; ++n)
-                            flux_val += f(n, j, iv, jv);
+                            flux_shift += f(n, j, iv, jv);
                     } else {
                         for (int n = i + 1; n <= min(s - 1, f.extent_int(0) - 1); ++n)
-                            flux_val += f(n, j, iv, jv);
+                            flux_shift += f(n, j, iv, jv);
                     }
-                    // Store flux at right interface of cell i
-                    flux(i, j, iv, jv)     = flux_val;
-                    flux_1st(i, j, iv, jv) = nu * f0;
                 } else if (axis == 1) {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= j; ++n)
-                            flux_val += f(i, n, iv, jv);
+                            flux_shift += f(i, n, iv, jv);
                     } else {
                         for (int n = j + 1; n <= min(s - 1, f.extent_int(1) - 1); ++n)
-                            flux_val += f(i, n, iv, jv);
+                            flux_shift += f(i, n, iv, jv);
                     }
-                    flux(i, j, iv, jv)     = flux_val;
-                    flux_1st(i, j, iv, jv) = nu * f0;
                 } else if (axis == 2) {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= iv; ++n)
-                            flux_val += f(i, j, n, jv);
+                            flux_shift += f(i, j, n, jv);
                     } else {
                         for (int n = iv + 1; n <= min(s - 1, f.extent_int(2) - 1); ++n)
-                            flux_val += f(i, j, n, jv);
+                            flux_shift += f(i, j, n, jv);
                     }
-                    flux(i, j, iv, jv)     = flux_val;
-                    flux_1st(i, j, iv, jv) = nu * f0;
                 } else {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= jv; ++n)
-                            flux_val += f(i, j, iv, n);
+                            flux_shift += f(i, j, iv, n);
                     } else {
                         for (int n = jv + 1; n <= min(s - 1, f.extent_int(3) - 1); ++n)
-                            flux_val += f(i, j, iv, n);
+                            flux_shift += f(i, j, iv, n);
                     }
-                    flux(i, j, iv, jv)     = flux_val;
-                    flux_1st(i, j, iv, jv) = nu * f0;
                 }
+                // Store flux at right interface of cell i
+                flux(i, j, iv, jv)     = flux_val + flux_shift;
+                flux_1st(i, j, iv, jv) = nu * f0 + flux_shift;
             });
         Kokkos::fence();
 
@@ -469,37 +466,14 @@ class Vlasolver {
 
                 double ep_left = 1.0, ep_right = 1.0;
                 if (d_l < 0.0 && d_r <= 0.0) {
-                    ep_left = Kokkos::min(1.0, delta / d_l);
+                    ep_l(i, j, iv, jv) = Kokkos::min(1.0, delta / d_l);
                 } else if (d_l * d_r < 0.0 && p < 0.0) {
-                    ep_left = delta / (d_l - d_r);
+                    ep_l(i, j, iv, jv) = delta / (d_l - d_r);
                 }
                 if (d_l >= 0.0 && d_r > 0.0) {
-                    ep_right = Kokkos::min(1.0, -delta / d_r);
+                    ep_r(i, j, iv, jv) = Kokkos::min(1.0, -delta / d_r);
                 } else if (d_l * d_r < 0.0 && p < 0.0) {
-                    ep_right = delta / (d_l - d_r);
-                }
-                if (ep_left >= -1e-16)
-                    ep_left = Kokkos::max(ep_left, 0.0);
-                if (ep_right >= -1e-16)
-                    ep_right = Kokkos::max(ep_right, 0.0);
-
-                // Store ep at interfaces: ep(i-1,...) for left, ep(i,...) for right
-                if (axis == 0) {
-                    if (i > ngc)
-                        ep(i - 1, j, iv, jv) = ep_left;
-                    ep(i, j, iv, jv) = ep_right;
-                } else if (axis == 1) {
-                    if (j > ngc)
-                        ep(i, j - 1, iv, jv) = ep_left;
-                    ep(i, j, iv, jv) = ep_right;
-                } else if (axis == 2) {
-                    if (iv > ngc)
-                        ep(i, j, iv - 1, jv) = ep_left;
-                    ep(i, j, iv, jv) = ep_right;
-                } else {
-                    if (jv > ngc)
-                        ep(i, j, iv, jv - 1) = ep_left;
-                    ep(i, j, iv, jv) = ep_right;
+                    ep_r(i, j, iv, jv) = delta / (d_l - d_r);
                 }
             });
         Kokkos::fence();
@@ -519,14 +493,53 @@ class Vlasolver {
                                         : (axis == 2) ? flux_1st(i, j, iv - 1, jv)
                                                       : flux_1st(i, j, iv, jv - 1);
                 double flux_1st_right = flux_1st(i, j, iv, jv);
-                double ep_left_val    = (axis == 0)   ? ep(i - 1, j, iv, jv)
-                                        : (axis == 1) ? ep(i, j - 1, iv, jv)
-                                        : (axis == 2) ? ep(i, j, iv - 1, jv)
-                                                      : ep(i, j, iv, jv - 1);
-                double ep_right_val   = ep(i, j, iv, jv);
 
-                double flux_hat_l     = ep_left_val * (flux_left - flux_1st_left) + flux_1st_left;
-                double flux_hat_r     = ep_right_val * (flux_right - flux_1st_right) + flux_1st_right;
+                auto [x, y, vx, vy]   = grid.center({i, j, iv, jv});
+                double eta            = world.surface(x, y);
+                double eta_l          = world.surface(x - dx, y);
+                double eta_r          = world.surface(x + dx, y);
+                double eta_b          = world.surface(x, y - dy);
+                double eta_t          = world.surface(x, y + dy);
+                double ep_left = 0.0, ep_right = 0.0;
+                if (eta > 0.0) {
+                    if (axis == 0) {
+                        ep_left  = (eta_l < 0.0) ? ep_l(i, j, iv, jv)
+                                                 : Kokkos::min(ep_r(i - 1, j, iv, jv), ep_l(i, j, iv, jv));
+                        ep_right = (eta_r < 0.0) ? ep_r(i, j, iv, jv)
+                                                 : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv));
+                    } else if (axis == 1) {
+                        ep_left  = (eta_b < 0.0) ? ep_l(i, j, iv, jv)
+                                                 : Kokkos::min(ep_r(i, j - 1, iv, jv), ep_l(i, j, iv, jv));
+                        ep_right = (eta_t < 0.0) ? ep_r(i, j, iv, jv)
+                                                 : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
+                    } else if (axis == 2) {
+                        ep_left  = (eta_l < 0.0) ? ep_l(i, j, iv, jv)
+                                                 : Kokkos::min(ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
+                        ep_right = (eta_r < 0.0) ? ep_r(i, j, iv, jv)
+                                                 : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));
+                        // ep_left  = Kokkos::min(ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
+                        // ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));
+                    } else {
+                        ep_left  = (eta_b < 0.0) ? ep_l(i, j, iv, jv)
+                                                 : Kokkos::min(ep_r(i, j, iv, jv - 1), ep_l(i, j, iv, jv));
+                        ep_right = (eta_t < 0.0) ? ep_r(i, j, iv, jv)
+                                                 : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
+                        // ep_left  = Kokkos::min(ep_r(i, j, iv, jv - 1), ep_l(i, j, iv, jv));
+                        // ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
+                    }
+
+                    if (ep_left < -1e-16 || ep_right < -1e-16 || ep_left > 1.0 + 1e-16 || ep_right > 1.0 + 1e-16) {
+                        Kokkos::printf("(axis %d) ep_left(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, ep_left);
+                        Kokkos::printf("(axis %d) ep_right(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, ep_right);
+                        Kokkos::abort("Abort: Limiter out of bound");
+                    }
+                    // fix any negative values due to numerical error
+                    ep_l(i, j, iv, jv) = Kokkos::max(ep_l(i, j, iv, jv), 0.0);
+                    ep_r(i, j, iv, jv) = Kokkos::max(ep_r(i, j, iv, jv), 0.0);
+                }
+
+                double flux_hat_l = ep_left * (flux_left - flux_1st_left) + flux_1st_left;
+                double flux_hat_r = ep_right * (flux_right - flux_1st_right) + flux_1st_right;
 
                 f(i, j, iv, jv) += flux_hat_l - flux_hat_r;
                 // fix any negative value due to numerical error

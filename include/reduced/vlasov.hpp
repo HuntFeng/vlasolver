@@ -280,8 +280,8 @@ class Vlasolver {
                     // sum x_i*y_i * c0 + sum y_i^2 * c1 + 0 = sum y_i*f_i
                     // b[0] * x_b + b[1] * y_b + b[2] = 0
                     if (v_dot_n >= 0.0) {
-                        double x_b = x0 + eta * n1;
-                        double y_b = y0 + eta * n2;
+                        double x_b = x0 - eta * n1;
+                        double y_b = y0 - eta * n2;
                         A[0][2]    = 0.0;
                         A[1][2]    = 0.0;
                         A[2][0]    = x_b;

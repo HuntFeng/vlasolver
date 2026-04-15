@@ -540,19 +540,19 @@ class Vlasolver {
                         ep_right = (eta_t < 0.0) ? ep_r(i, j, iv, jv)
                                                  : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
                     } else if (axis == 2) {
-                        ep_left  = (eta_l < 0.0) ? ep_l(i, j, iv, jv)
-                                                 : Kokkos::min(ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
-                        ep_right = (eta_r < 0.0) ? ep_r(i, j, iv, jv)
-                                                 : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));
-                        // ep_left  = Kokkos::min(ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
-                        // ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));
+                        // ep_left  = (eta_l < 0.0) ? ep_l(i, j, iv, jv)
+                        //                          : Kokkos::min(ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
+                        // ep_right = (eta_r < 0.0) ? ep_r(i, j, iv, jv)
+                        //                          : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));
+                        ep_left  = Kokkos::min(ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
+                        ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));
                     } else {
-                        ep_left  = (eta_b < 0.0) ? ep_l(i, j, iv, jv)
-                                                 : Kokkos::min(ep_r(i, j, iv, jv - 1), ep_l(i, j, iv, jv));
-                        ep_right = (eta_t < 0.0) ? ep_r(i, j, iv, jv)
-                                                 : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
-                        // ep_left  = Kokkos::min(ep_r(i, j, iv, jv - 1), ep_l(i, j, iv, jv));
-                        // ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
+                        // ep_left  = (eta_b < 0.0) ? ep_l(i, j, iv, jv)
+                        //                          : Kokkos::min(ep_r(i, j, iv, jv - 1), ep_l(i, j, iv, jv));
+                        // ep_right = (eta_t < 0.0) ? ep_r(i, j, iv, jv)
+                        //                          : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
+                        ep_left  = Kokkos::min(ep_r(i, j, iv, jv - 1), ep_l(i, j, iv, jv));
+                        ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
                     }
 
                     if (ep_left < -1e-16 || ep_right < -1e-16 || ep_left > 1.0 + 1e-16 || ep_right > 1.0 + 1e-16) {
@@ -560,17 +560,21 @@ class Vlasolver {
                         Kokkos::printf("(axis %d) ep_right(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, ep_right);
                         Kokkos::abort("Abort: Limiter out of bound");
                     }
-                    // fix any negative values due to numerical error
-                    ep_l(i, j, iv, jv) = Kokkos::max(ep_l(i, j, iv, jv), 0.0);
-                    ep_r(i, j, iv, jv) = Kokkos::max(ep_r(i, j, iv, jv), 0.0);
+                    // fix values due to numerical error
+                    ep_l(i, j, iv, jv) = Kokkos::min(Kokkos::max(ep_l(i, j, iv, jv), 0.0), 1.0);
+                    ep_r(i, j, iv, jv) = Kokkos::min(Kokkos::max(ep_r(i, j, iv, jv), 0.0), 1.0);
                 }
 
                 double flux_hat_l = ep_left * (flux_left - flux_1st_left) + flux_1st_left;
                 double flux_hat_r = ep_right * (flux_right - flux_1st_right) + flux_1st_right;
 
                 f(i, j, iv, jv) += flux_hat_l - flux_hat_r;
-                if (eta > 0.0 && f(i, j, iv, jv) <= -1e-16) {
+                if (eta > 0.0 && f(i, j, iv, jv) < -1e-16) {
                     Kokkos::printf("f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
+                    Kokkos::printf("ep_left = %e, ep_right = %e\n", ep_left, ep_right);
+                    Kokkos::printf("flux_left = %e, flux_right = %e\n", flux_left, flux_right);
+                    Kokkos::printf("flux_1st_left = %e, flux_1st_right = %e\n", flux_1st_left, flux_1st_right);
+                    Kokkos::printf("flux_hat_l = %e, flux_hat_r = %e\n", flux_hat_l, flux_hat_r);
                     Kokkos::abort("Abort: Negative distribution");
                 }
                 // fix any negative value due to numerical error

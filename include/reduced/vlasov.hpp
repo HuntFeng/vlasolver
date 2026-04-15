@@ -351,55 +351,44 @@ class Vlasolver {
                 auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
                 double f0 = 0.0, fp1 = 0.0, fm1 = 0.0;
                 double advection_velocity = 0;
-                int floor_v               = 0;
+                double floor_velocity     = 0;
                 int s                     = 0;
                 if (axis == 0) {
                     advection_velocity = vx * dt / dx;
-                    floor_v            = (int)Kokkos::floor(advection_velocity);
-                    s                  = i - floor_v;
+                    floor_velocity     = floor(advection_velocity);
+                    s                  = i - (int)floor_velocity;
                     f0                 = f(s, j, iv, jv);
                     fp1                = f(s + 1, j, iv, jv);
                     fm1                = f(s - 1, j, iv, jv);
                 } else if (axis == 1) {
                     advection_velocity = vy * dt / dy;
-                    floor_v            = (int)Kokkos::floor(advection_velocity);
-                    s                  = j - floor_v;
+                    floor_velocity     = floor(advection_velocity);
+                    s                  = j - (int)floor_velocity;
                     f0                 = f(i, s, iv, jv);
                     fp1                = f(i, s + 1, iv, jv);
                     fm1                = f(i, s - 1, iv, jv);
                 } else if (axis == 2) {
                     advection_velocity = E(i, j, 0) * dt / dvx;
-                    floor_v            = (int)Kokkos::floor(advection_velocity);
-                    s                  = iv - floor_v;
+                    floor_velocity     = floor(advection_velocity);
+                    s                  = iv - (int)floor_velocity;
                     f0                 = f(i, j, s, jv);
                     fp1                = f(i, j, s + 1, jv);
                     fm1                = f(i, j, s - 1, jv);
                 } else if (axis == 3) {
                     advection_velocity = E(i, j, 1) * dt / dvy;
-                    floor_v            = (int)Kokkos::floor(advection_velocity);
-                    s                  = jv - floor_v;
+                    floor_velocity     = floor(advection_velocity);
+                    s                  = jv - (int)floor_velocity;
                     f0                 = f(i, j, iv, s);
                     fp1                = f(i, j, iv, s + 1);
                     fm1                = f(i, j, iv, s - 1);
                 }
 
-                double plus_diff  = fp1 - f0;
-                double minus_diff = f0 - fm1;
-                double flux_val   = 0.0;
-                double nu         = 0.0;
-                if (advection_velocity >= 0.0) {
-                    nu       = advection_velocity - floor_v;
-                    flux_val = f0;
-                    flux_val += (1 - nu) * (2 - nu) * plus_diff / 6.0;
-                    flux_val += (1 - nu) * (1 + nu) * minus_diff / 6.0;
-                    flux_val *= nu;
-                } else {
-                    nu       = advection_velocity - (floor_v + 1);
-                    flux_val = f0;
-                    flux_val += -(1 - nu) * (1 + nu) * plus_diff / 6.0;
-                    flux_val += -(2 + nu) * (1 + nu) * minus_diff / 6.0;
-                    flux_val *= nu;
-                }
+                double diff_0   = (advection_velocity >= 0) ? fp1 - f0 : f0 - fm1;
+                double diff_1   = (advection_velocity < 0) ? fp1 - f0 : f0 - fm1;
+                double nu       = advection_velocity - trunc(advection_velocity);
+                double flux_val = nu * f0;
+                flux_val += abs(nu) * (1 - abs(nu)) * (2 - abs(nu)) * diff_0 / 6.0;
+                flux_val += abs(nu) * (1 - abs(nu)) * (1 + abs(nu)) * diff_1 / 6.0;
 
                 double flux_shift = 0.0;
                 if (axis == 0) {
@@ -408,7 +397,7 @@ class Vlasolver {
                             flux_shift += f(n, j, iv, jv);
                     } else {
                         for (int n = i + 1; n <= min(s - 1, f.extent_int(0) - 1); ++n)
-                            flux_shift += f(n, j, iv, jv);
+                            flux_shift -= f(n, j, iv, jv);
                     }
                 } else if (axis == 1) {
                     if (advection_velocity >= 0.0) {
@@ -416,7 +405,7 @@ class Vlasolver {
                             flux_shift += f(i, n, iv, jv);
                     } else {
                         for (int n = j + 1; n <= min(s - 1, f.extent_int(1) - 1); ++n)
-                            flux_shift += f(i, n, iv, jv);
+                            flux_shift -= f(i, n, iv, jv);
                     }
                 } else if (axis == 2) {
                     if (advection_velocity >= 0.0) {
@@ -424,7 +413,7 @@ class Vlasolver {
                             flux_shift += f(i, j, n, jv);
                     } else {
                         for (int n = iv + 1; n <= min(s - 1, f.extent_int(2) - 1); ++n)
-                            flux_shift += f(i, j, n, jv);
+                            flux_shift -= f(i, j, n, jv);
                     }
                 } else {
                     if (advection_velocity >= 0.0) {
@@ -432,7 +421,7 @@ class Vlasolver {
                             flux_shift += f(i, j, iv, n);
                     } else {
                         for (int n = jv + 1; n <= min(s - 1, f.extent_int(3) - 1); ++n)
-                            flux_shift += f(i, j, iv, n);
+                            flux_shift -= f(i, j, iv, n);
                     }
                 }
                 // Store flux at right interface of cell i

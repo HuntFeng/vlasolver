@@ -460,11 +460,38 @@ class Vlasolver {
                 double d_l            = flux_left - flux_1st_left;
                 double d_r            = flux_right - flux_1st_right;
                 double delta          = -f(i, j, iv, jv) - flux_1st_left + flux_1st_right;
-                if (delta < 1e-16)
-                    delta = Kokkos::min(delta, 0.0);
-                double p       = d_l - d_r - delta;
 
-                double ep_left = 1.0, ep_right = 1.0;
+                auto [x, y, vx, vy]   = grid.center({i, j, iv, jv});
+                double eta            = world.surface(x, y);
+                if (delta > 1e-16 && eta > 0.0) {
+                    Kokkos::printf("(axis %d) -delta(%d, %d, %d, %d) = %e + %e - %e = %e\n", axis, i, j, iv, jv,
+                                   f(i, j, iv, jv), flux_1st_left, flux_1st_right, -delta);
+                    double advection_velocity = 0;
+                    int floor_v               = 0;
+                    int s                     = 0;
+                    if (axis == 0) {
+                        advection_velocity = vx * dt / dx;
+                        floor_v            = (int)Kokkos::floor(advection_velocity);
+                        s                  = i - floor_v;
+                    } else if (axis == 1) {
+                        advection_velocity = vy * dt / dy;
+                        floor_v            = (int)Kokkos::floor(advection_velocity);
+                        s                  = j - floor_v;
+                    } else if (axis == 2) {
+                        advection_velocity = E(i, j, 0) * dt / dvx;
+                        floor_v            = (int)Kokkos::floor(advection_velocity);
+                        s                  = iv - floor_v;
+                    } else if (axis == 3) {
+                        advection_velocity = E(i, j, 1) * dt / dvy;
+                        floor_v            = (int)Kokkos::floor(advection_velocity);
+                        s                  = jv - floor_v;
+                    }
+                    Kokkos::printf("s = %d\n", s);
+                    Kokkos::abort("Abort: Negative 1st order flux update at fluid cell");
+                }
+                delta    = Kokkos::min(delta, 0.0);
+                double p = d_l - d_r - delta;
+
                 if (d_l < 0.0 && d_r <= 0.0) {
                     ep_l(i, j, iv, jv) = Kokkos::min(1.0, delta / d_l);
                 } else if (d_l * d_r < 0.0 && p < 0.0) {
@@ -542,6 +569,10 @@ class Vlasolver {
                 double flux_hat_r = ep_right * (flux_right - flux_1st_right) + flux_1st_right;
 
                 f(i, j, iv, jv) += flux_hat_l - flux_hat_r;
+                if (eta > 0.0 && f(i, j, iv, jv) <= -1e-16) {
+                    Kokkos::printf("f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
+                    Kokkos::abort("Abort: Negative distribution");
+                }
                 // fix any negative value due to numerical error
                 f(i, j, iv, jv) = Kokkos::max(0.0, f(i, j, iv, jv));
             });

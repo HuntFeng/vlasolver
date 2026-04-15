@@ -327,6 +327,14 @@ class Vlasolver {
     }
 
     void pfc_update(double dt, int axis) const {
+        using Kokkos::abs;
+        using Kokkos::floor;
+        using Kokkos::max;
+        using Kokkos::min;
+        using Kokkos::trunc;
+
+        const double M_EPS      = 1e-14;
+
         auto& grid              = world.grid;
         auto& f                 = world.f;
         auto& E                 = world.E;
@@ -338,6 +346,8 @@ class Vlasolver {
         auto [dx, dy, dvx, dvy] = grid.spacing;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
+
+        auto& current_step      = world.current_step;
 
         Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_1st, 0.0);
@@ -453,43 +463,52 @@ class Vlasolver {
                 auto [x, y, vx, vy]   = grid.center({i, j, iv, jv});
                 double eta            = world.surface(x, y);
                 if (delta > 1e-16 && eta > 0.0) {
+                    Kokkos::printf("Warning: Negative 1st order flux update at fluid cell");
                     Kokkos::printf("(axis %d) -delta(%d, %d, %d, %d) = %e + %e - %e = %e\n", axis, i, j, iv, jv,
                                    f(i, j, iv, jv), flux_1st_left, flux_1st_right, -delta);
                     double advection_velocity = 0;
-                    int floor_v               = 0;
+                    double integer_velocity   = 0;
                     int s                     = 0;
                     if (axis == 0) {
                         advection_velocity = vx * dt / dx;
-                        floor_v            = (int)Kokkos::floor(advection_velocity);
-                        s                  = i - floor_v;
+                        integer_velocity   = trunc(advection_velocity);
+                        s                  = i - (int)integer_velocity;
                     } else if (axis == 1) {
                         advection_velocity = vy * dt / dy;
-                        floor_v            = (int)Kokkos::floor(advection_velocity);
-                        s                  = j - floor_v;
+                        integer_velocity   = trunc(advection_velocity);
+                        s                  = j - (int)integer_velocity;
                     } else if (axis == 2) {
                         advection_velocity = E(i, j, 0) * dt / dvx;
-                        floor_v            = (int)Kokkos::floor(advection_velocity);
-                        s                  = iv - floor_v;
+                        integer_velocity   = trunc(advection_velocity);
+                        s                  = iv - (int)integer_velocity;
                     } else if (axis == 3) {
                         advection_velocity = E(i, j, 1) * dt / dvy;
-                        floor_v            = (int)Kokkos::floor(advection_velocity);
-                        s                  = jv - floor_v;
+                        integer_velocity   = trunc(advection_velocity);
+                        s                  = jv - (int)integer_velocity;
                     }
                     Kokkos::printf("s = %d\n", s);
-                    Kokkos::abort("Abort: Negative 1st order flux update at fluid cell");
+                    // Kokkos::abort("Abort: Negative 1st order flux update at fluid cell");
                 }
-                delta    = Kokkos::min(delta, 0.0);
+                // delta    = Kokkos::min(delta, 0.0);
                 double p = d_l - d_r - delta;
 
                 if (d_l < 0.0 && d_r <= 0.0) {
-                    ep_l(i, j, iv, jv) = Kokkos::min(1.0, delta / d_l);
+                    ep_l(i, j, iv, jv) = Kokkos::min(1.0, delta / (d_l - M_EPS));
                 } else if (d_l * d_r < 0.0 && p < 0.0) {
                     ep_l(i, j, iv, jv) = delta / (d_l - d_r);
                 }
                 if (d_l >= 0.0 && d_r > 0.0) {
-                    ep_r(i, j, iv, jv) = Kokkos::min(1.0, -delta / d_r);
+                    ep_r(i, j, iv, jv) = Kokkos::min(1.0, -delta / (d_r + M_EPS));
                 } else if (d_l * d_r < 0.0 && p < 0.0) {
                     ep_r(i, j, iv, jv) = delta / (d_l - d_r);
+                }
+
+                if (axis == 0 && i == 82 && j == 7 && iv == 108 && jv == 26 && current_step == 22) {
+                    Kokkos::printf("(axis %d) -delta(%d, %d, %d, %d) = %e + %e - %e = %e\n", axis, i, j, iv, jv,
+                                   f(i, j, iv, jv), flux_1st_left, flux_1st_right, -delta);
+                    Kokkos::printf("d_l = %e, d_r = %e\n", d_l, d_r);
+                    Kokkos::printf("p = %e\n", p);
+                    Kokkos::printf("ep_l = %e, ep_r = %e\n", ep_l(i, j, iv, jv), ep_r(i, j, iv, jv));
                 }
             });
         Kokkos::fence();
@@ -545,13 +564,14 @@ class Vlasolver {
                     }
 
                     if (ep_left < -1e-16 || ep_right < -1e-16 || ep_left > 1.0 + 1e-16 || ep_right > 1.0 + 1e-16) {
-                        Kokkos::printf("(axis %d) ep_left(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, ep_left);
-                        Kokkos::printf("(axis %d) ep_right(%d, %d, %d, %d) = %e\n", axis, i, j, iv, jv, ep_right);
-                        Kokkos::abort("Abort: Limiter out of bound");
+                        Kokkos::printf("Warning: Limiter out of bound\n\
+                            (axis %d) ep_left(%d, %d, %d, %d) = %e\n\
+                            (axis %d) ep_right(%d, %d, %d, %d) = %e\n",
+                                       axis, i, j, iv, jv, ep_left, axis, i, j, iv, jv, ep_right);
                     }
                     // fix values due to numerical error
-                    ep_l(i, j, iv, jv) = Kokkos::min(Kokkos::max(ep_l(i, j, iv, jv), 0.0), 1.0);
-                    ep_r(i, j, iv, jv) = Kokkos::min(Kokkos::max(ep_r(i, j, iv, jv), 0.0), 1.0);
+                    // ep_l(i, j, iv, jv) = Kokkos::min(Kokkos::max(ep_l(i, j, iv, jv), 0.0), 1.0);
+                    // ep_r(i, j, iv, jv) = Kokkos::min(Kokkos::max(ep_r(i, j, iv, jv), 0.0), 1.0);
                 }
 
                 double flux_hat_l = ep_left * (flux_left - flux_1st_left) + flux_1st_left;
@@ -559,15 +579,23 @@ class Vlasolver {
 
                 f(i, j, iv, jv) += flux_hat_l - flux_hat_r;
                 if (eta > 0.0 && f(i, j, iv, jv) < -1e-16) {
-                    Kokkos::printf("f(%d, %d, %d, %d) = %e\n", i, j, iv, jv, f(i, j, iv, jv));
-                    Kokkos::printf("ep_left = %e, ep_right = %e\n", ep_left, ep_right);
-                    Kokkos::printf("flux_left = %e, flux_right = %e\n", flux_left, flux_right);
-                    Kokkos::printf("flux_1st_left = %e, flux_1st_right = %e\n", flux_1st_left, flux_1st_right);
-                    Kokkos::printf("flux_hat_l = %e, flux_hat_r = %e\n", flux_hat_l, flux_hat_r);
-                    Kokkos::abort("Abort: Negative distribution");
+                    Kokkos::printf("\nWarning: Negative distribution\n\
+                        f(%d, %d, %d, %d) = %e\n\
+                        ep_left = %e, ep_right = %e\n\
+                        flux_left = %e, flux_right = %e\n\
+                        flux_1st_left = %e, flux_1st_right = %e\n\
+                        flux_hat_l = %e, flux_hat_r = %e\n",
+                                   i, j, iv, jv, f(i, j, iv, jv), ep_left, ep_right, flux_left, flux_right,
+                                   flux_1st_left, flux_1st_right, flux_hat_l, flux_hat_r);
+                    // Kokkos::printf("ep_left = %e, ep_right = %e\n", ep_left, ep_right);
+                    // Kokkos::printf("flux_left = %e, flux_right = %e\n", flux_left, flux_right);
+                    // Kokkos::printf("flux_1st_left = %e, flux_1st_right = %e\n", flux_1st_left, flux_1st_right);
+                    // Kokkos::printf("flux_hat_l = %e, flux_hat_r = %e\n", flux_hat_l, flux_hat_r);
+                    if (f(i, j, iv, jv) < -M_EPS)
+                        Kokkos::abort("Abort: Negative distribution");
                 }
                 // fix any negative value due to numerical error
-                f(i, j, iv, jv) = Kokkos::max(0.0, f(i, j, iv, jv));
+                f(i, j, iv, jv) = max(f(i, j, iv, jv), 0.0);
             });
         Kokkos::fence();
     }

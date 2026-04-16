@@ -22,7 +22,7 @@ Lx, Ly = 1, 0.5
 G = 3
 is_include_circle = True
 
-step = 54
+step = 300
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
     f"{file_path}/../../data/cylinder/output_{step:03d}.h5",

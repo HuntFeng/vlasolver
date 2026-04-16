@@ -25,13 +25,13 @@ import numpy as np
 
 # ── 1. Grid and initial condition ─────────────────────────────────────────────
 
-N = 100
+N = 200
 L = 2 * np.pi
 dx = L / N
 x = np.linspace(dx / 2, L - dx / 2, N)
 
-u0 = np.sin(x) ** 4
-u_min = u0.min()
+u0 = np.sin(4.3 * x) ** 2
+u_min = 0.0
 u_max = u0.max()
 
 # ── 2. Scheme parameters ──────────────────────────────────────────────────────
@@ -40,8 +40,7 @@ a = 1.0  # advection speed; code handles any sign
 CFL = 2.5  # free to exceed 1
 dt = CFL * dx / abs(a)
 xi = a * dt / dx  # signed Courant number
-# T_end = 2 * np.pi
-T_end = 1
+T_end = 2 * np.pi
 
 print(f"a = {a},  CFL = {CFL},  xi = {xi:.4f}")
 
@@ -187,9 +186,10 @@ def compute_fluxes(u, xi):
 
 def mpp_limiter(u, F_hi, f_lo):
     n = len(u)
-    eps = 1e-14
+    eps = 1e-13
     d = F_hi - f_lo
-    delta = u + np.roll(f_lo, 1) - f_lo
+    # delta = u + np.roll(f_lo, 1) - f_lo
+    delta = 0.0 - (u + np.roll(f_lo, 1) - f_lo)
 
     eps_l = np.ones(n)
     eps_r = np.ones(n)
@@ -198,15 +198,38 @@ def mpp_limiter(u, F_hi, f_lo):
         di_m = d[i - 1]
         di_p = d[i]
         delt = delta[i]
+        p = di_m - di_p - delt
 
-        if di_m > 0:
-            eps_l[i] = min(1.0, (u_max - delt) / (di_m + eps))
-        if di_p < 0:
-            eps_r[i] = min(1.0, (u_max - delt) / (-di_p + eps))
-        if di_m < 0:
-            eps_l[i] = min(eps_l[i], (u_min - delt) / (di_m - eps))
-        if di_p > 0:
-            eps_r[i] = min(eps_r[i], (u_min - delt) / (-di_p - eps))
+        if di_m >= 0 and di_p < 0:
+            eps_l[i] = 1.0
+            eps_r[i] = 1.0
+        elif di_m >= 0 and di_p > 0:
+            eps_l[i] = 1.0
+            eps_r[i] = min(1.0, delt / (-di_p))
+        elif di_m < 0 and di_p <= 0:
+            eps_l[i] = min(1.0, delt / (di_m))
+            eps_r[i] = 1.0
+        elif di_m < 0 and di_p > 0:
+            if p > 0:
+                eps_l[i] = 1.0
+                eps_r[i] = 1.0
+            else:
+                eps_l[i] = min(1.0, delt / (di_m - di_p))
+                eps_r[i] = min(1.0, delt / (di_m - di_p))
+
+        # if di_m < 0 and di_p <= 0:
+        #     eps_l[i] = min(1.0, delt / (di_m - eps))
+        # elif di_m * di_p <= 0 and p < 0:
+        #     eps_l[i] = delt / (di_m - di_p)
+        # else:
+        #     eps_l[i] = 1.0
+        #
+        # if di_m > 0 and di_p >= 0:
+        #     eps_r[i] = min(1.0, -delt / (di_p + eps))
+        # elif di_m * di_p <= 0 and p < 0:
+        #     eps_r[i] = delt / (di_m - di_p)
+        # else:
+        #     eps_r[i] = 1.0
 
     eps_l = np.clip(eps_l, 0.0, 1.0)
     eps_r = np.clip(eps_r, 0.0, 1.0)
@@ -252,7 +275,7 @@ u_with_lim, neg_wi = run(u0, use_limiter=True, T=T_end, xi_full=xi)
 # ── 9. Plot ───────────────────────────────────────────────────────────────────
 
 m, alpha = decompose(xi)
-fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+fig, axes = plt.subplots(1, 2, figsize=(15, 4))
 fig.suptitle(
     f"a = {a},  CFL = {CFL},  xi = {xi:.2f}  "
     f"(integer shifts m = {m}, alpha = {alpha:.2f})  "
@@ -276,14 +299,6 @@ ax.axhline(0, color="gray", lw=0.8, ls=":", label="Physical min = 0")
 ax.set_title("(b) Minimum cell value vs. time step")
 ax.set_xlabel("Time step")
 ax.legend(fontsize=8)
-
-ax = axes[2]
-ax.scatter(u_no_lim, u_with_lim, s=20, alpha=0.7)
-ax.axhline(0, color="r", lw=0.8, ls="--")
-ax.axvline(0, color="r", lw=0.8, ls="--")
-ax.set_xlabel("Value without limiter")
-ax.set_ylabel("Value with limiter")
-ax.set_title("(c) Cell values: limiter vs. no limiter")
 
 plt.tight_layout()
 plt.savefig("mpp_limiter_filbet_sum.png", dpi=150)

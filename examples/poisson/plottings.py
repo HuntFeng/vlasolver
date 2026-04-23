@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-nx = ny = 32
+nx = ny = 128
 Lx, Ly = 1.0, 1.0
 G = 3
 
@@ -38,12 +38,22 @@ print(f"error Ex = {np.linalg.norm((-dudx_exact - Ex)[G:-G, G:-G], np.inf)}")
 print(f"error Ey = {np.linalg.norm((-dudy_exact - Ey)[G:-G, G:-G], np.inf)}")
 
 fig = plt.figure()
-ax = fig.add_subplot(111, projection="3d")
-ax.plot_surface(X, Y, phi, cmap="viridis")
+ax1 = fig.add_subplot(121, projection="3d")
+ax1.plot_surface(X, Y, phi, cmap="viridis")
 
-ax.set_xlabel("x")
-ax.set_ylabel("y")
-ax.set_zlabel("$\\phi$")
+ax1.set_xlabel("x")
+ax1.set_ylabel("y")
+ax1.set_zlabel("$\\phi$")
+ax1.set_title("$\\phi$")
+
+ax2 = fig.add_subplot(122, projection="3d")
+ax2.plot_surface(X, Y, u_exact, cmap="viridis")
+
+ax2.set_xlabel("x")
+ax2.set_ylabel("y")
+ax2.set_zlabel("$\\phi$")
+ax2.set_title("$\\phi$ exact")
+
 
 fig = plt.figure(figsize=(10, 8))
 

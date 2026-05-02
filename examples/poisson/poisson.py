@@ -1,3 +1,7 @@
+"""
+Poisson solver prototype
+Handles complex shape and piecewise variable permittivity
+"""
 import contextlib
 import enum
 import importlib.util

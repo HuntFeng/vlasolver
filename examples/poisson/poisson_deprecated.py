@@ -1,3 +1,8 @@
+"""
+Deprecated prototype
+Convergence tests are good, except that test5 is only 1st order
+Beta evaluation should happen at interface rather than cell center
+"""
 import contextlib
 import enum
 import importlib.util
@@ -3331,6 +3336,3 @@ if __name__ == "__main__":
     convergence_test4()
     # convergence_test5()
 
-    # all convergence as good
-    # except 5 are 1st order
-    # suspect that beta evaluation should happen at interface rather than cell center

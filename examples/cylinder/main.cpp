@@ -65,7 +65,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         int ny       = u.extent(1);
         double dx    = grid.size[0] / (nx - 2 * ngc);
         double dy    = grid.size[1] / (ny - 2 * ngc);
-        double phi_w = -20.0 / (2 * 0.15); // cylinder potential normalized to electron quantities
+        double phi_w = -20.0 / (2 * 0.15); // cylinder potential normalized to ion quantities
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 double x   = (i - ngc + 0.5) * dx;

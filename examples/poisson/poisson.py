@@ -7,7 +7,500 @@ import enum
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
-from _hardcoded_formulas import CASE3_EVAL, CASE4_EVAL
+
+
+# Shared zero function — all constant-zero matrix entries.
+_Z = lambda *_: 0.0
+
+
+# Evaluator dispatch tables
+# Each entry maps to a dict with:
+#   'M': [[func]] 3x3, 'd': [func], 'N': [[{offset: func}]] 3-list,
+#   'offsets': [(di,dj)], 'row_ifaces': (str, str, str)
+
+CASE3_EVAL = {}
+CASE4_EVAL = {}
+
+# case3 sub-case 1, eta sign -1
+_case3_sc1_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(2*r + rr - 3)/((r - 1)*(r + rr - 2)) - (2*r + 1)*(ej*n2**2 + em)/(r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(r - 1)/((rr - 1)*(r + rr - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(rr - 1)/((r - 1)*(r + rr - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(r + 2*rr - 3)/((rr - 1)*(r + rr - 2)) + (2*rr + 1)*(ej*n2**2 + em)/(rr*(rr + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), _Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(2*t - 3)/((t - 2)*(t - 1)) - (2*t + 1)*(ej*n1**2 + em)/(t*(t + 1))],
+]
+_case3_sc1_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 - av*ep*(r + rr - 2)/((r - 1)*(rr - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 + av*ep*(r + rr - 2)/((r - 1)*(rr - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 - av*ep*(2*t - 3)/((t - 2)*(t - 1)) + bv*dy*n2]
+_case3_sc1_eta_m1_N = [
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*r/dy, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: r*(ej*dx*n1*n2*r + ej*dx*n1*n2 + ej*dy*n2**2 + em*dy)/(dy*(r + 1)), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(r*t + r + t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*r**2*t + ej*dx*n1*n2*r*t - ej*dx*n1*n2*r + ej*dy*n2**2*r*t + ej*dy*n2**2*t + em*dy*r*t + em*dy*t)/(dy*r*t), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(r + rr - 2)/((r - 1)*(rr - 1))},
+    {(+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(r + rr - 2)/((r - 1)*(rr - 1)), (+2, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dx*n1*n2*(2*rr + 1)/dy, (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*rr**2 - ej*dy*n2**2*rr - ej*dy*n2**2 - em*dy*rr - em*dy)/(dy*rr), (+2, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dx*n1*n2/dy, (+3, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*rr/dy, (+3, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: rr*(ej*dx*n1*n2*rr + ej*dx*n1*n2 - ej*dy*n2**2 - em*dy)/(dy*(rr + 1))},
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*t/dx, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(r*t + r + t)/(dx*(r + 1)), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: t*(ej*dx*n1**2 + ej*dy*n1*n2*t + ej*dy*n1*n2 + em*dx)/(dx*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*r*t + ej*dx*n1**2*r + ej*dy*n1*n2*r*t**2 + ej*dy*n1*n2*r*t - ej*dy*n1*n2*t + em*dx*r*t + em*dx*r)/(dx*r*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(t - 2)/(t - 1), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(t - 1)/(t - 2)},
+]
+_case3_sc1_eta_m1_offsets = [(-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+_case3_sc1_eta_m1_row_ifaces = ("R", "extra", "T")
+_case3_sc1_eta_m1 = {
+    'M': _case3_sc1_eta_m1_M, 'd': _case3_sc1_eta_m1_d, 'N': _case3_sc1_eta_m1_N,
+    'offsets': _case3_sc1_eta_m1_offsets, 'row_ifaces': _case3_sc1_eta_m1_row_ifaces,
+}
+CASE3_EVAL[(1, -1)] = _case3_sc1_eta_m1
+
+# case3 sub-case 1, eta sign +1
+_case3_sc1_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(2*r + rr - 3)/((r - 1)*(r + rr - 2)) - (2*r + 1)*(ej*n2**2 - ep)/(r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(r - 1)/((rr - 1)*(r + rr - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(rr - 1)/((r - 1)*(r + rr - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(r + 2*rr - 3)/((rr - 1)*(r + rr - 2)) + (2*rr + 1)*(ej*n2**2 - ep)/(rr*(rr + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), _Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(2*t - 3)/((t - 2)*(t - 1)) - (2*t + 1)*(ej*n1**2 - ep)/(t*(t + 1))],
+]
+_case3_sc1_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 - av*em*(r + rr - 2)/((r - 1)*(rr - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 + av*em*(r + rr - 2)/((r - 1)*(rr - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 - av*em*(2*t - 3)/((t - 2)*(t - 1)) + bv*dy*n2]
+_case3_sc1_eta_p1_N = [
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*r/dy, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: r*(ej*dx*n1*n2*r + ej*dx*n1*n2 + ej*dy*n2**2 - ep*dy)/(dy*(r + 1)), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(r*t + r + t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*r**2*t + ej*dx*n1*n2*r*t - ej*dx*n1*n2*r + ej*dy*n2**2*r*t + ej*dy*n2**2*t - ep*dy*r*t - ep*dy*t)/(dy*r*t), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(r + rr - 2)/((r - 1)*(rr - 1))},
+    {(+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(r + rr - 2)/((r - 1)*(rr - 1)), (+2, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dx*n1*n2*(2*rr + 1)/dy, (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*rr**2 - ej*dy*n2**2*rr - ej*dy*n2**2 + ep*dy*rr + ep*dy)/(dy*rr), (+2, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dx*n1*n2/dy, (+3, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*rr/dy, (+3, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: rr*(ej*dx*n1*n2*rr + ej*dx*n1*n2 - ej*dy*n2**2 + ep*dy)/(dy*(rr + 1))},
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*t/dx, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(r*t + r + t)/(dx*(r + 1)), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: t*(ej*dx*n1**2 + ej*dy*n1*n2*t + ej*dy*n1*n2 - ep*dx)/(dx*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*r*t + ej*dx*n1**2*r + ej*dy*n1*n2*r*t**2 + ej*dy*n1*n2*r*t - ej*dy*n1*n2*t - ep*dx*r*t - ep*dx*r)/(dx*r*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(t - 2)/(t - 1), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(t - 1)/(t - 2)},
+]
+_case3_sc1_eta_p1_offsets = [(-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+_case3_sc1_eta_p1_row_ifaces = ("R", "extra", "T")
+_case3_sc1_eta_p1 = {
+    'M': _case3_sc1_eta_p1_M, 'd': _case3_sc1_eta_p1_d, 'N': _case3_sc1_eta_p1_N,
+    'offsets': _case3_sc1_eta_p1_offsets, 'row_ifaces': _case3_sc1_eta_p1_row_ifaces,
+}
+CASE3_EVAL[(1, 1)] = _case3_sc1_eta_p1
+
+# case3 sub-case 2, eta sign -1
+_case3_sc2_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(2*r - 3)/((r - 2)*(r - 1)) - (2*r + 1)*(ej*n2**2 + em)/(r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(2*t + tt - 3)/((t - 1)*(t + tt - 2)) - (2*t + 1)*(ej*n1**2 + em)/(t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(t - 1)/((tt - 1)*(t + tt - 2))],
+    [_Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(tt - 1)/((t - 1)*(t + tt - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(t + 2*tt - 3)/((tt - 1)*(t + tt - 2)) + (2*tt + 1)*(ej*n1**2 + em)/(tt*(tt + 1))],
+]
+_case3_sc2_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 - av*ep*(2*r - 3)/((r - 2)*(r - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 - av*ep*(t + tt - 2)/((t - 1)*(tt - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 + av*ep*(t + tt - 2)/((t - 1)*(tt - 1)) + bv*dy*n2]
+_case3_sc2_eta_m1_N = [
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*r/dy, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: r*(ej*dx*n1*n2*r + ej*dx*n1*n2 + ej*dy*n2**2 + em*dy)/(dy*(r + 1)), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(r*t + r + t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*r**2*t + ej*dx*n1*n2*r*t - ej*dx*n1*n2*r + ej*dy*n2**2*r*t + ej*dy*n2**2*t + em*dy*r*t + em*dy*t)/(dy*r*t), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(r - 2)/(r - 1), (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(r - 1)/(r - 2)},
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*t/dx, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(r*t + r + t)/(dx*(r + 1)), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: t*(ej*dx*n1**2 + ej*dy*n1*n2*t + ej*dy*n1*n2 + em*dx)/(dx*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*r*t + ej*dx*n1**2*r + ej*dy*n1*n2*r*t**2 + ej*dy*n1*n2*r*t - ej*dy*n1*n2*t + em*dx*r*t + em*dx*r)/(dx*r*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(t + tt - 2)/((t - 1)*(tt - 1))},
+    {(-1, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dy*n1*n2*(2*tt + 1)/dx, (-1, +3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*tt/dx, (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(t + tt - 2)/((t - 1)*(tt - 1)), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*tt + ej*dx*n1**2 - ej*dy*n1*n2*tt**2 + em*dx*tt + em*dx)/(dx*tt), (+0, +3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -tt*(ej*dx*n1**2 - ej*dy*n1*n2*tt - ej*dy*n1*n2 + em*dx)/(dx*(tt + 1)), (+1, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dy*n1*n2/dx},
+]
+_case3_sc2_eta_m1_offsets = [(-1, -1), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, +0), (+1, +2), (+2, +0)]
+_case3_sc2_eta_m1_row_ifaces = ("R", "T", "extra")
+_case3_sc2_eta_m1 = {
+    'M': _case3_sc2_eta_m1_M, 'd': _case3_sc2_eta_m1_d, 'N': _case3_sc2_eta_m1_N,
+    'offsets': _case3_sc2_eta_m1_offsets, 'row_ifaces': _case3_sc2_eta_m1_row_ifaces,
+}
+CASE3_EVAL[(2, -1)] = _case3_sc2_eta_m1
+
+# case3 sub-case 2, eta sign +1
+_case3_sc2_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(2*r - 3)/((r - 2)*(r - 1)) - (2*r + 1)*(ej*n2**2 - ep)/(r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(2*t + tt - 3)/((t - 1)*(t + tt - 2)) - (2*t + 1)*(ej*n1**2 - ep)/(t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(t - 1)/((tt - 1)*(t + tt - 2))],
+    [_Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(tt - 1)/((t - 1)*(t + tt - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(t + 2*tt - 3)/((tt - 1)*(t + tt - 2)) + (2*tt + 1)*(ej*n1**2 - ep)/(tt*(tt + 1))],
+]
+_case3_sc2_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 - av*em*(2*r - 3)/((r - 2)*(r - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 - av*em*(t + tt - 2)/((t - 1)*(tt - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 + av*em*(t + tt - 2)/((t - 1)*(tt - 1)) + bv*dy*n2]
+_case3_sc2_eta_p1_N = [
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*r/dy, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: r*(ej*dx*n1*n2*r + ej*dx*n1*n2 + ej*dy*n2**2 - ep*dy)/(dy*(r + 1)), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(r*t + r + t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*r**2*t + ej*dx*n1*n2*r*t - ej*dx*n1*n2*r + ej*dy*n2**2*r*t + ej*dy*n2**2*t - ep*dy*r*t - ep*dy*t)/(dy*r*t), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(r - 2)/(r - 1), (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(r - 1)/(r - 2)},
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*t/dx, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(r*t + r + t)/(dx*(r + 1)), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: t*(ej*dx*n1**2 + ej*dy*n1*n2*t + ej*dy*n1*n2 - ep*dx)/(dx*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*r*t + ej*dx*n1**2*r + ej*dy*n1*n2*r*t**2 + ej*dy*n1*n2*r*t - ej*dy*n1*n2*t - ep*dx*r*t - ep*dx*r)/(dx*r*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(t + tt - 2)/((t - 1)*(tt - 1))},
+    {(-1, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dy*n1*n2*(2*tt + 1)/dx, (-1, +3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*tt/dx, (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(t + tt - 2)/((t - 1)*(tt - 1)), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*tt + ej*dx*n1**2 - ej*dy*n1*n2*tt**2 - ep*dx*tt - ep*dx)/(dx*tt), (+0, +3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -tt*(ej*dx*n1**2 - ej*dy*n1*n2*tt - ej*dy*n1*n2 - ep*dx)/(dx*(tt + 1)), (+1, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dy*n1*n2/dx},
+]
+_case3_sc2_eta_p1_offsets = [(-1, -1), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, +0), (+1, +2), (+2, +0)]
+_case3_sc2_eta_p1_row_ifaces = ("R", "T", "extra")
+_case3_sc2_eta_p1 = {
+    'M': _case3_sc2_eta_p1_M, 'd': _case3_sc2_eta_p1_d, 'N': _case3_sc2_eta_p1_N,
+    'offsets': _case3_sc2_eta_p1_offsets, 'row_ifaces': _case3_sc2_eta_p1_row_ifaces,
+}
+CASE3_EVAL[(2, 1)] = _case3_sc2_eta_p1
+
+# case3 sub-case 3, eta sign -1
+_case3_sc3_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(2*t + tt - 3)/((t - 1)*(t + tt - 2)) - (2*t + 1)*(ej*n1**2 + em)/(t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(t - 1)/((tt - 1)*(t + tt - 2))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(2*l - 3)/((l - 2)*(l - 1)) + (2*l + 1)*(ej*n2**2 + em)/(l*(l + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(tt - 1)/((t - 1)*(t + tt - 2)), _Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(t + 2*tt - 3)/((tt - 1)*(t + tt - 2)) + (2*tt + 1)*(ej*n1**2 + em)/(tt*(tt + 1))],
+]
+_case3_sc3_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 - av*ep*(t + tt - 2)/((t - 1)*(tt - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 + av*ep*(2*l - 3)/((l - 2)*(l - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 + av*ep*(t + tt - 2)/((t - 1)*(tt - 1)) + bv*dy*n2]
+_case3_sc3_eta_m1_N = [
+    {(+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: t*(ej*dx*n1**2 - ej*dy*n1*n2*t - ej*dy*n1*n2 + em*dx)/(dx*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*l*t + ej*dx*n1**2*l - ej*dy*n1*n2*l*t**2 - ej*dy*n1*n2*l*t + ej*dy*n1*n2*t + em*dx*l*t + em*dx*l)/(dx*l*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(t + tt - 2)/((t - 1)*(tt - 1)), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*t/dx, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(l*t + l + t)/(dx*(l + 1))},
+    {(-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(l - 1)/(l - 2), (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(l - 2)/(l - 1), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(l*t + l + t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*l**2*t + ej*dx*n1*n2*l*t - ej*dx*n1*n2*l - ej*dy*n2**2*l*t - ej*dy*n2**2*t - em*dy*l*t - em*dy*t)/(dy*l*t), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*l/dy, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: l*(ej*dx*n1*n2*l + ej*dx*n1*n2 - ej*dy*n2**2 - em*dy)/(dy*(l + 1))},
+    {(-1, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dy*n1*n2*(2*tt + 1)/dx, (-1, +3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*tt/dx, (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(t + tt - 2)/((t - 1)*(tt - 1)), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*tt + ej*dx*n1**2 - ej*dy*n1*n2*tt**2 + em*dx*tt + em*dx)/(dx*tt), (+0, +3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -tt*(ej*dx*n1**2 - ej*dy*n1*n2*tt - ej*dy*n1*n2 + em*dx)/(dx*(tt + 1)), (+1, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dy*n1*n2/dx},
+]
+_case3_sc3_eta_m1_offsets = [(-2, +0), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, -1), (+1, +0), (+1, +2)]
+_case3_sc3_eta_m1_row_ifaces = ("T", "L", "extra")
+_case3_sc3_eta_m1 = {
+    'M': _case3_sc3_eta_m1_M, 'd': _case3_sc3_eta_m1_d, 'N': _case3_sc3_eta_m1_N,
+    'offsets': _case3_sc3_eta_m1_offsets, 'row_ifaces': _case3_sc3_eta_m1_row_ifaces,
+}
+CASE3_EVAL[(3, -1)] = _case3_sc3_eta_m1
+
+# case3 sub-case 3, eta sign +1
+_case3_sc3_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(2*t + tt - 3)/((t - 1)*(t + tt - 2)) - (2*t + 1)*(ej*n1**2 - ep)/(t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(t - 1)/((tt - 1)*(t + tt - 2))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(2*l - 3)/((l - 2)*(l - 1)) + (2*l + 1)*(ej*n2**2 - ep)/(l*(l + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(tt - 1)/((t - 1)*(t + tt - 2)), _Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(t + 2*tt - 3)/((tt - 1)*(t + tt - 2)) + (2*tt + 1)*(ej*n1**2 - ep)/(tt*(tt + 1))],
+]
+_case3_sc3_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 - av*em*(t + tt - 2)/((t - 1)*(tt - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 + av*em*(2*l - 3)/((l - 2)*(l - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 + av*em*(t + tt - 2)/((t - 1)*(tt - 1)) + bv*dy*n2]
+_case3_sc3_eta_p1_N = [
+    {(+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: t*(ej*dx*n1**2 - ej*dy*n1*n2*t - ej*dy*n1*n2 - ep*dx)/(dx*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*l*t + ej*dx*n1**2*l - ej*dy*n1*n2*l*t**2 - ej*dy*n1*n2*l*t + ej*dy*n1*n2*t - ep*dx*l*t - ep*dx*l)/(dx*l*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(t + tt - 2)/((t - 1)*(tt - 1)), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*t/dx, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(l*t + l + t)/(dx*(l + 1))},
+    {(-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(l - 1)/(l - 2), (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(l - 2)/(l - 1), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(l*t + l + t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*l**2*t + ej*dx*n1*n2*l*t - ej*dx*n1*n2*l - ej*dy*n2**2*l*t - ej*dy*n2**2*t + ep*dy*l*t + ep*dy*t)/(dy*l*t), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*l/dy, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: l*(ej*dx*n1*n2*l + ej*dx*n1*n2 - ej*dy*n2**2 + ep*dy)/(dy*(l + 1))},
+    {(-1, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dy*n1*n2*(2*tt + 1)/dx, (-1, +3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*tt/dx, (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(t + tt - 2)/((t - 1)*(tt - 1)), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*tt + ej*dx*n1**2 - ej*dy*n1*n2*tt**2 - ep*dx*tt - ep*dx)/(dx*tt), (+0, +3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -tt*(ej*dx*n1**2 - ej*dy*n1*n2*tt - ej*dy*n1*n2 - ep*dx)/(dx*(tt + 1)), (+1, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dy*n1*n2/dx},
+]
+_case3_sc3_eta_p1_offsets = [(-2, +0), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, -1), (+1, +0), (+1, +2)]
+_case3_sc3_eta_p1_row_ifaces = ("T", "L", "extra")
+_case3_sc3_eta_p1 = {
+    'M': _case3_sc3_eta_p1_M, 'd': _case3_sc3_eta_p1_d, 'N': _case3_sc3_eta_p1_N,
+    'offsets': _case3_sc3_eta_p1_offsets, 'row_ifaces': _case3_sc3_eta_p1_row_ifaces,
+}
+CASE3_EVAL[(3, 1)] = _case3_sc3_eta_p1
+
+# case3 sub-case 4, eta sign -1
+_case3_sc4_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(2*t - 3)/((t - 2)*(t - 1)) - (2*t + 1)*(ej*n1**2 + em)/(t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(2*l + ll - 3)/((l - 1)*(l + ll - 2)) + (2*l + 1)*(ej*n2**2 + em)/(l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(l - 1)/((ll - 1)*(l + ll - 2))],
+    [_Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(ll - 1)/((l - 1)*(l + ll - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(l + 2*ll - 3)/((ll - 1)*(l + ll - 2)) - (2*ll + 1)*(ej*n2**2 + em)/(ll*(ll + 1))],
+]
+_case3_sc4_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 - av*ep*(2*t - 3)/((t - 2)*(t - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 + av*ep*(l + ll - 2)/((l - 1)*(ll - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 - av*ep*(l + ll - 2)/((l - 1)*(ll - 1)) + bv*dx*n1]
+_case3_sc4_eta_m1_N = [
+    {(+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: t*(ej*dx*n1**2 - ej*dy*n1*n2*t - ej*dy*n1*n2 + em*dx)/(dx*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*l*t + ej*dx*n1**2*l - ej*dy*n1*n2*l*t**2 - ej*dy*n1*n2*l*t + ej*dy*n1*n2*t + em*dx*l*t + em*dx*l)/(dx*l*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(t - 2)/(t - 1), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(t - 1)/(t - 2), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*t/dx, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(l*t + l + t)/(dx*(l + 1))},
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(l + ll - 2)/((l - 1)*(ll - 1)), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(l*t + l + t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*l**2*t + ej*dx*n1*n2*l*t - ej*dx*n1*n2*l - ej*dy*n2**2*l*t - ej*dy*n2**2*t - em*dy*l*t - em*dy*t)/(dy*l*t), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*l/dy, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: l*(ej*dx*n1*n2*l + ej*dx*n1*n2 - ej*dy*n2**2 - em*dy)/(dy*(l + 1))},
+    {(-3, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*ll/dy, (-3, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ll*(ej*dx*n1*n2*ll + ej*dx*n1*n2 + ej*dy*n2**2 + em*dy)/(dy*(ll + 1)), (-2, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dx*n1*n2*(2*ll + 1)/dy, (-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*ll**2 + ej*dy*n2**2*ll + ej*dy*n2**2 + em*dy*ll + em*dy)/(dy*ll), (-2, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dx*n1*n2/dy, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(l + ll - 2)/((l - 1)*(ll - 1))},
+]
+_case3_sc4_eta_m1_offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+_case3_sc4_eta_m1_row_ifaces = ("T", "L", "extra")
+_case3_sc4_eta_m1 = {
+    'M': _case3_sc4_eta_m1_M, 'd': _case3_sc4_eta_m1_d, 'N': _case3_sc4_eta_m1_N,
+    'offsets': _case3_sc4_eta_m1_offsets, 'row_ifaces': _case3_sc4_eta_m1_row_ifaces,
+}
+CASE3_EVAL[(4, -1)] = _case3_sc4_eta_m1
+
+# case3 sub-case 4, eta sign +1
+_case3_sc4_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(2*t - 3)/((t - 2)*(t - 1)) - (2*t + 1)*(ej*n1**2 - ep)/(t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(2*l + ll - 3)/((l - 1)*(l + ll - 2)) + (2*l + 1)*(ej*n2**2 - ep)/(l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(l - 1)/((ll - 1)*(l + ll - 2))],
+    [_Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(ll - 1)/((l - 1)*(l + ll - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(l + 2*ll - 3)/((ll - 1)*(l + ll - 2)) - (2*ll + 1)*(ej*n2**2 - ep)/(ll*(ll + 1))],
+]
+_case3_sc4_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 - av*em*(2*t - 3)/((t - 2)*(t - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 + av*em*(l + ll - 2)/((l - 1)*(ll - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 - av*em*(l + ll - 2)/((l - 1)*(ll - 1)) + bv*dx*n1]
+_case3_sc4_eta_p1_N = [
+    {(+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: t*(ej*dx*n1**2 - ej*dy*n1*n2*t - ej*dy*n1*n2 - ep*dx)/(dx*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*l*t + ej*dx*n1**2*l - ej*dy*n1*n2*l*t**2 - ej*dy*n1*n2*l*t + ej*dy*n1*n2*t - ep*dx*l*t - ep*dx*l)/(dx*l*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(t - 2)/(t - 1), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(t - 1)/(t - 2), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*t/dx, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(l*t + l + t)/(dx*(l + 1))},
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(l + ll - 2)/((l - 1)*(ll - 1)), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(l*t + l + t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*l**2*t + ej*dx*n1*n2*l*t - ej*dx*n1*n2*l - ej*dy*n2**2*l*t - ej*dy*n2**2*t + ep*dy*l*t + ep*dy*t)/(dy*l*t), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*l/dy, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: l*(ej*dx*n1*n2*l + ej*dx*n1*n2 - ej*dy*n2**2 + ep*dy)/(dy*(l + 1))},
+    {(-3, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*ll/dy, (-3, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ll*(ej*dx*n1*n2*ll + ej*dx*n1*n2 + ej*dy*n2**2 - ep*dy)/(dy*(ll + 1)), (-2, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dx*n1*n2*(2*ll + 1)/dy, (-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*ll**2 + ej*dy*n2**2*ll + ej*dy*n2**2 - ep*dy*ll - ep*dy)/(dy*ll), (-2, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dx*n1*n2/dy, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(l + ll - 2)/((l - 1)*(ll - 1))},
+]
+_case3_sc4_eta_p1_offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+_case3_sc4_eta_p1_row_ifaces = ("T", "L", "extra")
+_case3_sc4_eta_p1 = {
+    'M': _case3_sc4_eta_p1_M, 'd': _case3_sc4_eta_p1_d, 'N': _case3_sc4_eta_p1_N,
+    'offsets': _case3_sc4_eta_p1_offsets, 'row_ifaces': _case3_sc4_eta_p1_row_ifaces,
+}
+CASE3_EVAL[(4, 1)] = _case3_sc4_eta_p1
+
+# case3 sub-case 5, eta sign -1
+_case3_sc5_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(2*l + ll - 3)/((l - 1)*(l + ll - 2)) + (2*l + 1)*(ej*n2**2 + em)/(l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(l - 1)/((ll - 1)*(l + ll - 2))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(2*b - 3)/((b - 2)*(b - 1)) + (2*b + 1)*(ej*n1**2 + em)/(b*(b + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(ll - 1)/((l - 1)*(l + ll - 2)), _Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(l + 2*ll - 3)/((ll - 1)*(l + ll - 2)) - (2*ll + 1)*(ej*n2**2 + em)/(ll*(ll + 1))],
+]
+_case3_sc5_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 + av*ep*(l + ll - 2)/((l - 1)*(ll - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 + av*ep*(2*b - 3)/((b - 2)*(b - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 - av*ep*(l + ll - 2)/((l - 1)*(ll - 1)) + bv*dx*n1]
+_case3_sc5_eta_m1_N = [
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(l + ll - 2)/((l - 1)*(ll - 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*l**2 + ej*dx*n1*n2*b*l - ej*dx*n1*n2*l + ej*dy*n2**2*b*l + ej*dy*n2**2*b + em*dy*b*l + em*dy*b)/(dy*b*l), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(b*l + b + l)/(dy*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -l*(ej*dx*n1*n2*l + ej*dx*n1*n2 + ej*dy*n2**2 + em*dy)/(dy*(l + 1)), (+1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*l/dy},
+    {(+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(b - 1)/(b - 2), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(b - 2)/(b - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*l + ej*dx*n1**2*l + ej*dy*n1*n2*b**2*l + ej*dy*n1*n2*b*l - ej*dy*n1*n2*b + em*dx*b*l + em*dx*l)/(dx*b*l), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -b*(ej*dx*n1**2 + ej*dy*n1*n2*b + ej*dy*n1*n2 + em*dx)/(dx*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(b*l + b + l)/(dx*(l + 1)), (+1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*b/dx},
+    {(-3, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*ll/dy, (-3, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ll*(ej*dx*n1*n2*ll + ej*dx*n1*n2 + ej*dy*n2**2 + em*dy)/(dy*(ll + 1)), (-2, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dx*n1*n2*(2*ll + 1)/dy, (-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*ll**2 + ej*dy*n2**2*ll + ej*dy*n2**2 + em*dy*ll + em*dy)/(dy*ll), (-2, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dx*n1*n2/dy, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(l + ll - 2)/((l - 1)*(ll - 1))},
+]
+_case3_sc5_eta_m1_offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+1, +1)]
+_case3_sc5_eta_m1_row_ifaces = ("L", "B", "extra")
+_case3_sc5_eta_m1 = {
+    'M': _case3_sc5_eta_m1_M, 'd': _case3_sc5_eta_m1_d, 'N': _case3_sc5_eta_m1_N,
+    'offsets': _case3_sc5_eta_m1_offsets, 'row_ifaces': _case3_sc5_eta_m1_row_ifaces,
+}
+CASE3_EVAL[(5, -1)] = _case3_sc5_eta_m1
+
+# case3 sub-case 5, eta sign +1
+_case3_sc5_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(2*l + ll - 3)/((l - 1)*(l + ll - 2)) + (2*l + 1)*(ej*n2**2 - ep)/(l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(l - 1)/((ll - 1)*(l + ll - 2))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(2*b - 3)/((b - 2)*(b - 1)) + (2*b + 1)*(ej*n1**2 - ep)/(b*(b + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(ll - 1)/((l - 1)*(l + ll - 2)), _Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(l + 2*ll - 3)/((ll - 1)*(l + ll - 2)) - (2*ll + 1)*(ej*n2**2 - ep)/(ll*(ll + 1))],
+]
+_case3_sc5_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 + av*em*(l + ll - 2)/((l - 1)*(ll - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 + av*em*(2*b - 3)/((b - 2)*(b - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 - av*em*(l + ll - 2)/((l - 1)*(ll - 1)) + bv*dx*n1]
+_case3_sc5_eta_p1_N = [
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(l + ll - 2)/((l - 1)*(ll - 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*l**2 + ej*dx*n1*n2*b*l - ej*dx*n1*n2*l + ej*dy*n2**2*b*l + ej*dy*n2**2*b - ep*dy*b*l - ep*dy*b)/(dy*b*l), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(b*l + b + l)/(dy*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -l*(ej*dx*n1*n2*l + ej*dx*n1*n2 + ej*dy*n2**2 - ep*dy)/(dy*(l + 1)), (+1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*l/dy},
+    {(+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(b - 1)/(b - 2), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(b - 2)/(b - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*l + ej*dx*n1**2*l + ej*dy*n1*n2*b**2*l + ej*dy*n1*n2*b*l - ej*dy*n1*n2*b - ep*dx*b*l - ep*dx*l)/(dx*b*l), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -b*(ej*dx*n1**2 + ej*dy*n1*n2*b + ej*dy*n1*n2 - ep*dx)/(dx*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(b*l + b + l)/(dx*(l + 1)), (+1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*b/dx},
+    {(-3, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*ll/dy, (-3, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ll*(ej*dx*n1*n2*ll + ej*dx*n1*n2 + ej*dy*n2**2 - ep*dy)/(dy*(ll + 1)), (-2, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dx*n1*n2*(2*ll + 1)/dy, (-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*ll**2 + ej*dy*n2**2*ll + ej*dy*n2**2 - ep*dy*ll - ep*dy)/(dy*ll), (-2, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dx*n1*n2/dy, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(l + ll - 2)/((l - 1)*(ll - 1))},
+]
+_case3_sc5_eta_p1_offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+1, +1)]
+_case3_sc5_eta_p1_row_ifaces = ("L", "B", "extra")
+_case3_sc5_eta_p1 = {
+    'M': _case3_sc5_eta_p1_M, 'd': _case3_sc5_eta_p1_d, 'N': _case3_sc5_eta_p1_N,
+    'offsets': _case3_sc5_eta_p1_offsets, 'row_ifaces': _case3_sc5_eta_p1_row_ifaces,
+}
+CASE3_EVAL[(5, 1)] = _case3_sc5_eta_p1
+
+# case3 sub-case 6, eta sign -1
+_case3_sc6_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(2*l - 3)/((l - 2)*(l - 1)) + (2*l + 1)*(ej*n2**2 + em)/(l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(2*b + bb - 3)/((b - 1)*(b + bb - 2)) + (2*b + 1)*(ej*n1**2 + em)/(b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(b - 1)/((bb - 1)*(b + bb - 2))],
+    [_Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(bb - 1)/((b - 1)*(b + bb - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(b + 2*bb - 3)/((bb - 1)*(b + bb - 2)) - (2*bb + 1)*(ej*n1**2 + em)/(bb*(bb + 1))],
+]
+_case3_sc6_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 + av*ep*(2*l - 3)/((l - 2)*(l - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 + av*ep*(b + bb - 2)/((b - 1)*(bb - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 - av*ep*(b + bb - 2)/((b - 1)*(bb - 1)) + bv*dy*n2]
+_case3_sc6_eta_m1_N = [
+    {(-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(l - 1)/(l - 2), (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(l - 2)/(l - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*l**2 + ej*dx*n1*n2*b*l - ej*dx*n1*n2*l + ej*dy*n2**2*b*l + ej*dy*n2**2*b + em*dy*b*l + em*dy*b)/(dy*b*l), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(b*l + b + l)/(dy*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -l*(ej*dx*n1*n2*l + ej*dx*n1*n2 + ej*dy*n2**2 + em*dy)/(dy*(l + 1)), (+1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*l/dy},
+    {(+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(b + bb - 2)/((b - 1)*(bb - 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*l + ej*dx*n1**2*l + ej*dy*n1*n2*b**2*l + ej*dy*n1*n2*b*l - ej*dy*n1*n2*b + em*dx*b*l + em*dx*l)/(dx*b*l), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -b*(ej*dx*n1**2 + ej*dy*n1*n2*b + ej*dy*n1*n2 + em*dx)/(dx*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(b*l + b + l)/(dx*(l + 1)), (+1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*b/dx},
+    {(-1, -3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*bb/dx, (-1, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dy*n1*n2*(2*bb + 1)/dx, (+0, -3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: bb*(ej*dx*n1**2 + ej*dy*n1*n2*bb + ej*dy*n1*n2 + em*dx)/(dx*(bb + 1)), (+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*bb + ej*dx*n1**2 + ej*dy*n1*n2*bb**2 + em*dx*bb + em*dx)/(dx*bb), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(b + bb - 2)/((b - 1)*(bb - 1)), (+1, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dy*n1*n2/dx},
+]
+_case3_sc6_eta_m1_offsets = [(-2, +0), (-1, -3), (-1, -2), (-1, +0), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+1, +1)]
+_case3_sc6_eta_m1_row_ifaces = ("L", "B", "extra")
+_case3_sc6_eta_m1 = {
+    'M': _case3_sc6_eta_m1_M, 'd': _case3_sc6_eta_m1_d, 'N': _case3_sc6_eta_m1_N,
+    'offsets': _case3_sc6_eta_m1_offsets, 'row_ifaces': _case3_sc6_eta_m1_row_ifaces,
+}
+CASE3_EVAL[(6, -1)] = _case3_sc6_eta_m1
+
+# case3 sub-case 6, eta sign +1
+_case3_sc6_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(2*l - 3)/((l - 2)*(l - 1)) + (2*l + 1)*(ej*n2**2 - ep)/(l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(2*b + bb - 3)/((b - 1)*(b + bb - 2)) + (2*b + 1)*(ej*n1**2 - ep)/(b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(b - 1)/((bb - 1)*(b + bb - 2))],
+    [_Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(bb - 1)/((b - 1)*(b + bb - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(b + 2*bb - 3)/((bb - 1)*(b + bb - 2)) - (2*bb + 1)*(ej*n1**2 - ep)/(bb*(bb + 1))],
+]
+_case3_sc6_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 + av*em*(2*l - 3)/((l - 2)*(l - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 + av*em*(b + bb - 2)/((b - 1)*(bb - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 - av*em*(b + bb - 2)/((b - 1)*(bb - 1)) + bv*dy*n2]
+_case3_sc6_eta_p1_N = [
+    {(-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(l - 1)/(l - 2), (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(l - 2)/(l - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*l**2 + ej*dx*n1*n2*b*l - ej*dx*n1*n2*l + ej*dy*n2**2*b*l + ej*dy*n2**2*b - ep*dy*b*l - ep*dy*b)/(dy*b*l), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(b*l + b + l)/(dy*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -l*(ej*dx*n1*n2*l + ej*dx*n1*n2 + ej*dy*n2**2 - ep*dy)/(dy*(l + 1)), (+1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*l/dy},
+    {(+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(b + bb - 2)/((b - 1)*(bb - 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*l + ej*dx*n1**2*l + ej*dy*n1*n2*b**2*l + ej*dy*n1*n2*b*l - ej*dy*n1*n2*b - ep*dx*b*l - ep*dx*l)/(dx*b*l), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -b*(ej*dx*n1**2 + ej*dy*n1*n2*b + ej*dy*n1*n2 - ep*dx)/(dx*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(b*l + b + l)/(dx*(l + 1)), (+1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*b/dx},
+    {(-1, -3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*bb/dx, (-1, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dy*n1*n2*(2*bb + 1)/dx, (+0, -3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: bb*(ej*dx*n1**2 + ej*dy*n1*n2*bb + ej*dy*n1*n2 - ep*dx)/(dx*(bb + 1)), (+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*bb + ej*dx*n1**2 + ej*dy*n1*n2*bb**2 - ep*dx*bb - ep*dx)/(dx*bb), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(b + bb - 2)/((b - 1)*(bb - 1)), (+1, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dy*n1*n2/dx},
+]
+_case3_sc6_eta_p1_offsets = [(-2, +0), (-1, -3), (-1, -2), (-1, +0), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+1, +1)]
+_case3_sc6_eta_p1_row_ifaces = ("L", "B", "extra")
+_case3_sc6_eta_p1 = {
+    'M': _case3_sc6_eta_p1_M, 'd': _case3_sc6_eta_p1_d, 'N': _case3_sc6_eta_p1_N,
+    'offsets': _case3_sc6_eta_p1_offsets, 'row_ifaces': _case3_sc6_eta_p1_row_ifaces,
+}
+CASE3_EVAL[(6, 1)] = _case3_sc6_eta_p1
+
+# case3 sub-case 7, eta sign -1
+_case3_sc7_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(2*b + bb - 3)/((b - 1)*(b + bb - 2)) + (2*b + 1)*(ej*n1**2 + em)/(b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(b - 1)/((bb - 1)*(b + bb - 2))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(2*r - 3)/((r - 2)*(r - 1)) - (2*r + 1)*(ej*n2**2 + em)/(r*(r + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(bb - 1)/((b - 1)*(b + bb - 2)), _Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(b + 2*bb - 3)/((bb - 1)*(b + bb - 2)) - (2*bb + 1)*(ej*n1**2 + em)/(bb*(bb + 1))],
+]
+_case3_sc7_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 + av*ep*(b + bb - 2)/((b - 1)*(bb - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 - av*ep*(2*r - 3)/((r - 2)*(r - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 - av*ep*(b + bb - 2)/((b - 1)*(bb - 1)) + bv*dy*n2]
+_case3_sc7_eta_m1_N = [
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(b*r + b + r)/(dx*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*b/dx, (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(b + bb - 2)/((b - 1)*(bb - 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*r + ej*dx*n1**2*r - ej*dy*n1*n2*b**2*r - ej*dy*n1*n2*b*r + ej*dy*n1*n2*b + em*dx*b*r + em*dx*r)/(dx*b*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -b*(ej*dx*n1**2 - ej*dy*n1*n2*b - ej*dy*n1*n2 + em*dx)/(dx*(b + 1))},
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -r*(ej*dx*n1*n2*r + ej*dx*n1*n2 - ej*dy*n2**2 - em*dy)/(dy*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*r/dy, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*r**2 + ej*dx*n1*n2*b*r - ej*dx*n1*n2*r - ej*dy*n2**2*b*r - ej*dy*n2**2*b - em*dy*b*r - em*dy*b)/(dy*b*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(b*r + b + r)/(dy*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(r - 2)/(r - 1), (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(r - 1)/(r - 2)},
+    {(-1, -3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*bb/dx, (-1, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dy*n1*n2*(2*bb + 1)/dx, (+0, -3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: bb*(ej*dx*n1**2 + ej*dy*n1*n2*bb + ej*dy*n1*n2 + em*dx)/(dx*(bb + 1)), (+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*bb + ej*dx*n1**2 + ej*dy*n1*n2*bb**2 + em*dx*bb + em*dx)/(dx*bb), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(b + bb - 2)/((b - 1)*(bb - 1)), (+1, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dy*n1*n2/dx},
+]
+_case3_sc7_eta_m1_offsets = [(-1, -3), (-1, -2), (-1, +0), (-1, +1), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+2, +0)]
+_case3_sc7_eta_m1_row_ifaces = ("B", "R", "extra")
+_case3_sc7_eta_m1 = {
+    'M': _case3_sc7_eta_m1_M, 'd': _case3_sc7_eta_m1_d, 'N': _case3_sc7_eta_m1_N,
+    'offsets': _case3_sc7_eta_m1_offsets, 'row_ifaces': _case3_sc7_eta_m1_row_ifaces,
+}
+CASE3_EVAL[(7, -1)] = _case3_sc7_eta_m1
+
+# case3 sub-case 7, eta sign +1
+_case3_sc7_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(2*b + bb - 3)/((b - 1)*(b + bb - 2)) + (2*b + 1)*(ej*n1**2 - ep)/(b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(b - 1)/((bb - 1)*(b + bb - 2))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(2*r - 3)/((r - 2)*(r - 1)) - (2*r + 1)*(ej*n2**2 - ep)/(r*(r + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(bb - 1)/((b - 1)*(b + bb - 2)), _Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(b + 2*bb - 3)/((bb - 1)*(b + bb - 2)) - (2*bb + 1)*(ej*n1**2 - ep)/(bb*(bb + 1))],
+]
+_case3_sc7_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 + av*em*(b + bb - 2)/((b - 1)*(bb - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 - av*em*(2*r - 3)/((r - 2)*(r - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 - av*em*(b + bb - 2)/((b - 1)*(bb - 1)) + bv*dy*n2]
+_case3_sc7_eta_p1_N = [
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(b*r + b + r)/(dx*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*b/dx, (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(b + bb - 2)/((b - 1)*(bb - 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*r + ej*dx*n1**2*r - ej*dy*n1*n2*b**2*r - ej*dy*n1*n2*b*r + ej*dy*n1*n2*b - ep*dx*b*r - ep*dx*r)/(dx*b*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -b*(ej*dx*n1**2 - ej*dy*n1*n2*b - ej*dy*n1*n2 - ep*dx)/(dx*(b + 1))},
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -r*(ej*dx*n1*n2*r + ej*dx*n1*n2 - ej*dy*n2**2 + ep*dy)/(dy*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*r/dy, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*r**2 + ej*dx*n1*n2*b*r - ej*dx*n1*n2*r - ej*dy*n2**2*b*r - ej*dy*n2**2*b + ep*dy*b*r + ep*dy*b)/(dy*b*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(b*r + b + r)/(dy*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(r - 2)/(r - 1), (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(r - 1)/(r - 2)},
+    {(-1, -3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*bb/dx, (-1, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dy*n1*n2*(2*bb + 1)/dx, (+0, -3): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: bb*(ej*dx*n1**2 + ej*dy*n1*n2*bb + ej*dy*n1*n2 - ep*dx)/(dx*(bb + 1)), (+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*bb + ej*dx*n1**2 + ej*dy*n1*n2*bb**2 - ep*dx*bb - ep*dx)/(dx*bb), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(b + bb - 2)/((b - 1)*(bb - 1)), (+1, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dy*n1*n2/dx},
+]
+_case3_sc7_eta_p1_offsets = [(-1, -3), (-1, -2), (-1, +0), (-1, +1), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+2, +0)]
+_case3_sc7_eta_p1_row_ifaces = ("B", "R", "extra")
+_case3_sc7_eta_p1 = {
+    'M': _case3_sc7_eta_p1_M, 'd': _case3_sc7_eta_p1_d, 'N': _case3_sc7_eta_p1_N,
+    'offsets': _case3_sc7_eta_p1_offsets, 'row_ifaces': _case3_sc7_eta_p1_row_ifaces,
+}
+CASE3_EVAL[(7, 1)] = _case3_sc7_eta_p1
+
+# case3 sub-case 8, eta sign -1
+_case3_sc8_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(2*b - 3)/((b - 2)*(b - 1)) + (2*b + 1)*(ej*n1**2 + em)/(b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(2*r + rr - 3)/((r - 1)*(r + rr - 2)) - (2*r + 1)*(ej*n2**2 + em)/(r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(r - 1)/((rr - 1)*(r + rr - 2))],
+    [_Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(rr - 1)/((r - 1)*(r + rr - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(r + 2*rr - 3)/((rr - 1)*(r + rr - 2)) + (2*rr + 1)*(ej*n2**2 + em)/(rr*(rr + 1))],
+]
+_case3_sc8_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 + av*ep*(2*b - 3)/((b - 2)*(b - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 - av*ep*(r + rr - 2)/((r - 1)*(rr - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 + av*ep*(r + rr - 2)/((r - 1)*(rr - 1)) + bv*dx*n1]
+_case3_sc8_eta_m1_N = [
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(b*r + b + r)/(dx*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*b/dx, (+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(b - 1)/(b - 2), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(b - 2)/(b - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*r + ej*dx*n1**2*r - ej*dy*n1*n2*b**2*r - ej*dy*n1*n2*b*r + ej*dy*n1*n2*b + em*dx*b*r + em*dx*r)/(dx*b*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -b*(ej*dx*n1**2 - ej*dy*n1*n2*b - ej*dy*n1*n2 + em*dx)/(dx*(b + 1))},
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -r*(ej*dx*n1*n2*r + ej*dx*n1*n2 - ej*dy*n2**2 - em*dy)/(dy*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*r/dy, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*r**2 + ej*dx*n1*n2*b*r - ej*dx*n1*n2*r - ej*dy*n2**2*b*r - ej*dy*n2**2*b - em*dy*b*r - em*dy*b)/(dy*b*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(b*r + b + r)/(dy*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(r + rr - 2)/((r - 1)*(rr - 1))},
+    {(+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(r + rr - 2)/((r - 1)*(rr - 1)), (+2, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dx*n1*n2*(2*rr + 1)/dy, (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*rr**2 - ej*dy*n2**2*rr - ej*dy*n2**2 - em*dy*rr - em*dy)/(dy*rr), (+2, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dx*n1*n2/dy, (+3, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*rr/dy, (+3, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: rr*(ej*dx*n1*n2*rr + ej*dx*n1*n2 - ej*dy*n2**2 - em*dy)/(dy*(rr + 1))},
+]
+_case3_sc8_eta_m1_offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+_case3_sc8_eta_m1_row_ifaces = ("B", "R", "extra")
+_case3_sc8_eta_m1 = {
+    'M': _case3_sc8_eta_m1_M, 'd': _case3_sc8_eta_m1_d, 'N': _case3_sc8_eta_m1_N,
+    'offsets': _case3_sc8_eta_m1_offsets, 'row_ifaces': _case3_sc8_eta_m1_row_ifaces,
+}
+CASE3_EVAL[(8, -1)] = _case3_sc8_eta_m1
+
+# case3 sub-case 8, eta sign +1
+_case3_sc8_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(2*b - 3)/((b - 2)*(b - 1)) + (2*b + 1)*(ej*n1**2 - ep)/(b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), _Z],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(2*r + rr - 3)/((r - 1)*(r + rr - 2)) - (2*r + 1)*(ej*n2**2 - ep)/(r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(r - 1)/((rr - 1)*(r + rr - 2))],
+    [_Z, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(rr - 1)/((r - 1)*(r + rr - 2)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(r + 2*rr - 3)/((rr - 1)*(r + rr - 2)) + (2*rr + 1)*(ej*n2**2 - ep)/(rr*(rr + 1))],
+]
+_case3_sc8_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 + av*em*(2*b - 3)/((b - 2)*(b - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 - av*em*(r + rr - 2)/((r - 1)*(rr - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 + av*em*(r + rr - 2)/((r - 1)*(rr - 1)) + bv*dx*n1]
+_case3_sc8_eta_p1_N = [
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(b*r + b + r)/(dx*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*b/dx, (+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(b - 1)/(b - 2), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(b - 2)/(b - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*r + ej*dx*n1**2*r - ej*dy*n1*n2*b**2*r - ej*dy*n1*n2*b*r + ej*dy*n1*n2*b - ep*dx*b*r - ep*dx*r)/(dx*b*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -b*(ej*dx*n1**2 - ej*dy*n1*n2*b - ej*dy*n1*n2 - ep*dx)/(dx*(b + 1))},
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -r*(ej*dx*n1*n2*r + ej*dx*n1*n2 - ej*dy*n2**2 + ep*dy)/(dy*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*r/dy, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*r**2 + ej*dx*n1*n2*b*r - ej*dx*n1*n2*r - ej*dy*n2**2*b*r - ej*dy*n2**2*b + ep*dy*b*r + ep*dy*b)/(dy*b*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(b*r + b + r)/(dy*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(r + rr - 2)/((r - 1)*(rr - 1))},
+    {(+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(r + rr - 2)/((r - 1)*(rr - 1)), (+2, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (1/2)*ej*dx*n1*n2*(2*rr + 1)/dy, (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*rr**2 - ej*dy*n2**2*rr - ej*dy*n2**2 + ep*dy*rr + ep*dy)/(dy*rr), (+2, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -1/2*ej*dx*n1*n2/dy, (+3, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*rr/dy, (+3, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: rr*(ej*dx*n1*n2*rr + ej*dx*n1*n2 - ej*dy*n2**2 + ep*dy)/(dy*(rr + 1))},
+]
+_case3_sc8_eta_p1_offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+_case3_sc8_eta_p1_row_ifaces = ("B", "R", "extra")
+_case3_sc8_eta_p1 = {
+    'M': _case3_sc8_eta_p1_M, 'd': _case3_sc8_eta_p1_d, 'N': _case3_sc8_eta_p1_N,
+    'offsets': _case3_sc8_eta_p1_offsets, 'row_ifaces': _case3_sc8_eta_p1_row_ifaces,
+}
+CASE3_EVAL[(8, 1)] = _case3_sc8_eta_p1
+
+# case4 sub-case 1, eta sign -1
+_case4_sc1_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n2*(dx*n1*l*r - dx*n1*r - dy*n2*l - 2*dy*n2*r)/(dy*r*(l + r)) - em*(l + 2*r)/(r*(l + r)) + ep*(2*r - 3)/((r - 2)*(r - 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n2*r*(dx*n1*r + dx*n1 + dy*n2)/(dy*l*(l + r)) - em*r/(l*(l + r))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(l*t + l - t)/(dx*r*(l + r)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(2*t - 3)/((t - 2)*(t - 1)) - (2*t + 1)*(ej*n1**2 + em)/(t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(r*t + r + t)/(dx*l*(l + r))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n2*l*(dx*n1*l - dx*n1 - dy*n2)/(dy*r*(l + r)) + em*l/(r*(l + r)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n2*(dx*n1*l*r + dx*n1*l + 2*dy*n2*l + dy*n2*r)/(dy*l*(l + r)) + em*(2*l + r)/(l*(l + r)) - ep*(2*l - 3)/((l - 2)*(l - 1))],
+]
+_case4_sc1_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 - av*ep*(2*r - 3)/((r - 2)*(r - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 - av*ep*(2*t - 3)/((t - 2)*(t - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 + av*ep*(2*l - 3)/((l - 2)*(l - 1)) + bv*dx*n1]
+_case4_sc1_eta_m1_N = [
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*r/dy, (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(r*t + r + t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*l*r - ej*dx*n1*n2*r**2*t - ej*dx*n1*n2*r*t - ej*dy*n2**2*l*t - ej*dy*n2**2*r*t - em*dy*l*t - em*dy*r*t)/(dy*l*r*t), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(r - 2)/(r - 1), (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(r - 1)/(r - 2)},
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*t/dx, (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: t*(ej*dx*n1**2 + ej*dy*n1*n2*t + ej*dy*n1*n2 + em*dx)/(dx*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*l*r*t + ej*dx*n1**2*l*r - ej*dy*n1*n2*l*t**2 - ej*dy*n1*n2*l*t + ej*dy*n1*n2*r*t**2 + ej*dy*n1*n2*r*t + ej*dy*n1*n2*t**2 + em*dx*l*r*t + em*dx*l*r)/(dx*l*r*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(t - 2)/(t - 1), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(t - 1)/(t - 2)},
+    {(-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(l - 1)/(l - 2), (-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*l/dy, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(l - 2)/(l - 1), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(l*t + l - t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*l**2*t - ej*dx*n1*n2*l*r - ej*dx*n1*n2*l*t - ej*dy*n2**2*l*t - ej*dy*n2**2*r*t - em*dy*l*t - em*dy*r*t)/(dy*l*r*t)},
+]
+_case4_sc1_eta_m1_offsets = [(-2, +0), (-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+_case4_sc1_eta_m1_row_ifaces = ("R", "T", "L")
+_case4_sc1_eta_m1 = {
+    'M': _case4_sc1_eta_m1_M, 'd': _case4_sc1_eta_m1_d, 'N': _case4_sc1_eta_m1_N,
+    'offsets': _case4_sc1_eta_m1_offsets, 'row_ifaces': _case4_sc1_eta_m1_row_ifaces,
+}
+CASE4_EVAL[(1, -1)] = _case4_sc1_eta_m1
+
+# case4 sub-case 1, eta sign +1
+_case4_sc1_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n2*(dx*n1*l*r - dx*n1*r - dy*n2*l - 2*dy*n2*r)/(dy*r*(l + r)) - em*(2*r - 3)/((r - 2)*(r - 1)) + ep*(l + 2*r)/(r*(l + r)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n2*r*(dx*n1*r + dx*n1 + dy*n2)/(dy*l*(l + r)) + ep*r/(l*(l + r))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(l*t + l - t)/(dx*r*(l + r)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(2*t - 3)/((t - 2)*(t - 1)) - (2*t + 1)*(ej*n1**2 - ep)/(t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(r*t + r + t)/(dx*l*(l + r))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n2*l*(dx*n1*l - dx*n1 - dy*n2)/(dy*r*(l + r)) - ep*l/(r*(l + r)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2/(dy*t*(t + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n2*(dx*n1*l*r + dx*n1*l + 2*dy*n2*l + dy*n2*r)/(dy*l*(l + r)) + em*(2*l - 3)/((l - 2)*(l - 1)) - ep*(2*l + r)/(l*(l + r))],
+]
+_case4_sc1_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 - av*em*(2*r - 3)/((r - 2)*(r - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 - av*em*(2*t - 3)/((t - 2)*(t - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 + av*em*(2*l - 3)/((l - 2)*(l - 1)) + bv*dx*n1]
+_case4_sc1_eta_p1_N = [
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*r/dy, (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(r*t + r + t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*l*r - ej*dx*n1*n2*r**2*t - ej*dx*n1*n2*r*t - ej*dy*n2**2*l*t - ej*dy*n2**2*r*t + ep*dy*l*t + ep*dy*r*t)/(dy*l*r*t), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(r - 2)/(r - 1), (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(r - 1)/(r - 2)},
+    {(-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*t/dx, (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: t*(ej*dx*n1**2 + ej*dy*n1*n2*t + ej*dy*n1*n2 - ep*dx)/(dx*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*l*r*t + ej*dx*n1**2*l*r - ej*dy*n1*n2*l*t**2 - ej*dy*n1*n2*l*t + ej*dy*n1*n2*r*t**2 + ej*dy*n1*n2*r*t + ej*dy*n1*n2*t**2 - ep*dx*l*r*t - ep*dx*l*r)/(dx*l*r*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(t - 2)/(t - 1), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(t - 1)/(t - 2)},
+    {(-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(l - 1)/(l - 2), (-1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*l/dy, (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(l - 2)/(l - 1), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(l*t + l - t)/(dy*(t + 1)), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1*n2*l**2*t - ej*dx*n1*n2*l*r - ej*dx*n1*n2*l*t - ej*dy*n2**2*l*t - ej*dy*n2**2*r*t + ep*dy*l*t + ep*dy*r*t)/(dy*l*r*t)},
+]
+_case4_sc1_eta_p1_offsets = [(-2, +0), (-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+_case4_sc1_eta_p1_row_ifaces = ("R", "T", "L")
+_case4_sc1_eta_p1 = {
+    'M': _case4_sc1_eta_p1_M, 'd': _case4_sc1_eta_p1_d, 'N': _case4_sc1_eta_p1_N,
+    'offsets': _case4_sc1_eta_p1_offsets, 'row_ifaces': _case4_sc1_eta_p1_row_ifaces,
+}
+CASE4_EVAL[(1, 1)] = _case4_sc1_eta_p1
+
+# case4 sub-case 2, eta sign -1
+_case4_sc2_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(2*r - 3)/((r - 2)*(r - 1)) - (2*r + 1)*(ej*n2**2 + em)/(r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(b*r + b + r)/(dy*t*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(r*t - r + t)/(dy*b*(b + t))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n1*(dx*n1*b + 2*dx*n1*t - dy*n2*b*t - dy*n2*t)/(dx*t*(b + t)) - em*(b + 2*t)/(t*(b + t)) + ep*(2*t - 3)/((t - 2)*(t - 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n1*t*(dx*n1 + dy*n2*t - dy*n2)/(dx*b*(b + t)) - em*t/(b*(b + t))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n1*b*(dx*n1 - dy*n2*b - dy*n2)/(dx*t*(b + t)) + em*b/(t*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n1*(2*dx*n1*b + dx*n1*t + dy*n2*b*t - dy*n2*b)/(dx*b*(b + t)) + em*(2*b + t)/(b*(b + t)) - ep*(2*b - 3)/((b - 2)*(b - 1))],
+]
+_case4_sc2_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 - av*ep*(2*r - 3)/((r - 2)*(r - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 - av*ep*(2*t - 3)/((t - 2)*(t - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 + av*ep*(2*b - 3)/((b - 2)*(b - 1)) + bv*dy*n2]
+_case4_sc2_eta_m1_N = [
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -r*(ej*dx*n1*n2*r + ej*dx*n1*n2 - ej*dy*n2**2 - em*dy)/(dy*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*r/dy, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*r**2 + ej*dx*n1*n2*b*r - ej*dx*n1*n2*r**2*t + ej*dx*n1*n2*r**2 - ej*dx*n1*n2*r*t - ej*dy*n2**2*b*r*t - ej*dy*n2**2*b*t - em*dy*b*r*t - em*dy*b*t)/(dy*b*r*t), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(r - 2)/(r - 1), (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(r - 1)/(r - 2)},
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(r*t - r + t)/(dx*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*t/dx, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*b*r + ej*dx*n1**2*r*t - ej*dy*n1*n2*b*t + ej*dy*n1*n2*r*t**2 - ej*dy*n1*n2*r*t + em*dx*b*r + em*dx*r*t)/(dx*b*r*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(t - 2)/(t - 1), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(t - 1)/(t - 2)},
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(b*r + b + r)/(dx*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*b/dx, (+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(b - 1)/(b - 2), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(b - 2)/(b - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*r + ej*dx*n1**2*r*t - ej*dy*n1*n2*b**2*r - ej*dy*n1*n2*b*r + ej*dy*n1*n2*b*t + em*dx*b*r + em*dx*r*t)/(dx*b*r*t)},
+]
+_case4_sc2_eta_m1_offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+_case4_sc2_eta_m1_row_ifaces = ("R", "T", "B")
+_case4_sc2_eta_m1 = {
+    'M': _case4_sc2_eta_m1_M, 'd': _case4_sc2_eta_m1_d, 'N': _case4_sc2_eta_m1_N,
+    'offsets': _case4_sc2_eta_m1_offsets, 'row_ifaces': _case4_sc2_eta_m1_row_ifaces,
+}
+CASE4_EVAL[(2, -1)] = _case4_sc2_eta_m1
+
+# case4 sub-case 2, eta sign +1
+_case4_sc2_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(2*r - 3)/((r - 2)*(r - 1)) - (2*r + 1)*(ej*n2**2 - ep)/(r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(b*r + b + r)/(dy*t*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(r*t - r + t)/(dy*b*(b + t))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n1*(dx*n1*b + 2*dx*n1*t - dy*n2*b*t - dy*n2*t)/(dx*t*(b + t)) - em*(2*t - 3)/((t - 2)*(t - 1)) + ep*(b + 2*t)/(t*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n1*t*(dx*n1 + dy*n2*t - dy*n2)/(dx*b*(b + t)) + ep*t/(b*(b + t))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2/(dx*r*(r + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n1*b*(dx*n1 - dy*n2*b - dy*n2)/(dx*t*(b + t)) - ep*b/(t*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n1*(2*dx*n1*b + dx*n1*t + dy*n2*b*t - dy*n2*b)/(dx*b*(b + t)) + em*(2*b - 3)/((b - 2)*(b - 1)) - ep*(2*b + t)/(b*(b + t))],
+]
+_case4_sc2_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 - av*em*(2*r - 3)/((r - 2)*(r - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 - av*em*(2*t - 3)/((t - 2)*(t - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 + av*em*(2*b - 3)/((b - 2)*(b - 1)) + bv*dy*n2]
+_case4_sc2_eta_p1_N = [
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -r*(ej*dx*n1*n2*r + ej*dx*n1*n2 - ej*dy*n2**2 + ep*dy)/(dy*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*r/dy, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*r**2 + ej*dx*n1*n2*b*r - ej*dx*n1*n2*r**2*t + ej*dx*n1*n2*r**2 - ej*dx*n1*n2*r*t - ej*dy*n2**2*b*r*t - ej*dy*n2**2*b*t + ep*dy*b*r*t + ep*dy*b*t)/(dy*b*r*t), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(r - 2)/(r - 1), (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(r - 1)/(r - 2)},
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(r*t - r + t)/(dx*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*t/dx, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*b*r + ej*dx*n1**2*r*t - ej*dy*n1*n2*b*t + ej*dy*n1*n2*r*t**2 - ej*dy*n1*n2*r*t - ep*dx*b*r - ep*dx*r*t)/(dx*b*r*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(t - 2)/(t - 1), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(t - 1)/(t - 2)},
+    {(-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(b*r + b + r)/(dx*(r + 1)), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*b/dx, (+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(b - 1)/(b - 2), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(b - 2)/(b - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*r + ej*dx*n1**2*r*t - ej*dy*n1*n2*b**2*r - ej*dy*n1*n2*b*r + ej*dy*n1*n2*b*t - ep*dx*b*r - ep*dx*r*t)/(dx*b*r*t)},
+]
+_case4_sc2_eta_p1_offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+_case4_sc2_eta_p1_row_ifaces = ("R", "T", "B")
+_case4_sc2_eta_p1 = {
+    'M': _case4_sc2_eta_p1_M, 'd': _case4_sc2_eta_p1_d, 'N': _case4_sc2_eta_p1_N,
+    'offsets': _case4_sc2_eta_p1_offsets, 'row_ifaces': _case4_sc2_eta_p1_row_ifaces,
+}
+CASE4_EVAL[(2, 1)] = _case4_sc2_eta_p1
+
+# case4 sub-case 3, eta sign -1
+_case4_sc3_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n2*(dx*n1*l*r - dx*n1*r + dy*n2*l + 2*dy*n2*r)/(dy*r*(l + r)) - em*(l + 2*r)/(r*(l + r)) + ep*(2*r - 3)/((r - 2)*(r - 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n2*r*(dx*n1*r + dx*n1 - dy*n2)/(dy*l*(l + r)) - em*r/(l*(l + r))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(b*l - b + l)/(dx*r*(l + r)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(2*b - 3)/((b - 2)*(b - 1)) + (2*b + 1)*(ej*n1**2 + em)/(b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(b*r + b + r)/(dx*l*(l + r))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n2*l*(dx*n1*l - dx*n1 + dy*n2)/(dy*r*(l + r)) + em*l/(r*(l + r)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n2*(dx*n1*l*r + dx*n1*l - 2*dy*n2*l - dy*n2*r)/(dy*l*(l + r)) + em*(2*l + r)/(l*(l + r)) - ep*(2*l - 3)/((l - 2)*(l - 1))],
+]
+_case4_sc3_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 - av*ep*(2*r - 3)/((r - 2)*(r - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 + av*ep*(2*b - 3)/((b - 2)*(b - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 + av*ep*(2*l - 3)/((l - 2)*(l - 1)) + bv*dx*n1]
+_case4_sc3_eta_m1_N = [
+    {(-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*r/dy, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*r**2 + ej*dx*n1*n2*b*r - ej*dx*n1*n2*l*r - ej*dy*n2**2*b*l - ej*dy*n2**2*b*r - em*dy*b*l - em*dy*b*r)/(dy*b*l*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(b*r + b + r)/(dy*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(r - 2)/(r - 1), (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(r - 1)/(r - 2)},
+    {(-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*b/dx, (+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(b - 1)/(b - 2), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(b - 2)/(b - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*l*r + ej*dx*n1**2*l*r + ej*dy*n1*n2*b**2*l - ej*dy*n1*n2*b**2*r - ej*dy*n1*n2*b**2 + ej*dy*n1*n2*b*l - ej*dy*n1*n2*b*r + em*dx*b*l*r + em*dx*l*r)/(dx*b*l*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -b*(ej*dx*n1**2 - ej*dy*n1*n2*b - ej*dy*n1*n2 + em*dx)/(dx*(b + 1))},
+    {(-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(l - 1)/(l - 2), (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(l - 2)/(l - 1), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*l/dy, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*l**2 - ej*dx*n1*n2*b*l - ej*dx*n1*n2*l*r + ej*dy*n2**2*b*l + ej*dy*n2**2*b*r + em*dy*b*l + em*dy*b*r)/(dy*b*l*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(b*l - b + l)/(dy*(b + 1))},
+]
+_case4_sc3_eta_m1_offsets = [(-2, +0), (-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, +0)]
+_case4_sc3_eta_m1_row_ifaces = ("R", "B", "L")
+_case4_sc3_eta_m1 = {
+    'M': _case4_sc3_eta_m1_M, 'd': _case4_sc3_eta_m1_d, 'N': _case4_sc3_eta_m1_N,
+    'offsets': _case4_sc3_eta_m1_offsets, 'row_ifaces': _case4_sc3_eta_m1_row_ifaces,
+}
+CASE4_EVAL[(3, -1)] = _case4_sc3_eta_m1
+
+# case4 sub-case 3, eta sign +1
+_case4_sc3_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n2*(dx*n1*l*r - dx*n1*r + dy*n2*l + 2*dy*n2*r)/(dy*r*(l + r)) - em*(2*r - 3)/((r - 2)*(r - 1)) + ep*(l + 2*r)/(r*(l + r)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n2*r*(dx*n1*r + dx*n1 - dy*n2)/(dy*l*(l + r)) + ep*r/(l*(l + r))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(b*l - b + l)/(dx*r*(l + r)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(2*b - 3)/((b - 2)*(b - 1)) + (2*b + 1)*(ej*n1**2 - ep)/(b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(b*r + b + r)/(dx*l*(l + r))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n2*l*(dx*n1*l - dx*n1 + dy*n2)/(dy*r*(l + r)) - ep*l/(r*(l + r)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2/(dy*b*(b + 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n2*(dx*n1*l*r + dx*n1*l - 2*dy*n2*l - dy*n2*r)/(dy*l*(l + r)) + em*(2*l - 3)/((l - 2)*(l - 1)) - ep*(2*l + r)/(l*(l + r))],
+]
+_case4_sc3_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 - av*em*(2*r - 3)/((r - 2)*(r - 1)) + bv*dx*n1, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 + av*em*(2*b - 3)/((b - 2)*(b - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 + av*em*(2*l - 3)/((l - 2)*(l - 1)) + bv*dx*n1]
+_case4_sc3_eta_p1_N = [
+    {(-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*r/dy, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*r**2 + ej*dx*n1*n2*b*r - ej*dx*n1*n2*l*r - ej*dy*n2**2*b*l - ej*dy*n2**2*b*r + ep*dy*b*l + ep*dy*b*r)/(dy*b*l*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(b*r + b + r)/(dy*(b + 1)), (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(r - 2)/(r - 1), (+2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(r - 1)/(r - 2)},
+    {(-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*b/dx, (+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(b - 1)/(b - 2), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(b - 2)/(b - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*l*r + ej*dx*n1**2*l*r + ej*dy*n1*n2*b**2*l - ej*dy*n1*n2*b**2*r - ej*dy*n1*n2*b**2 + ej*dy*n1*n2*b*l - ej*dy*n1*n2*b*r - ep*dx*b*l*r - ep*dx*l*r)/(dx*b*l*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -b*(ej*dx*n1**2 - ej*dy*n1*n2*b - ej*dy*n1*n2 - ep*dx)/(dx*(b + 1))},
+    {(-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(l - 1)/(l - 2), (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(l - 2)/(l - 1), (-1, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*l/dy, (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*l**2 - ej*dx*n1*n2*b*l - ej*dx*n1*n2*l*r + ej*dy*n2**2*b*l + ej*dy*n2**2*b*r - ep*dy*b*l - ep*dy*b*r)/(dy*b*l*r), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(b*l - b + l)/(dy*(b + 1))},
+]
+_case4_sc3_eta_p1_offsets = [(-2, +0), (-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, +0)]
+_case4_sc3_eta_p1_row_ifaces = ("R", "B", "L")
+_case4_sc3_eta_p1 = {
+    'M': _case4_sc3_eta_p1_M, 'd': _case4_sc3_eta_p1_d, 'N': _case4_sc3_eta_p1_N,
+    'offsets': _case4_sc3_eta_p1_offsets, 'row_ifaces': _case4_sc3_eta_p1_row_ifaces,
+}
+CASE4_EVAL[(3, 1)] = _case4_sc3_eta_p1
+
+# case4 sub-case 4, eta sign -1
+_case4_sc4_eta_m1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n1*(dx*n1*b + 2*dx*n1*t + dy*n2*b*t - dy*n2*t)/(dx*t*(b + t)) - em*(b + 2*t)/(t*(b + t)) + ep*(2*t - 3)/((t - 2)*(t - 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n1*t*(dx*n1 - dy*n2*t - dy*n2)/(dx*b*(b + t)) - em*t/(b*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n1*b*(dx*n1 + dy*n2*b - dy*n2)/(dx*t*(b + t)) + em*b/(t*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n1*(2*dx*n1*b + dx*n1*t - dy*n2*b*t - dy*n2*b)/(dx*b*(b + t)) + em*(2*b + t)/(b*(b + t)) - ep*(2*b - 3)/((b - 2)*(b - 1)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(b*l + b - l)/(dy*t*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(l*t + l + t)/(dy*b*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(2*l - 3)/((l - 2)*(l - 1)) + (2*l + 1)*(ej*n2**2 + em)/(l*(l + 1))],
+]
+_case4_sc4_eta_m1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 - av*ep*(2*t - 3)/((t - 2)*(t - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*ep*dy*n1 + av*ep*(2*b - 3)/((b - 2)*(b - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*ep*dx*n2 + av*ep*(2*l - 3)/((l - 2)*(l - 1)) + bv*dx*n1]
+_case4_sc4_eta_m1_N = [
+    {(+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*b*l + ej*dx*n1**2*l*t + ej*dy*n1*n2*b*t - ej*dy*n1*n2*l*t**2 - ej*dy*n1*n2*l*t + em*dx*b*l + em*dx*l*t)/(dx*b*l*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(t - 2)/(t - 1), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(t - 1)/(t - 2), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*t/dx, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(l*t + l + t)/(dx*(l + 1))},
+    {(+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(b - 1)/(b - 2), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(b - 2)/(b - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*l + ej*dx*n1**2*l*t + ej*dy*n1*n2*b**2*l - ej*dy*n1*n2*b*l - ej*dy*n1*n2*b*t + em*dx*b*l + em*dx*l*t)/(dx*b*l*t), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*b/dx, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(b*l + b - l)/(dx*(l + 1))},
+    {(-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ep*(l - 1)/(l - 2), (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ep*(l - 2)/(l - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*l**2 + ej*dx*n1*n2*b*l - ej*dx*n1*n2*l**2*t - ej*dx*n1*n2*l**2 - ej*dx*n1*n2*l*t + ej*dy*n2**2*b*l*t + ej*dy*n2**2*b*t + em*dy*b*l*t + em*dy*b*t)/(dy*b*l*t), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*l/dy, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: l*(ej*dx*n1*n2*l + ej*dx*n1*n2 - ej*dy*n2**2 - em*dy)/(dy*(l + 1))},
+]
+_case4_sc4_eta_m1_offsets = [(-2, +0), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+_case4_sc4_eta_m1_row_ifaces = ("T", "B", "L")
+_case4_sc4_eta_m1 = {
+    'M': _case4_sc4_eta_m1_M, 'd': _case4_sc4_eta_m1_d, 'N': _case4_sc4_eta_m1_N,
+    'offsets': _case4_sc4_eta_m1_offsets, 'row_ifaces': _case4_sc4_eta_m1_row_ifaces,
+}
+CASE4_EVAL[(4, -1)] = _case4_sc4_eta_m1
+
+# case4 sub-case 4, eta sign +1
+_case4_sc4_eta_p1_M = [
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n1*(dx*n1*b + 2*dx*n1*t + dy*n2*b*t - dy*n2*t)/(dx*t*(b + t)) - em*(2*t - 3)/((t - 2)*(t - 1)) + ep*(b + 2*t)/(t*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*n1*t*(dx*n1 - dy*n2*t - dy*n2)/(dx*b*(b + t)) + ep*t/(b*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n1*b*(dx*n1 + dy*n2*b - dy*n2)/(dx*t*(b + t)) - ep*b/(t*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*n1*(2*dx*n1*b + dx*n1*t - dy*n2*b*t - dy*n2*b)/(dx*b*(b + t)) + em*(2*b - 3)/((b - 2)*(b - 1)) - ep*(2*b + t)/(b*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2/(dx*l*(l + 1))],
+    [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dx*n1*n2*(b*l + b - l)/(dy*t*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*(l*t + l + t)/(dy*b*(b + t)), lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(2*l - 3)/((l - 2)*(l - 1)) + (2*l + 1)*(ej*n2**2 - ep)/(l*(l + 1))],
+]
+_case4_sc4_eta_p1_d = [lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 - av*em*(2*t - 3)/((t - 2)*(t - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: at*em*dy*n1 + av*em*(2*b - 3)/((b - 2)*(b - 1)) + bv*dy*n2, lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -at*em*dx*n2 + av*em*(2*l - 3)/((l - 2)*(l - 1)) + bv*dx*n1]
+_case4_sc4_eta_p1_N = [
+    {(+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -(ej*dx*n1**2*b*l + ej*dx*n1**2*l*t + ej*dy*n1*n2*b*t - ej*dy*n1*n2*l*t**2 - ej*dy*n1*n2*l*t - ep*dx*b*l - ep*dx*l*t)/(dx*b*l*t), (+0, +1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(t - 2)/(t - 1), (+0, +2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(t - 1)/(t - 2), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*t/dx, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*(l*t + l + t)/(dx*(l + 1))},
+    {(+0, -2): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(b - 1)/(b - 2), (+0, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(b - 2)/(b - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1**2*b*l + ej*dx*n1**2*l*t + ej*dy*n1*n2*b**2*l - ej*dy*n1*n2*b*l - ej*dy*n1*n2*b*t - ep*dx*b*l - ep*dx*l*t)/(dx*b*l*t), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dy*n1*n2*b/dx, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: ej*dy*n1*n2*(b*l + b - l)/(dx*(l + 1))},
+    {(-2, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: em*(l - 1)/(l - 2), (-1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -em*(l - 2)/(l - 1), (+0, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: (ej*dx*n1*n2*b*l**2 + ej*dx*n1*n2*b*l - ej*dx*n1*n2*l**2*t - ej*dx*n1*n2*l**2 - ej*dx*n1*n2*l*t + ej*dy*n2**2*b*l*t + ej*dy*n2**2*b*t - ep*dy*b*l*t - ep*dy*b*t)/(dy*b*l*t), (+1, -1): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: -ej*dx*n1*n2*l/dy, (+1, +0): lambda r,t,l,b,rr,tt,ll,bb,n1,n2,av,bv,at,ep,em,ej,dx,dy: l*(ej*dx*n1*n2*l + ej*dx*n1*n2 - ej*dy*n2**2 + ep*dy)/(dy*(l + 1))},
+]
+_case4_sc4_eta_p1_offsets = [(-2, +0), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+_case4_sc4_eta_p1_row_ifaces = ("T", "B", "L")
+_case4_sc4_eta_p1 = {
+    'M': _case4_sc4_eta_p1_M, 'd': _case4_sc4_eta_p1_d, 'N': _case4_sc4_eta_p1_N,
+    'offsets': _case4_sc4_eta_p1_offsets, 'rof_ifaces': _case4_sc4_eta_p1_row_ifaces,
+}
+CASE4_EVAL[(4, 1)] = _case4_sc4_eta_p1
+
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import spsolve
 
@@ -15,8 +508,7 @@ np.set_printoptions(legacy="1.25")  # no type info when printing
 
 
 # ---------------------------------------------------------------------------
-# Case 3 / Case 4 evaluators — hardcoded formulas (no sympy runtime dependency).
-# Per-element functions and dispatch tables live in _hardcoded_formulas.py.
+# Case 3 / Case 4 evaluators — hardcoded M/N/d formulas live above.
 # ---------------------------------------------------------------------------
 
 

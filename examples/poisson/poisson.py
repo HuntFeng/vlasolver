@@ -3240,8 +3240,8 @@ def convergence_test5():
 
 
 if __name__ == "__main__":
-    convergence_test1()
-    convergence_test2()
-    convergence_test3()
+    # convergence_test1()
+    # convergence_test2()
+    # convergence_test3()
     convergence_test4()
-    convergence_test5()
+    # convergence_test5()

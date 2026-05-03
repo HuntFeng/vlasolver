@@ -6,2045 +6,2045 @@ import numpy as np
 # Per-element evaluator functions
 # Each function takes 17 arguments and returns a scalar.
 
-def M_case3_sc1_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(2*theta_R + theta_r - 3)/((theta_R - 1)*(theta_R + theta_r - 2)) - (2*theta_R + 1)*(bj*ny**2 + bm)/(theta_R*(theta_R + 1))
+def M_case3_sc1_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(2*theta_r + theta_rr - 3)/((theta_r - 1)*(theta_r + theta_rr - 2)) - (2*theta_r + 1)*(eps_jump*ny**2 + eps_m)/(theta_r*(theta_r + 1))
 
-def M_case3_sc1_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_R - 1)/((theta_r - 1)*(theta_R + theta_r - 2))
+def M_case3_sc1_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_r - 1)/((theta_rr - 1)*(theta_r + theta_rr - 2))
 
-def M_case3_sc1_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case3_sc1_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case3_sc1_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_r - 1)/((theta_R - 1)*(theta_R + theta_r - 2))
+def M_case3_sc1_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_rr - 1)/((theta_r - 1)*(theta_r + theta_rr - 2))
 
-def M_case3_sc1_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_R + 2*theta_r - 3)/((theta_r - 1)*(theta_R + theta_r - 2)) + (2*theta_r + 1)*(bj*ny**2 + bm)/(theta_r*(theta_r + 1))
+def M_case3_sc1_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_r + 2*theta_rr - 3)/((theta_rr - 1)*(theta_r + theta_rr - 2)) + (2*theta_rr + 1)*(eps_jump*ny**2 + eps_m)/(theta_rr*(theta_rr + 1))
 
-def M_case3_sc1_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc1_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc1_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case3_sc1_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case3_sc1_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc1_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc1_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) - (2*theta_T + 1)*(bj*nx**2 + bm)/(theta_T*(theta_T + 1))
+def M_case3_sc1_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) - (2*theta_t + 1)*(eps_jump*nx**2 + eps_m)/(theta_t*(theta_t + 1))
 
-def d_case3_sc1_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny - a_val*bp*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1)) + b_val*dx*nx
+def d_case3_sc1_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny - a_val*eps_p*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1)) + b_val*dx*nx
 
-def d_case3_sc1_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny + a_val*bp*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1)) + b_val*dx*nx
+def d_case3_sc1_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny + a_val*eps_p*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1)) + b_val*dx*nx
 
-def d_case3_sc1_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx - a_val*bp*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + b_val*dy*ny
+def d_case3_sc1_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx - a_val*eps_p*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + b_val*dy*ny
 
-def N_case3_sc1_eta_m1_r0_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_R/dy
+def N_case3_sc1_eta_m1_r0_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case3_sc1_eta_m1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_R*(bj*dx*nx*ny*theta_R + bj*dx*nx*ny + bj*dy*ny**2 + bm*dy)/(dy*(theta_R + 1))
+def N_case3_sc1_eta_m1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_r*(eps_jump*dx*nx*ny*theta_r + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 + eps_m*dy)/(dy*(theta_r + 1))
 
-def N_case3_sc1_eta_m1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dy*(theta_T + 1))
+def N_case3_sc1_eta_m1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dy*(theta_t + 1))
 
-def N_case3_sc1_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_R**2*theta_T + bj*dx*nx*ny*theta_R*theta_T - bj*dx*nx*ny*theta_R + bj*dy*ny**2*theta_R*theta_T + bj*dy*ny**2*theta_T + bm*dy*theta_R*theta_T + bm*dy*theta_T)/(dy*theta_R*theta_T)
+def N_case3_sc1_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_r**2*theta_t + eps_jump*dx*nx*ny*theta_r*theta_t - eps_jump*dx*nx*ny*theta_r + eps_jump*dy*ny**2*theta_r*theta_t + eps_jump*dy*ny**2*theta_t + eps_m*dy*theta_r*theta_t + eps_m*dy*theta_t)/(dy*theta_r*theta_t)
 
-def N_case3_sc1_eta_m1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1))
+def N_case3_sc1_eta_m1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1))
 
-def N_case3_sc1_eta_m1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1))
+def N_case3_sc1_eta_m1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1))
 
-def N_case3_sc1_eta_m1_r1_op2_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dx*nx*ny*(2*theta_r + 1)/dy
+def N_case3_sc1_eta_m1_r1_op2_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dx*nx*ny*(2*theta_rr + 1)/dy
 
-def N_case3_sc1_eta_m1_r1_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_r**2 - bj*dy*ny**2*theta_r - bj*dy*ny**2 - bm*dy*theta_r - bm*dy)/(dy*theta_r)
+def N_case3_sc1_eta_m1_r1_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_rr**2 - eps_jump*dy*ny**2*theta_rr - eps_jump*dy*ny**2 - eps_m*dy*theta_rr - eps_m*dy)/(dy*theta_rr)
 
-def N_case3_sc1_eta_m1_r1_op2_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dx*nx*ny/dy
+def N_case3_sc1_eta_m1_r1_op2_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dx*nx*ny/dy
 
-def N_case3_sc1_eta_m1_r1_op3_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_r/dy
+def N_case3_sc1_eta_m1_r1_op3_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_rr/dy
 
-def N_case3_sc1_eta_m1_r1_op3_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_r*(bj*dx*nx*ny*theta_r + bj*dx*nx*ny - bj*dy*ny**2 - bm*dy)/(dy*(theta_r + 1))
+def N_case3_sc1_eta_m1_r1_op3_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_rr*(eps_jump*dx*nx*ny*theta_rr + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 - eps_m*dy)/(dy*(theta_rr + 1))
 
-def N_case3_sc1_eta_m1_r2_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_T/dx
+def N_case3_sc1_eta_m1_r2_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case3_sc1_eta_m1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dx*(theta_R + 1))
+def N_case3_sc1_eta_m1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dx*(theta_r + 1))
 
-def N_case3_sc1_eta_m1_r2_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_T*(bj*dx*nx**2 + bj*dy*nx*ny*theta_T + bj*dy*nx*ny + bm*dx)/(dx*(theta_T + 1))
+def N_case3_sc1_eta_m1_r2_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_t*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_t + eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_t + 1))
 
-def N_case3_sc1_eta_m1_r2_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_R*theta_T + bj*dx*nx**2*theta_R + bj*dy*nx*ny*theta_R*theta_T**2 + bj*dy*nx*ny*theta_R*theta_T - bj*dy*nx*ny*theta_T + bm*dx*theta_R*theta_T + bm*dx*theta_R)/(dx*theta_R*theta_T)
+def N_case3_sc1_eta_m1_r2_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_r*theta_t + eps_jump*dx*nx**2*theta_r + eps_jump*dy*nx*ny*theta_r*theta_t**2 + eps_jump*dy*nx*ny*theta_r*theta_t - eps_jump*dy*nx*ny*theta_t + eps_m*dx*theta_r*theta_t + eps_m*dx*theta_r)/(dx*theta_r*theta_t)
 
-def N_case3_sc1_eta_m1_r2_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_T - 2)/(theta_T - 1)
+def N_case3_sc1_eta_m1_r2_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_t - 2)/(theta_t - 1)
 
-def N_case3_sc1_eta_m1_r2_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_T - 1)/(theta_T - 2)
+def N_case3_sc1_eta_m1_r2_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_t - 1)/(theta_t - 2)
 
-def M_case3_sc1_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(2*theta_R + theta_r - 3)/((theta_R - 1)*(theta_R + theta_r - 2)) - (2*theta_R + 1)*(bj*ny**2 - bp)/(theta_R*(theta_R + 1))
+def M_case3_sc1_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(2*theta_r + theta_rr - 3)/((theta_r - 1)*(theta_r + theta_rr - 2)) - (2*theta_r + 1)*(eps_jump*ny**2 - eps_p)/(theta_r*(theta_r + 1))
 
-def M_case3_sc1_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_R - 1)/((theta_r - 1)*(theta_R + theta_r - 2))
+def M_case3_sc1_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_r - 1)/((theta_rr - 1)*(theta_r + theta_rr - 2))
 
-def M_case3_sc1_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case3_sc1_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case3_sc1_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_r - 1)/((theta_R - 1)*(theta_R + theta_r - 2))
+def M_case3_sc1_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_rr - 1)/((theta_r - 1)*(theta_r + theta_rr - 2))
 
-def M_case3_sc1_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_R + 2*theta_r - 3)/((theta_r - 1)*(theta_R + theta_r - 2)) + (2*theta_r + 1)*(bj*ny**2 - bp)/(theta_r*(theta_r + 1))
+def M_case3_sc1_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_r + 2*theta_rr - 3)/((theta_rr - 1)*(theta_r + theta_rr - 2)) + (2*theta_rr + 1)*(eps_jump*ny**2 - eps_p)/(theta_rr*(theta_rr + 1))
 
-def M_case3_sc1_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc1_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc1_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case3_sc1_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case3_sc1_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc1_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc1_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) - (2*theta_T + 1)*(bj*nx**2 - bp)/(theta_T*(theta_T + 1))
+def M_case3_sc1_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) - (2*theta_t + 1)*(eps_jump*nx**2 - eps_p)/(theta_t*(theta_t + 1))
 
-def d_case3_sc1_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny - a_val*bm*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1)) + b_val*dx*nx
+def d_case3_sc1_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny - a_val*eps_m*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1)) + b_val*dx*nx
 
-def d_case3_sc1_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny + a_val*bm*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1)) + b_val*dx*nx
+def d_case3_sc1_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny + a_val*eps_m*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1)) + b_val*dx*nx
 
-def d_case3_sc1_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx - a_val*bm*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + b_val*dy*ny
+def d_case3_sc1_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx - a_val*eps_m*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + b_val*dy*ny
 
-def N_case3_sc1_eta_p1_r0_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_R/dy
+def N_case3_sc1_eta_p1_r0_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case3_sc1_eta_p1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_R*(bj*dx*nx*ny*theta_R + bj*dx*nx*ny + bj*dy*ny**2 - bp*dy)/(dy*(theta_R + 1))
+def N_case3_sc1_eta_p1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_r*(eps_jump*dx*nx*ny*theta_r + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 - eps_p*dy)/(dy*(theta_r + 1))
 
-def N_case3_sc1_eta_p1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dy*(theta_T + 1))
+def N_case3_sc1_eta_p1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dy*(theta_t + 1))
 
-def N_case3_sc1_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_R**2*theta_T + bj*dx*nx*ny*theta_R*theta_T - bj*dx*nx*ny*theta_R + bj*dy*ny**2*theta_R*theta_T + bj*dy*ny**2*theta_T - bp*dy*theta_R*theta_T - bp*dy*theta_T)/(dy*theta_R*theta_T)
+def N_case3_sc1_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_r**2*theta_t + eps_jump*dx*nx*ny*theta_r*theta_t - eps_jump*dx*nx*ny*theta_r + eps_jump*dy*ny**2*theta_r*theta_t + eps_jump*dy*ny**2*theta_t - eps_p*dy*theta_r*theta_t - eps_p*dy*theta_t)/(dy*theta_r*theta_t)
 
-def N_case3_sc1_eta_p1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1))
+def N_case3_sc1_eta_p1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1))
 
-def N_case3_sc1_eta_p1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1))
+def N_case3_sc1_eta_p1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1))
 
-def N_case3_sc1_eta_p1_r1_op2_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dx*nx*ny*(2*theta_r + 1)/dy
+def N_case3_sc1_eta_p1_r1_op2_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dx*nx*ny*(2*theta_rr + 1)/dy
 
-def N_case3_sc1_eta_p1_r1_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_r**2 - bj*dy*ny**2*theta_r - bj*dy*ny**2 + bp*dy*theta_r + bp*dy)/(dy*theta_r)
+def N_case3_sc1_eta_p1_r1_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_rr**2 - eps_jump*dy*ny**2*theta_rr - eps_jump*dy*ny**2 + eps_p*dy*theta_rr + eps_p*dy)/(dy*theta_rr)
 
-def N_case3_sc1_eta_p1_r1_op2_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dx*nx*ny/dy
+def N_case3_sc1_eta_p1_r1_op2_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dx*nx*ny/dy
 
-def N_case3_sc1_eta_p1_r1_op3_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_r/dy
+def N_case3_sc1_eta_p1_r1_op3_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_rr/dy
 
-def N_case3_sc1_eta_p1_r1_op3_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_r*(bj*dx*nx*ny*theta_r + bj*dx*nx*ny - bj*dy*ny**2 + bp*dy)/(dy*(theta_r + 1))
+def N_case3_sc1_eta_p1_r1_op3_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_rr*(eps_jump*dx*nx*ny*theta_rr + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 + eps_p*dy)/(dy*(theta_rr + 1))
 
-def N_case3_sc1_eta_p1_r2_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_T/dx
+def N_case3_sc1_eta_p1_r2_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case3_sc1_eta_p1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dx*(theta_R + 1))
+def N_case3_sc1_eta_p1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dx*(theta_r + 1))
 
-def N_case3_sc1_eta_p1_r2_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_T*(bj*dx*nx**2 + bj*dy*nx*ny*theta_T + bj*dy*nx*ny - bp*dx)/(dx*(theta_T + 1))
+def N_case3_sc1_eta_p1_r2_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_t*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_t + eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_t + 1))
 
-def N_case3_sc1_eta_p1_r2_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_R*theta_T + bj*dx*nx**2*theta_R + bj*dy*nx*ny*theta_R*theta_T**2 + bj*dy*nx*ny*theta_R*theta_T - bj*dy*nx*ny*theta_T - bp*dx*theta_R*theta_T - bp*dx*theta_R)/(dx*theta_R*theta_T)
+def N_case3_sc1_eta_p1_r2_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_r*theta_t + eps_jump*dx*nx**2*theta_r + eps_jump*dy*nx*ny*theta_r*theta_t**2 + eps_jump*dy*nx*ny*theta_r*theta_t - eps_jump*dy*nx*ny*theta_t - eps_p*dx*theta_r*theta_t - eps_p*dx*theta_r)/(dx*theta_r*theta_t)
 
-def N_case3_sc1_eta_p1_r2_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_T - 2)/(theta_T - 1)
+def N_case3_sc1_eta_p1_r2_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_t - 2)/(theta_t - 1)
 
-def N_case3_sc1_eta_p1_r2_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_T - 1)/(theta_T - 2)
+def N_case3_sc1_eta_p1_r2_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_t - 1)/(theta_t - 2)
 
-def M_case3_sc2_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) - (2*theta_R + 1)*(bj*ny**2 + bm)/(theta_R*(theta_R + 1))
+def M_case3_sc2_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) - (2*theta_r + 1)*(eps_jump*ny**2 + eps_m)/(theta_r*(theta_r + 1))
 
-def M_case3_sc2_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case3_sc2_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case3_sc2_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc2_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc2_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case3_sc2_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case3_sc2_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(2*theta_T + theta_t - 3)/((theta_T - 1)*(theta_T + theta_t - 2)) - (2*theta_T + 1)*(bj*nx**2 + bm)/(theta_T*(theta_T + 1))
+def M_case3_sc2_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(2*theta_t + theta_tt - 3)/((theta_t - 1)*(theta_t + theta_tt - 2)) - (2*theta_t + 1)*(eps_jump*nx**2 + eps_m)/(theta_t*(theta_t + 1))
 
-def M_case3_sc2_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_T - 1)/((theta_t - 1)*(theta_T + theta_t - 2))
+def M_case3_sc2_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_t - 1)/((theta_tt - 1)*(theta_t + theta_tt - 2))
 
-def M_case3_sc2_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc2_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc2_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_t - 1)/((theta_T - 1)*(theta_T + theta_t - 2))
+def M_case3_sc2_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_tt - 1)/((theta_t - 1)*(theta_t + theta_tt - 2))
 
-def M_case3_sc2_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_T + 2*theta_t - 3)/((theta_t - 1)*(theta_T + theta_t - 2)) + (2*theta_t + 1)*(bj*nx**2 + bm)/(theta_t*(theta_t + 1))
+def M_case3_sc2_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_t + 2*theta_tt - 3)/((theta_tt - 1)*(theta_t + theta_tt - 2)) + (2*theta_tt + 1)*(eps_jump*nx**2 + eps_m)/(theta_tt*(theta_tt + 1))
 
-def d_case3_sc2_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny - a_val*bp*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + b_val*dx*nx
+def d_case3_sc2_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny - a_val*eps_p*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + b_val*dx*nx
 
-def d_case3_sc2_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx - a_val*bp*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1)) + b_val*dy*ny
+def d_case3_sc2_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx - a_val*eps_p*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1)) + b_val*dy*ny
 
-def d_case3_sc2_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx + a_val*bp*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1)) + b_val*dy*ny
+def d_case3_sc2_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx + a_val*eps_p*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1)) + b_val*dy*ny
 
-def N_case3_sc2_eta_m1_r0_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_R/dy
+def N_case3_sc2_eta_m1_r0_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case3_sc2_eta_m1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_R*(bj*dx*nx*ny*theta_R + bj*dx*nx*ny + bj*dy*ny**2 + bm*dy)/(dy*(theta_R + 1))
+def N_case3_sc2_eta_m1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_r*(eps_jump*dx*nx*ny*theta_r + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 + eps_m*dy)/(dy*(theta_r + 1))
 
-def N_case3_sc2_eta_m1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dy*(theta_T + 1))
+def N_case3_sc2_eta_m1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dy*(theta_t + 1))
 
-def N_case3_sc2_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_R**2*theta_T + bj*dx*nx*ny*theta_R*theta_T - bj*dx*nx*ny*theta_R + bj*dy*ny**2*theta_R*theta_T + bj*dy*ny**2*theta_T + bm*dy*theta_R*theta_T + bm*dy*theta_T)/(dy*theta_R*theta_T)
+def N_case3_sc2_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_r**2*theta_t + eps_jump*dx*nx*ny*theta_r*theta_t - eps_jump*dx*nx*ny*theta_r + eps_jump*dy*ny**2*theta_r*theta_t + eps_jump*dy*ny**2*theta_t + eps_m*dy*theta_r*theta_t + eps_m*dy*theta_t)/(dy*theta_r*theta_t)
 
-def N_case3_sc2_eta_m1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_R - 2)/(theta_R - 1)
+def N_case3_sc2_eta_m1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_r - 2)/(theta_r - 1)
 
-def N_case3_sc2_eta_m1_r0_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_R - 1)/(theta_R - 2)
+def N_case3_sc2_eta_m1_r0_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_r - 1)/(theta_r - 2)
 
-def N_case3_sc2_eta_m1_r1_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_T/dx
+def N_case3_sc2_eta_m1_r1_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case3_sc2_eta_m1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dx*(theta_R + 1))
+def N_case3_sc2_eta_m1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dx*(theta_r + 1))
 
-def N_case3_sc2_eta_m1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_T*(bj*dx*nx**2 + bj*dy*nx*ny*theta_T + bj*dy*nx*ny + bm*dx)/(dx*(theta_T + 1))
+def N_case3_sc2_eta_m1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_t*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_t + eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_t + 1))
 
-def N_case3_sc2_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_R*theta_T + bj*dx*nx**2*theta_R + bj*dy*nx*ny*theta_R*theta_T**2 + bj*dy*nx*ny*theta_R*theta_T - bj*dy*nx*ny*theta_T + bm*dx*theta_R*theta_T + bm*dx*theta_R)/(dx*theta_R*theta_T)
+def N_case3_sc2_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_r*theta_t + eps_jump*dx*nx**2*theta_r + eps_jump*dy*nx*ny*theta_r*theta_t**2 + eps_jump*dy*nx*ny*theta_r*theta_t - eps_jump*dy*nx*ny*theta_t + eps_m*dx*theta_r*theta_t + eps_m*dx*theta_r)/(dx*theta_r*theta_t)
 
-def N_case3_sc2_eta_m1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1))
+def N_case3_sc2_eta_m1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1))
 
-def N_case3_sc2_eta_m1_r2_om1_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dy*nx*ny*(2*theta_t + 1)/dx
+def N_case3_sc2_eta_m1_r2_om1_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dy*nx*ny*(2*theta_tt + 1)/dx
 
-def N_case3_sc2_eta_m1_r2_om1_p3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_t/dx
+def N_case3_sc2_eta_m1_r2_om1_p3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_tt/dx
 
-def N_case3_sc2_eta_m1_r2_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1))
+def N_case3_sc2_eta_m1_r2_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1))
 
-def N_case3_sc2_eta_m1_r2_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_t + bj*dx*nx**2 - bj*dy*nx*ny*theta_t**2 + bm*dx*theta_t + bm*dx)/(dx*theta_t)
+def N_case3_sc2_eta_m1_r2_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_tt + eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_tt**2 + eps_m*dx*theta_tt + eps_m*dx)/(dx*theta_tt)
 
-def N_case3_sc2_eta_m1_r2_op0_p3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_t*(bj*dx*nx**2 - bj*dy*nx*ny*theta_t - bj*dy*nx*ny + bm*dx)/(dx*(theta_t + 1))
+def N_case3_sc2_eta_m1_r2_op0_p3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_tt*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_tt - eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_tt + 1))
 
-def N_case3_sc2_eta_m1_r2_op1_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dy*nx*ny/dx
+def N_case3_sc2_eta_m1_r2_op1_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dy*nx*ny/dx
 
-def M_case3_sc2_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) - (2*theta_R + 1)*(bj*ny**2 - bp)/(theta_R*(theta_R + 1))
+def M_case3_sc2_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) - (2*theta_r + 1)*(eps_jump*ny**2 - eps_p)/(theta_r*(theta_r + 1))
 
-def M_case3_sc2_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case3_sc2_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case3_sc2_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc2_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc2_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case3_sc2_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case3_sc2_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(2*theta_T + theta_t - 3)/((theta_T - 1)*(theta_T + theta_t - 2)) - (2*theta_T + 1)*(bj*nx**2 - bp)/(theta_T*(theta_T + 1))
+def M_case3_sc2_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(2*theta_t + theta_tt - 3)/((theta_t - 1)*(theta_t + theta_tt - 2)) - (2*theta_t + 1)*(eps_jump*nx**2 - eps_p)/(theta_t*(theta_t + 1))
 
-def M_case3_sc2_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_T - 1)/((theta_t - 1)*(theta_T + theta_t - 2))
+def M_case3_sc2_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_t - 1)/((theta_tt - 1)*(theta_t + theta_tt - 2))
 
-def M_case3_sc2_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc2_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc2_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_t - 1)/((theta_T - 1)*(theta_T + theta_t - 2))
+def M_case3_sc2_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_tt - 1)/((theta_t - 1)*(theta_t + theta_tt - 2))
 
-def M_case3_sc2_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_T + 2*theta_t - 3)/((theta_t - 1)*(theta_T + theta_t - 2)) + (2*theta_t + 1)*(bj*nx**2 - bp)/(theta_t*(theta_t + 1))
+def M_case3_sc2_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_t + 2*theta_tt - 3)/((theta_tt - 1)*(theta_t + theta_tt - 2)) + (2*theta_tt + 1)*(eps_jump*nx**2 - eps_p)/(theta_tt*(theta_tt + 1))
 
-def d_case3_sc2_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny - a_val*bm*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + b_val*dx*nx
+def d_case3_sc2_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny - a_val*eps_m*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + b_val*dx*nx
 
-def d_case3_sc2_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx - a_val*bm*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1)) + b_val*dy*ny
+def d_case3_sc2_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx - a_val*eps_m*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1)) + b_val*dy*ny
 
-def d_case3_sc2_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx + a_val*bm*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1)) + b_val*dy*ny
+def d_case3_sc2_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx + a_val*eps_m*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1)) + b_val*dy*ny
 
-def N_case3_sc2_eta_p1_r0_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_R/dy
+def N_case3_sc2_eta_p1_r0_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case3_sc2_eta_p1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_R*(bj*dx*nx*ny*theta_R + bj*dx*nx*ny + bj*dy*ny**2 - bp*dy)/(dy*(theta_R + 1))
+def N_case3_sc2_eta_p1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_r*(eps_jump*dx*nx*ny*theta_r + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 - eps_p*dy)/(dy*(theta_r + 1))
 
-def N_case3_sc2_eta_p1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dy*(theta_T + 1))
+def N_case3_sc2_eta_p1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dy*(theta_t + 1))
 
-def N_case3_sc2_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_R**2*theta_T + bj*dx*nx*ny*theta_R*theta_T - bj*dx*nx*ny*theta_R + bj*dy*ny**2*theta_R*theta_T + bj*dy*ny**2*theta_T - bp*dy*theta_R*theta_T - bp*dy*theta_T)/(dy*theta_R*theta_T)
+def N_case3_sc2_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_r**2*theta_t + eps_jump*dx*nx*ny*theta_r*theta_t - eps_jump*dx*nx*ny*theta_r + eps_jump*dy*ny**2*theta_r*theta_t + eps_jump*dy*ny**2*theta_t - eps_p*dy*theta_r*theta_t - eps_p*dy*theta_t)/(dy*theta_r*theta_t)
 
-def N_case3_sc2_eta_p1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_R - 2)/(theta_R - 1)
+def N_case3_sc2_eta_p1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_r - 2)/(theta_r - 1)
 
-def N_case3_sc2_eta_p1_r0_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_R - 1)/(theta_R - 2)
+def N_case3_sc2_eta_p1_r0_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_r - 1)/(theta_r - 2)
 
-def N_case3_sc2_eta_p1_r1_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_T/dx
+def N_case3_sc2_eta_p1_r1_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case3_sc2_eta_p1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dx*(theta_R + 1))
+def N_case3_sc2_eta_p1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dx*(theta_r + 1))
 
-def N_case3_sc2_eta_p1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_T*(bj*dx*nx**2 + bj*dy*nx*ny*theta_T + bj*dy*nx*ny - bp*dx)/(dx*(theta_T + 1))
+def N_case3_sc2_eta_p1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_t*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_t + eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_t + 1))
 
-def N_case3_sc2_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_R*theta_T + bj*dx*nx**2*theta_R + bj*dy*nx*ny*theta_R*theta_T**2 + bj*dy*nx*ny*theta_R*theta_T - bj*dy*nx*ny*theta_T - bp*dx*theta_R*theta_T - bp*dx*theta_R)/(dx*theta_R*theta_T)
+def N_case3_sc2_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_r*theta_t + eps_jump*dx*nx**2*theta_r + eps_jump*dy*nx*ny*theta_r*theta_t**2 + eps_jump*dy*nx*ny*theta_r*theta_t - eps_jump*dy*nx*ny*theta_t - eps_p*dx*theta_r*theta_t - eps_p*dx*theta_r)/(dx*theta_r*theta_t)
 
-def N_case3_sc2_eta_p1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1))
+def N_case3_sc2_eta_p1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1))
 
-def N_case3_sc2_eta_p1_r2_om1_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dy*nx*ny*(2*theta_t + 1)/dx
+def N_case3_sc2_eta_p1_r2_om1_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dy*nx*ny*(2*theta_tt + 1)/dx
 
-def N_case3_sc2_eta_p1_r2_om1_p3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_t/dx
+def N_case3_sc2_eta_p1_r2_om1_p3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_tt/dx
 
-def N_case3_sc2_eta_p1_r2_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1))
+def N_case3_sc2_eta_p1_r2_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1))
 
-def N_case3_sc2_eta_p1_r2_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_t + bj*dx*nx**2 - bj*dy*nx*ny*theta_t**2 - bp*dx*theta_t - bp*dx)/(dx*theta_t)
+def N_case3_sc2_eta_p1_r2_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_tt + eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_tt**2 - eps_p*dx*theta_tt - eps_p*dx)/(dx*theta_tt)
 
-def N_case3_sc2_eta_p1_r2_op0_p3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_t*(bj*dx*nx**2 - bj*dy*nx*ny*theta_t - bj*dy*nx*ny - bp*dx)/(dx*(theta_t + 1))
+def N_case3_sc2_eta_p1_r2_op0_p3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_tt*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_tt - eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_tt + 1))
 
-def N_case3_sc2_eta_p1_r2_op1_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dy*nx*ny/dx
+def N_case3_sc2_eta_p1_r2_op1_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dy*nx*ny/dx
 
-def M_case3_sc3_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(2*theta_T + theta_t - 3)/((theta_T - 1)*(theta_T + theta_t - 2)) - (2*theta_T + 1)*(bj*nx**2 + bm)/(theta_T*(theta_T + 1))
+def M_case3_sc3_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(2*theta_t + theta_tt - 3)/((theta_t - 1)*(theta_t + theta_tt - 2)) - (2*theta_t + 1)*(eps_jump*nx**2 + eps_m)/(theta_t*(theta_t + 1))
 
-def M_case3_sc3_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case3_sc3_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case3_sc3_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_T - 1)/((theta_t - 1)*(theta_T + theta_t - 2))
+def M_case3_sc3_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_t - 1)/((theta_tt - 1)*(theta_t + theta_tt - 2))
 
-def M_case3_sc3_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case3_sc3_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case3_sc3_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + (2*theta_L + 1)*(bj*ny**2 + bm)/(theta_L*(theta_L + 1))
+def M_case3_sc3_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + (2*theta_l + 1)*(eps_jump*ny**2 + eps_m)/(theta_l*(theta_l + 1))
 
-def M_case3_sc3_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc3_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc3_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_t - 1)/((theta_T - 1)*(theta_T + theta_t - 2))
+def M_case3_sc3_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_tt - 1)/((theta_t - 1)*(theta_t + theta_tt - 2))
 
-def M_case3_sc3_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc3_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc3_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_T + 2*theta_t - 3)/((theta_t - 1)*(theta_T + theta_t - 2)) + (2*theta_t + 1)*(bj*nx**2 + bm)/(theta_t*(theta_t + 1))
+def M_case3_sc3_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_t + 2*theta_tt - 3)/((theta_tt - 1)*(theta_t + theta_tt - 2)) + (2*theta_tt + 1)*(eps_jump*nx**2 + eps_m)/(theta_tt*(theta_tt + 1))
 
-def d_case3_sc3_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx - a_val*bp*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1)) + b_val*dy*ny
+def d_case3_sc3_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx - a_val*eps_p*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1)) + b_val*dy*ny
 
-def d_case3_sc3_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny + a_val*bp*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + b_val*dx*nx
+def d_case3_sc3_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny + a_val*eps_p*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + b_val*dx*nx
 
-def d_case3_sc3_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx + a_val*bp*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1)) + b_val*dy*ny
+def d_case3_sc3_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx + a_val*eps_p*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1)) + b_val*dy*ny
 
-def N_case3_sc3_eta_m1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_T*(bj*dx*nx**2 - bj*dy*nx*ny*theta_T - bj*dy*nx*ny + bm*dx)/(dx*(theta_T + 1))
+def N_case3_sc3_eta_m1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_t*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_t - eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_t + 1))
 
-def N_case3_sc3_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_L*theta_T + bj*dx*nx**2*theta_L - bj*dy*nx*ny*theta_L*theta_T**2 - bj*dy*nx*ny*theta_L*theta_T + bj*dy*nx*ny*theta_T + bm*dx*theta_L*theta_T + bm*dx*theta_L)/(dx*theta_L*theta_T)
+def N_case3_sc3_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_l*theta_t + eps_jump*dx*nx**2*theta_l - eps_jump*dy*nx*ny*theta_l*theta_t**2 - eps_jump*dy*nx*ny*theta_l*theta_t + eps_jump*dy*nx*ny*theta_t + eps_m*dx*theta_l*theta_t + eps_m*dx*theta_l)/(dx*theta_l*theta_t)
 
-def N_case3_sc3_eta_m1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1))
+def N_case3_sc3_eta_m1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1))
 
-def N_case3_sc3_eta_m1_r0_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_T/dx
+def N_case3_sc3_eta_m1_r0_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case3_sc3_eta_m1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dx*(theta_L + 1))
+def N_case3_sc3_eta_m1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dx*(theta_l + 1))
 
-def N_case3_sc3_eta_m1_r1_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_L - 1)/(theta_L - 2)
+def N_case3_sc3_eta_m1_r1_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_l - 1)/(theta_l - 2)
 
-def N_case3_sc3_eta_m1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_L - 2)/(theta_L - 1)
+def N_case3_sc3_eta_m1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_l - 2)/(theta_l - 1)
 
-def N_case3_sc3_eta_m1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dy*(theta_T + 1))
+def N_case3_sc3_eta_m1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dy*(theta_t + 1))
 
-def N_case3_sc3_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_L**2*theta_T + bj*dx*nx*ny*theta_L*theta_T - bj*dx*nx*ny*theta_L - bj*dy*ny**2*theta_L*theta_T - bj*dy*ny**2*theta_T - bm*dy*theta_L*theta_T - bm*dy*theta_T)/(dy*theta_L*theta_T)
+def N_case3_sc3_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_l**2*theta_t + eps_jump*dx*nx*ny*theta_l*theta_t - eps_jump*dx*nx*ny*theta_l - eps_jump*dy*ny**2*theta_l*theta_t - eps_jump*dy*ny**2*theta_t - eps_m*dy*theta_l*theta_t - eps_m*dy*theta_t)/(dy*theta_l*theta_t)
 
-def N_case3_sc3_eta_m1_r1_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_L/dy
+def N_case3_sc3_eta_m1_r1_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case3_sc3_eta_m1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_L*(bj*dx*nx*ny*theta_L + bj*dx*nx*ny - bj*dy*ny**2 - bm*dy)/(dy*(theta_L + 1))
+def N_case3_sc3_eta_m1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_l*(eps_jump*dx*nx*ny*theta_l + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 - eps_m*dy)/(dy*(theta_l + 1))
 
-def N_case3_sc3_eta_m1_r2_om1_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dy*nx*ny*(2*theta_t + 1)/dx
+def N_case3_sc3_eta_m1_r2_om1_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dy*nx*ny*(2*theta_tt + 1)/dx
 
-def N_case3_sc3_eta_m1_r2_om1_p3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_t/dx
+def N_case3_sc3_eta_m1_r2_om1_p3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_tt/dx
 
-def N_case3_sc3_eta_m1_r2_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1))
+def N_case3_sc3_eta_m1_r2_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1))
 
-def N_case3_sc3_eta_m1_r2_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_t + bj*dx*nx**2 - bj*dy*nx*ny*theta_t**2 + bm*dx*theta_t + bm*dx)/(dx*theta_t)
+def N_case3_sc3_eta_m1_r2_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_tt + eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_tt**2 + eps_m*dx*theta_tt + eps_m*dx)/(dx*theta_tt)
 
-def N_case3_sc3_eta_m1_r2_op0_p3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_t*(bj*dx*nx**2 - bj*dy*nx*ny*theta_t - bj*dy*nx*ny + bm*dx)/(dx*(theta_t + 1))
+def N_case3_sc3_eta_m1_r2_op0_p3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_tt*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_tt - eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_tt + 1))
 
-def N_case3_sc3_eta_m1_r2_op1_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dy*nx*ny/dx
+def N_case3_sc3_eta_m1_r2_op1_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dy*nx*ny/dx
 
-def M_case3_sc3_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(2*theta_T + theta_t - 3)/((theta_T - 1)*(theta_T + theta_t - 2)) - (2*theta_T + 1)*(bj*nx**2 - bp)/(theta_T*(theta_T + 1))
+def M_case3_sc3_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(2*theta_t + theta_tt - 3)/((theta_t - 1)*(theta_t + theta_tt - 2)) - (2*theta_t + 1)*(eps_jump*nx**2 - eps_p)/(theta_t*(theta_t + 1))
 
-def M_case3_sc3_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case3_sc3_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case3_sc3_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_T - 1)/((theta_t - 1)*(theta_T + theta_t - 2))
+def M_case3_sc3_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_t - 1)/((theta_tt - 1)*(theta_t + theta_tt - 2))
 
-def M_case3_sc3_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case3_sc3_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case3_sc3_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + (2*theta_L + 1)*(bj*ny**2 - bp)/(theta_L*(theta_L + 1))
+def M_case3_sc3_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + (2*theta_l + 1)*(eps_jump*ny**2 - eps_p)/(theta_l*(theta_l + 1))
 
-def M_case3_sc3_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc3_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc3_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_t - 1)/((theta_T - 1)*(theta_T + theta_t - 2))
+def M_case3_sc3_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_tt - 1)/((theta_t - 1)*(theta_t + theta_tt - 2))
 
-def M_case3_sc3_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc3_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc3_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_T + 2*theta_t - 3)/((theta_t - 1)*(theta_T + theta_t - 2)) + (2*theta_t + 1)*(bj*nx**2 - bp)/(theta_t*(theta_t + 1))
+def M_case3_sc3_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_t + 2*theta_tt - 3)/((theta_tt - 1)*(theta_t + theta_tt - 2)) + (2*theta_tt + 1)*(eps_jump*nx**2 - eps_p)/(theta_tt*(theta_tt + 1))
 
-def d_case3_sc3_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx - a_val*bm*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1)) + b_val*dy*ny
+def d_case3_sc3_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx - a_val*eps_m*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1)) + b_val*dy*ny
 
-def d_case3_sc3_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny + a_val*bm*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + b_val*dx*nx
+def d_case3_sc3_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny + a_val*eps_m*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + b_val*dx*nx
 
-def d_case3_sc3_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx + a_val*bm*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1)) + b_val*dy*ny
+def d_case3_sc3_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx + a_val*eps_m*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1)) + b_val*dy*ny
 
-def N_case3_sc3_eta_p1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_T*(bj*dx*nx**2 - bj*dy*nx*ny*theta_T - bj*dy*nx*ny - bp*dx)/(dx*(theta_T + 1))
+def N_case3_sc3_eta_p1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_t*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_t - eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_t + 1))
 
-def N_case3_sc3_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_L*theta_T + bj*dx*nx**2*theta_L - bj*dy*nx*ny*theta_L*theta_T**2 - bj*dy*nx*ny*theta_L*theta_T + bj*dy*nx*ny*theta_T - bp*dx*theta_L*theta_T - bp*dx*theta_L)/(dx*theta_L*theta_T)
+def N_case3_sc3_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_l*theta_t + eps_jump*dx*nx**2*theta_l - eps_jump*dy*nx*ny*theta_l*theta_t**2 - eps_jump*dy*nx*ny*theta_l*theta_t + eps_jump*dy*nx*ny*theta_t - eps_p*dx*theta_l*theta_t - eps_p*dx*theta_l)/(dx*theta_l*theta_t)
 
-def N_case3_sc3_eta_p1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1))
+def N_case3_sc3_eta_p1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1))
 
-def N_case3_sc3_eta_p1_r0_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_T/dx
+def N_case3_sc3_eta_p1_r0_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case3_sc3_eta_p1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dx*(theta_L + 1))
+def N_case3_sc3_eta_p1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dx*(theta_l + 1))
 
-def N_case3_sc3_eta_p1_r1_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_L - 1)/(theta_L - 2)
+def N_case3_sc3_eta_p1_r1_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_l - 1)/(theta_l - 2)
 
-def N_case3_sc3_eta_p1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_L - 2)/(theta_L - 1)
+def N_case3_sc3_eta_p1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_l - 2)/(theta_l - 1)
 
-def N_case3_sc3_eta_p1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dy*(theta_T + 1))
+def N_case3_sc3_eta_p1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dy*(theta_t + 1))
 
-def N_case3_sc3_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_L**2*theta_T + bj*dx*nx*ny*theta_L*theta_T - bj*dx*nx*ny*theta_L - bj*dy*ny**2*theta_L*theta_T - bj*dy*ny**2*theta_T + bp*dy*theta_L*theta_T + bp*dy*theta_T)/(dy*theta_L*theta_T)
+def N_case3_sc3_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_l**2*theta_t + eps_jump*dx*nx*ny*theta_l*theta_t - eps_jump*dx*nx*ny*theta_l - eps_jump*dy*ny**2*theta_l*theta_t - eps_jump*dy*ny**2*theta_t + eps_p*dy*theta_l*theta_t + eps_p*dy*theta_t)/(dy*theta_l*theta_t)
 
-def N_case3_sc3_eta_p1_r1_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_L/dy
+def N_case3_sc3_eta_p1_r1_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case3_sc3_eta_p1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_L*(bj*dx*nx*ny*theta_L + bj*dx*nx*ny - bj*dy*ny**2 + bp*dy)/(dy*(theta_L + 1))
+def N_case3_sc3_eta_p1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_l*(eps_jump*dx*nx*ny*theta_l + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 + eps_p*dy)/(dy*(theta_l + 1))
 
-def N_case3_sc3_eta_p1_r2_om1_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dy*nx*ny*(2*theta_t + 1)/dx
+def N_case3_sc3_eta_p1_r2_om1_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dy*nx*ny*(2*theta_tt + 1)/dx
 
-def N_case3_sc3_eta_p1_r2_om1_p3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_t/dx
+def N_case3_sc3_eta_p1_r2_om1_p3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_tt/dx
 
-def N_case3_sc3_eta_p1_r2_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_T + theta_t - 2)/((theta_T - 1)*(theta_t - 1))
+def N_case3_sc3_eta_p1_r2_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_t + theta_tt - 2)/((theta_t - 1)*(theta_tt - 1))
 
-def N_case3_sc3_eta_p1_r2_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_t + bj*dx*nx**2 - bj*dy*nx*ny*theta_t**2 - bp*dx*theta_t - bp*dx)/(dx*theta_t)
+def N_case3_sc3_eta_p1_r2_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_tt + eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_tt**2 - eps_p*dx*theta_tt - eps_p*dx)/(dx*theta_tt)
 
-def N_case3_sc3_eta_p1_r2_op0_p3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_t*(bj*dx*nx**2 - bj*dy*nx*ny*theta_t - bj*dy*nx*ny - bp*dx)/(dx*(theta_t + 1))
+def N_case3_sc3_eta_p1_r2_op0_p3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_tt*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_tt - eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_tt + 1))
 
-def N_case3_sc3_eta_p1_r2_op1_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dy*nx*ny/dx
+def N_case3_sc3_eta_p1_r2_op1_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dy*nx*ny/dx
 
-def M_case3_sc4_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) - (2*theta_T + 1)*(bj*nx**2 + bm)/(theta_T*(theta_T + 1))
+def M_case3_sc4_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) - (2*theta_t + 1)*(eps_jump*nx**2 + eps_m)/(theta_t*(theta_t + 1))
 
-def M_case3_sc4_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case3_sc4_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case3_sc4_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc4_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc4_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case3_sc4_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case3_sc4_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(2*theta_L + theta_l - 3)/((theta_L - 1)*(theta_L + theta_l - 2)) + (2*theta_L + 1)*(bj*ny**2 + bm)/(theta_L*(theta_L + 1))
+def M_case3_sc4_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(2*theta_l + theta_ll - 3)/((theta_l - 1)*(theta_l + theta_ll - 2)) + (2*theta_l + 1)*(eps_jump*ny**2 + eps_m)/(theta_l*(theta_l + 1))
 
-def M_case3_sc4_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_L - 1)/((theta_l - 1)*(theta_L + theta_l - 2))
+def M_case3_sc4_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_l - 1)/((theta_ll - 1)*(theta_l + theta_ll - 2))
 
-def M_case3_sc4_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc4_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc4_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_l - 1)/((theta_L - 1)*(theta_L + theta_l - 2))
+def M_case3_sc4_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_ll - 1)/((theta_l - 1)*(theta_l + theta_ll - 2))
 
-def M_case3_sc4_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_L + 2*theta_l - 3)/((theta_l - 1)*(theta_L + theta_l - 2)) - (2*theta_l + 1)*(bj*ny**2 + bm)/(theta_l*(theta_l + 1))
+def M_case3_sc4_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_l + 2*theta_ll - 3)/((theta_ll - 1)*(theta_l + theta_ll - 2)) - (2*theta_ll + 1)*(eps_jump*ny**2 + eps_m)/(theta_ll*(theta_ll + 1))
 
-def d_case3_sc4_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx - a_val*bp*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + b_val*dy*ny
+def d_case3_sc4_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx - a_val*eps_p*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + b_val*dy*ny
 
-def d_case3_sc4_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny + a_val*bp*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1)) + b_val*dx*nx
+def d_case3_sc4_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny + a_val*eps_p*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1)) + b_val*dx*nx
 
-def d_case3_sc4_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny - a_val*bp*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1)) + b_val*dx*nx
+def d_case3_sc4_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny - a_val*eps_p*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1)) + b_val*dx*nx
 
-def N_case3_sc4_eta_m1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_T*(bj*dx*nx**2 - bj*dy*nx*ny*theta_T - bj*dy*nx*ny + bm*dx)/(dx*(theta_T + 1))
+def N_case3_sc4_eta_m1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_t*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_t - eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_t + 1))
 
-def N_case3_sc4_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_L*theta_T + bj*dx*nx**2*theta_L - bj*dy*nx*ny*theta_L*theta_T**2 - bj*dy*nx*ny*theta_L*theta_T + bj*dy*nx*ny*theta_T + bm*dx*theta_L*theta_T + bm*dx*theta_L)/(dx*theta_L*theta_T)
+def N_case3_sc4_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_l*theta_t + eps_jump*dx*nx**2*theta_l - eps_jump*dy*nx*ny*theta_l*theta_t**2 - eps_jump*dy*nx*ny*theta_l*theta_t + eps_jump*dy*nx*ny*theta_t + eps_m*dx*theta_l*theta_t + eps_m*dx*theta_l)/(dx*theta_l*theta_t)
 
-def N_case3_sc4_eta_m1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_T - 2)/(theta_T - 1)
+def N_case3_sc4_eta_m1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_t - 2)/(theta_t - 1)
 
-def N_case3_sc4_eta_m1_r0_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_T - 1)/(theta_T - 2)
+def N_case3_sc4_eta_m1_r0_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_t - 1)/(theta_t - 2)
 
-def N_case3_sc4_eta_m1_r0_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_T/dx
+def N_case3_sc4_eta_m1_r0_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case3_sc4_eta_m1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dx*(theta_L + 1))
+def N_case3_sc4_eta_m1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dx*(theta_l + 1))
 
-def N_case3_sc4_eta_m1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1))
+def N_case3_sc4_eta_m1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1))
 
-def N_case3_sc4_eta_m1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dy*(theta_T + 1))
+def N_case3_sc4_eta_m1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dy*(theta_t + 1))
 
-def N_case3_sc4_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_L**2*theta_T + bj*dx*nx*ny*theta_L*theta_T - bj*dx*nx*ny*theta_L - bj*dy*ny**2*theta_L*theta_T - bj*dy*ny**2*theta_T - bm*dy*theta_L*theta_T - bm*dy*theta_T)/(dy*theta_L*theta_T)
+def N_case3_sc4_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_l**2*theta_t + eps_jump*dx*nx*ny*theta_l*theta_t - eps_jump*dx*nx*ny*theta_l - eps_jump*dy*ny**2*theta_l*theta_t - eps_jump*dy*ny**2*theta_t - eps_m*dy*theta_l*theta_t - eps_m*dy*theta_t)/(dy*theta_l*theta_t)
 
-def N_case3_sc4_eta_m1_r1_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_L/dy
+def N_case3_sc4_eta_m1_r1_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case3_sc4_eta_m1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_L*(bj*dx*nx*ny*theta_L + bj*dx*nx*ny - bj*dy*ny**2 - bm*dy)/(dy*(theta_L + 1))
+def N_case3_sc4_eta_m1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_l*(eps_jump*dx*nx*ny*theta_l + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 - eps_m*dy)/(dy*(theta_l + 1))
 
-def N_case3_sc4_eta_m1_r2_om3_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_l/dy
+def N_case3_sc4_eta_m1_r2_om3_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_ll/dy
 
-def N_case3_sc4_eta_m1_r2_om3_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_l*(bj*dx*nx*ny*theta_l + bj*dx*nx*ny + bj*dy*ny**2 + bm*dy)/(dy*(theta_l + 1))
+def N_case3_sc4_eta_m1_r2_om3_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_ll*(eps_jump*dx*nx*ny*theta_ll + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 + eps_m*dy)/(dy*(theta_ll + 1))
 
-def N_case3_sc4_eta_m1_r2_om2_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dx*nx*ny*(2*theta_l + 1)/dy
+def N_case3_sc4_eta_m1_r2_om2_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dx*nx*ny*(2*theta_ll + 1)/dy
 
-def N_case3_sc4_eta_m1_r2_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_l**2 + bj*dy*ny**2*theta_l + bj*dy*ny**2 + bm*dy*theta_l + bm*dy)/(dy*theta_l)
+def N_case3_sc4_eta_m1_r2_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_ll**2 + eps_jump*dy*ny**2*theta_ll + eps_jump*dy*ny**2 + eps_m*dy*theta_ll + eps_m*dy)/(dy*theta_ll)
 
-def N_case3_sc4_eta_m1_r2_om2_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dx*nx*ny/dy
+def N_case3_sc4_eta_m1_r2_om2_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dx*nx*ny/dy
 
-def N_case3_sc4_eta_m1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1))
+def N_case3_sc4_eta_m1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1))
 
-def M_case3_sc4_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) - (2*theta_T + 1)*(bj*nx**2 - bp)/(theta_T*(theta_T + 1))
+def M_case3_sc4_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) - (2*theta_t + 1)*(eps_jump*nx**2 - eps_p)/(theta_t*(theta_t + 1))
 
-def M_case3_sc4_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case3_sc4_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case3_sc4_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc4_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc4_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case3_sc4_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case3_sc4_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(2*theta_L + theta_l - 3)/((theta_L - 1)*(theta_L + theta_l - 2)) + (2*theta_L + 1)*(bj*ny**2 - bp)/(theta_L*(theta_L + 1))
+def M_case3_sc4_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(2*theta_l + theta_ll - 3)/((theta_l - 1)*(theta_l + theta_ll - 2)) + (2*theta_l + 1)*(eps_jump*ny**2 - eps_p)/(theta_l*(theta_l + 1))
 
-def M_case3_sc4_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_L - 1)/((theta_l - 1)*(theta_L + theta_l - 2))
+def M_case3_sc4_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_l - 1)/((theta_ll - 1)*(theta_l + theta_ll - 2))
 
-def M_case3_sc4_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc4_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc4_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_l - 1)/((theta_L - 1)*(theta_L + theta_l - 2))
+def M_case3_sc4_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_ll - 1)/((theta_l - 1)*(theta_l + theta_ll - 2))
 
-def M_case3_sc4_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_L + 2*theta_l - 3)/((theta_l - 1)*(theta_L + theta_l - 2)) - (2*theta_l + 1)*(bj*ny**2 - bp)/(theta_l*(theta_l + 1))
+def M_case3_sc4_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_l + 2*theta_ll - 3)/((theta_ll - 1)*(theta_l + theta_ll - 2)) - (2*theta_ll + 1)*(eps_jump*ny**2 - eps_p)/(theta_ll*(theta_ll + 1))
 
-def d_case3_sc4_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx - a_val*bm*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + b_val*dy*ny
+def d_case3_sc4_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx - a_val*eps_m*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + b_val*dy*ny
 
-def d_case3_sc4_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny + a_val*bm*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1)) + b_val*dx*nx
+def d_case3_sc4_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny + a_val*eps_m*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1)) + b_val*dx*nx
 
-def d_case3_sc4_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny - a_val*bm*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1)) + b_val*dx*nx
+def d_case3_sc4_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny - a_val*eps_m*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1)) + b_val*dx*nx
 
-def N_case3_sc4_eta_p1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_T*(bj*dx*nx**2 - bj*dy*nx*ny*theta_T - bj*dy*nx*ny - bp*dx)/(dx*(theta_T + 1))
+def N_case3_sc4_eta_p1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_t*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_t - eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_t + 1))
 
-def N_case3_sc4_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_L*theta_T + bj*dx*nx**2*theta_L - bj*dy*nx*ny*theta_L*theta_T**2 - bj*dy*nx*ny*theta_L*theta_T + bj*dy*nx*ny*theta_T - bp*dx*theta_L*theta_T - bp*dx*theta_L)/(dx*theta_L*theta_T)
+def N_case3_sc4_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_l*theta_t + eps_jump*dx*nx**2*theta_l - eps_jump*dy*nx*ny*theta_l*theta_t**2 - eps_jump*dy*nx*ny*theta_l*theta_t + eps_jump*dy*nx*ny*theta_t - eps_p*dx*theta_l*theta_t - eps_p*dx*theta_l)/(dx*theta_l*theta_t)
 
-def N_case3_sc4_eta_p1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_T - 2)/(theta_T - 1)
+def N_case3_sc4_eta_p1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_t - 2)/(theta_t - 1)
 
-def N_case3_sc4_eta_p1_r0_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_T - 1)/(theta_T - 2)
+def N_case3_sc4_eta_p1_r0_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_t - 1)/(theta_t - 2)
 
-def N_case3_sc4_eta_p1_r0_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_T/dx
+def N_case3_sc4_eta_p1_r0_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case3_sc4_eta_p1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dx*(theta_L + 1))
+def N_case3_sc4_eta_p1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dx*(theta_l + 1))
 
-def N_case3_sc4_eta_p1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1))
+def N_case3_sc4_eta_p1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1))
 
-def N_case3_sc4_eta_p1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dy*(theta_T + 1))
+def N_case3_sc4_eta_p1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dy*(theta_t + 1))
 
-def N_case3_sc4_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_L**2*theta_T + bj*dx*nx*ny*theta_L*theta_T - bj*dx*nx*ny*theta_L - bj*dy*ny**2*theta_L*theta_T - bj*dy*ny**2*theta_T + bp*dy*theta_L*theta_T + bp*dy*theta_T)/(dy*theta_L*theta_T)
+def N_case3_sc4_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_l**2*theta_t + eps_jump*dx*nx*ny*theta_l*theta_t - eps_jump*dx*nx*ny*theta_l - eps_jump*dy*ny**2*theta_l*theta_t - eps_jump*dy*ny**2*theta_t + eps_p*dy*theta_l*theta_t + eps_p*dy*theta_t)/(dy*theta_l*theta_t)
 
-def N_case3_sc4_eta_p1_r1_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_L/dy
+def N_case3_sc4_eta_p1_r1_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case3_sc4_eta_p1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_L*(bj*dx*nx*ny*theta_L + bj*dx*nx*ny - bj*dy*ny**2 + bp*dy)/(dy*(theta_L + 1))
+def N_case3_sc4_eta_p1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_l*(eps_jump*dx*nx*ny*theta_l + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 + eps_p*dy)/(dy*(theta_l + 1))
 
-def N_case3_sc4_eta_p1_r2_om3_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_l/dy
+def N_case3_sc4_eta_p1_r2_om3_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_ll/dy
 
-def N_case3_sc4_eta_p1_r2_om3_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_l*(bj*dx*nx*ny*theta_l + bj*dx*nx*ny + bj*dy*ny**2 - bp*dy)/(dy*(theta_l + 1))
+def N_case3_sc4_eta_p1_r2_om3_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_ll*(eps_jump*dx*nx*ny*theta_ll + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 - eps_p*dy)/(dy*(theta_ll + 1))
 
-def N_case3_sc4_eta_p1_r2_om2_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dx*nx*ny*(2*theta_l + 1)/dy
+def N_case3_sc4_eta_p1_r2_om2_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dx*nx*ny*(2*theta_ll + 1)/dy
 
-def N_case3_sc4_eta_p1_r2_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_l**2 + bj*dy*ny**2*theta_l + bj*dy*ny**2 - bp*dy*theta_l - bp*dy)/(dy*theta_l)
+def N_case3_sc4_eta_p1_r2_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_ll**2 + eps_jump*dy*ny**2*theta_ll + eps_jump*dy*ny**2 - eps_p*dy*theta_ll - eps_p*dy)/(dy*theta_ll)
 
-def N_case3_sc4_eta_p1_r2_om2_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dx*nx*ny/dy
+def N_case3_sc4_eta_p1_r2_om2_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dx*nx*ny/dy
 
-def N_case3_sc4_eta_p1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1))
+def N_case3_sc4_eta_p1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1))
 
-def M_case3_sc5_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(2*theta_L + theta_l - 3)/((theta_L - 1)*(theta_L + theta_l - 2)) + (2*theta_L + 1)*(bj*ny**2 + bm)/(theta_L*(theta_L + 1))
+def M_case3_sc5_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(2*theta_l + theta_ll - 3)/((theta_l - 1)*(theta_l + theta_ll - 2)) + (2*theta_l + 1)*(eps_jump*ny**2 + eps_m)/(theta_l*(theta_l + 1))
 
-def M_case3_sc5_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case3_sc5_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case3_sc5_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_L - 1)/((theta_l - 1)*(theta_L + theta_l - 2))
+def M_case3_sc5_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_l - 1)/((theta_ll - 1)*(theta_l + theta_ll - 2))
 
-def M_case3_sc5_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case3_sc5_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case3_sc5_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + (2*theta_B + 1)*(bj*nx**2 + bm)/(theta_B*(theta_B + 1))
+def M_case3_sc5_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + (2*theta_b + 1)*(eps_jump*nx**2 + eps_m)/(theta_b*(theta_b + 1))
 
-def M_case3_sc5_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc5_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc5_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_l - 1)/((theta_L - 1)*(theta_L + theta_l - 2))
+def M_case3_sc5_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_ll - 1)/((theta_l - 1)*(theta_l + theta_ll - 2))
 
-def M_case3_sc5_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc5_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc5_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_L + 2*theta_l - 3)/((theta_l - 1)*(theta_L + theta_l - 2)) - (2*theta_l + 1)*(bj*ny**2 + bm)/(theta_l*(theta_l + 1))
+def M_case3_sc5_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_l + 2*theta_ll - 3)/((theta_ll - 1)*(theta_l + theta_ll - 2)) - (2*theta_ll + 1)*(eps_jump*ny**2 + eps_m)/(theta_ll*(theta_ll + 1))
 
-def d_case3_sc5_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny + a_val*bp*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1)) + b_val*dx*nx
+def d_case3_sc5_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny + a_val*eps_p*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1)) + b_val*dx*nx
 
-def d_case3_sc5_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx + a_val*bp*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + b_val*dy*ny
+def d_case3_sc5_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx + a_val*eps_p*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + b_val*dy*ny
 
-def d_case3_sc5_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny - a_val*bp*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1)) + b_val*dx*nx
+def d_case3_sc5_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny - a_val*eps_p*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1)) + b_val*dx*nx
 
-def N_case3_sc5_eta_m1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1))
+def N_case3_sc5_eta_m1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1))
 
-def N_case3_sc5_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_L**2 + bj*dx*nx*ny*theta_B*theta_L - bj*dx*nx*ny*theta_L + bj*dy*ny**2*theta_B*theta_L + bj*dy*ny**2*theta_B + bm*dy*theta_B*theta_L + bm*dy*theta_B)/(dy*theta_B*theta_L)
+def N_case3_sc5_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_l**2 + eps_jump*dx*nx*ny*theta_b*theta_l - eps_jump*dx*nx*ny*theta_l + eps_jump*dy*ny**2*theta_b*theta_l + eps_jump*dy*ny**2*theta_b + eps_m*dy*theta_b*theta_l + eps_m*dy*theta_b)/(dy*theta_b*theta_l)
 
-def N_case3_sc5_eta_m1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_B*theta_L + theta_B + theta_L)/(dy*(theta_B + 1))
+def N_case3_sc5_eta_m1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_b*theta_l + theta_b + theta_l)/(dy*(theta_b + 1))
 
-def N_case3_sc5_eta_m1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_L*(bj*dx*nx*ny*theta_L + bj*dx*nx*ny + bj*dy*ny**2 + bm*dy)/(dy*(theta_L + 1))
+def N_case3_sc5_eta_m1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_l*(eps_jump*dx*nx*ny*theta_l + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 + eps_m*dy)/(dy*(theta_l + 1))
 
-def N_case3_sc5_eta_m1_r0_op1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_L/dy
+def N_case3_sc5_eta_m1_r0_op1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case3_sc5_eta_m1_r1_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_B - 1)/(theta_B - 2)
+def N_case3_sc5_eta_m1_r1_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_b - 1)/(theta_b - 2)
 
-def N_case3_sc5_eta_m1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_B - 2)/(theta_B - 1)
+def N_case3_sc5_eta_m1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_b - 2)/(theta_b - 1)
 
-def N_case3_sc5_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_L + bj*dx*nx**2*theta_L + bj*dy*nx*ny*theta_B**2*theta_L + bj*dy*nx*ny*theta_B*theta_L - bj*dy*nx*ny*theta_B + bm*dx*theta_B*theta_L + bm*dx*theta_L)/(dx*theta_B*theta_L)
+def N_case3_sc5_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_l + eps_jump*dx*nx**2*theta_l + eps_jump*dy*nx*ny*theta_b**2*theta_l + eps_jump*dy*nx*ny*theta_b*theta_l - eps_jump*dy*nx*ny*theta_b + eps_m*dx*theta_b*theta_l + eps_m*dx*theta_l)/(dx*theta_b*theta_l)
 
-def N_case3_sc5_eta_m1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_B*(bj*dx*nx**2 + bj*dy*nx*ny*theta_B + bj*dy*nx*ny + bm*dx)/(dx*(theta_B + 1))
+def N_case3_sc5_eta_m1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_b*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_b + eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_b + 1))
 
-def N_case3_sc5_eta_m1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_B*theta_L + theta_B + theta_L)/(dx*(theta_L + 1))
+def N_case3_sc5_eta_m1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_b*theta_l + theta_b + theta_l)/(dx*(theta_l + 1))
 
-def N_case3_sc5_eta_m1_r1_op1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_B/dx
+def N_case3_sc5_eta_m1_r1_op1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case3_sc5_eta_m1_r2_om3_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_l/dy
+def N_case3_sc5_eta_m1_r2_om3_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_ll/dy
 
-def N_case3_sc5_eta_m1_r2_om3_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_l*(bj*dx*nx*ny*theta_l + bj*dx*nx*ny + bj*dy*ny**2 + bm*dy)/(dy*(theta_l + 1))
+def N_case3_sc5_eta_m1_r2_om3_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_ll*(eps_jump*dx*nx*ny*theta_ll + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 + eps_m*dy)/(dy*(theta_ll + 1))
 
-def N_case3_sc5_eta_m1_r2_om2_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dx*nx*ny*(2*theta_l + 1)/dy
+def N_case3_sc5_eta_m1_r2_om2_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dx*nx*ny*(2*theta_ll + 1)/dy
 
-def N_case3_sc5_eta_m1_r2_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_l**2 + bj*dy*ny**2*theta_l + bj*dy*ny**2 + bm*dy*theta_l + bm*dy)/(dy*theta_l)
+def N_case3_sc5_eta_m1_r2_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_ll**2 + eps_jump*dy*ny**2*theta_ll + eps_jump*dy*ny**2 + eps_m*dy*theta_ll + eps_m*dy)/(dy*theta_ll)
 
-def N_case3_sc5_eta_m1_r2_om2_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dx*nx*ny/dy
+def N_case3_sc5_eta_m1_r2_om2_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dx*nx*ny/dy
 
-def N_case3_sc5_eta_m1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1))
+def N_case3_sc5_eta_m1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1))
 
-def M_case3_sc5_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(2*theta_L + theta_l - 3)/((theta_L - 1)*(theta_L + theta_l - 2)) + (2*theta_L + 1)*(bj*ny**2 - bp)/(theta_L*(theta_L + 1))
+def M_case3_sc5_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(2*theta_l + theta_ll - 3)/((theta_l - 1)*(theta_l + theta_ll - 2)) + (2*theta_l + 1)*(eps_jump*ny**2 - eps_p)/(theta_l*(theta_l + 1))
 
-def M_case3_sc5_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case3_sc5_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case3_sc5_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_L - 1)/((theta_l - 1)*(theta_L + theta_l - 2))
+def M_case3_sc5_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_l - 1)/((theta_ll - 1)*(theta_l + theta_ll - 2))
 
-def M_case3_sc5_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case3_sc5_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case3_sc5_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + (2*theta_B + 1)*(bj*nx**2 - bp)/(theta_B*(theta_B + 1))
+def M_case3_sc5_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + (2*theta_b + 1)*(eps_jump*nx**2 - eps_p)/(theta_b*(theta_b + 1))
 
-def M_case3_sc5_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc5_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc5_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_l - 1)/((theta_L - 1)*(theta_L + theta_l - 2))
+def M_case3_sc5_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_ll - 1)/((theta_l - 1)*(theta_l + theta_ll - 2))
 
-def M_case3_sc5_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc5_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc5_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_L + 2*theta_l - 3)/((theta_l - 1)*(theta_L + theta_l - 2)) - (2*theta_l + 1)*(bj*ny**2 - bp)/(theta_l*(theta_l + 1))
+def M_case3_sc5_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_l + 2*theta_ll - 3)/((theta_ll - 1)*(theta_l + theta_ll - 2)) - (2*theta_ll + 1)*(eps_jump*ny**2 - eps_p)/(theta_ll*(theta_ll + 1))
 
-def d_case3_sc5_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny + a_val*bm*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1)) + b_val*dx*nx
+def d_case3_sc5_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny + a_val*eps_m*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1)) + b_val*dx*nx
 
-def d_case3_sc5_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx + a_val*bm*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + b_val*dy*ny
+def d_case3_sc5_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx + a_val*eps_m*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + b_val*dy*ny
 
-def d_case3_sc5_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny - a_val*bm*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1)) + b_val*dx*nx
+def d_case3_sc5_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny - a_val*eps_m*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1)) + b_val*dx*nx
 
-def N_case3_sc5_eta_p1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1))
+def N_case3_sc5_eta_p1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1))
 
-def N_case3_sc5_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_L**2 + bj*dx*nx*ny*theta_B*theta_L - bj*dx*nx*ny*theta_L + bj*dy*ny**2*theta_B*theta_L + bj*dy*ny**2*theta_B - bp*dy*theta_B*theta_L - bp*dy*theta_B)/(dy*theta_B*theta_L)
+def N_case3_sc5_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_l**2 + eps_jump*dx*nx*ny*theta_b*theta_l - eps_jump*dx*nx*ny*theta_l + eps_jump*dy*ny**2*theta_b*theta_l + eps_jump*dy*ny**2*theta_b - eps_p*dy*theta_b*theta_l - eps_p*dy*theta_b)/(dy*theta_b*theta_l)
 
-def N_case3_sc5_eta_p1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_B*theta_L + theta_B + theta_L)/(dy*(theta_B + 1))
+def N_case3_sc5_eta_p1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_b*theta_l + theta_b + theta_l)/(dy*(theta_b + 1))
 
-def N_case3_sc5_eta_p1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_L*(bj*dx*nx*ny*theta_L + bj*dx*nx*ny + bj*dy*ny**2 - bp*dy)/(dy*(theta_L + 1))
+def N_case3_sc5_eta_p1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_l*(eps_jump*dx*nx*ny*theta_l + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 - eps_p*dy)/(dy*(theta_l + 1))
 
-def N_case3_sc5_eta_p1_r0_op1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_L/dy
+def N_case3_sc5_eta_p1_r0_op1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case3_sc5_eta_p1_r1_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_B - 1)/(theta_B - 2)
+def N_case3_sc5_eta_p1_r1_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_b - 1)/(theta_b - 2)
 
-def N_case3_sc5_eta_p1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_B - 2)/(theta_B - 1)
+def N_case3_sc5_eta_p1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_b - 2)/(theta_b - 1)
 
-def N_case3_sc5_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_L + bj*dx*nx**2*theta_L + bj*dy*nx*ny*theta_B**2*theta_L + bj*dy*nx*ny*theta_B*theta_L - bj*dy*nx*ny*theta_B - bp*dx*theta_B*theta_L - bp*dx*theta_L)/(dx*theta_B*theta_L)
+def N_case3_sc5_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_l + eps_jump*dx*nx**2*theta_l + eps_jump*dy*nx*ny*theta_b**2*theta_l + eps_jump*dy*nx*ny*theta_b*theta_l - eps_jump*dy*nx*ny*theta_b - eps_p*dx*theta_b*theta_l - eps_p*dx*theta_l)/(dx*theta_b*theta_l)
 
-def N_case3_sc5_eta_p1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_B*(bj*dx*nx**2 + bj*dy*nx*ny*theta_B + bj*dy*nx*ny - bp*dx)/(dx*(theta_B + 1))
+def N_case3_sc5_eta_p1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_b*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_b + eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_b + 1))
 
-def N_case3_sc5_eta_p1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_B*theta_L + theta_B + theta_L)/(dx*(theta_L + 1))
+def N_case3_sc5_eta_p1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_b*theta_l + theta_b + theta_l)/(dx*(theta_l + 1))
 
-def N_case3_sc5_eta_p1_r1_op1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_B/dx
+def N_case3_sc5_eta_p1_r1_op1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case3_sc5_eta_p1_r2_om3_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_l/dy
+def N_case3_sc5_eta_p1_r2_om3_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_ll/dy
 
-def N_case3_sc5_eta_p1_r2_om3_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_l*(bj*dx*nx*ny*theta_l + bj*dx*nx*ny + bj*dy*ny**2 - bp*dy)/(dy*(theta_l + 1))
+def N_case3_sc5_eta_p1_r2_om3_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_ll*(eps_jump*dx*nx*ny*theta_ll + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 - eps_p*dy)/(dy*(theta_ll + 1))
 
-def N_case3_sc5_eta_p1_r2_om2_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dx*nx*ny*(2*theta_l + 1)/dy
+def N_case3_sc5_eta_p1_r2_om2_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dx*nx*ny*(2*theta_ll + 1)/dy
 
-def N_case3_sc5_eta_p1_r2_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_l**2 + bj*dy*ny**2*theta_l + bj*dy*ny**2 - bp*dy*theta_l - bp*dy)/(dy*theta_l)
+def N_case3_sc5_eta_p1_r2_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_ll**2 + eps_jump*dy*ny**2*theta_ll + eps_jump*dy*ny**2 - eps_p*dy*theta_ll - eps_p*dy)/(dy*theta_ll)
 
-def N_case3_sc5_eta_p1_r2_om2_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dx*nx*ny/dy
+def N_case3_sc5_eta_p1_r2_om2_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dx*nx*ny/dy
 
-def N_case3_sc5_eta_p1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_L + theta_l - 2)/((theta_L - 1)*(theta_l - 1))
+def N_case3_sc5_eta_p1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_l + theta_ll - 2)/((theta_l - 1)*(theta_ll - 1))
 
-def M_case3_sc6_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + (2*theta_L + 1)*(bj*ny**2 + bm)/(theta_L*(theta_L + 1))
+def M_case3_sc6_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + (2*theta_l + 1)*(eps_jump*ny**2 + eps_m)/(theta_l*(theta_l + 1))
 
-def M_case3_sc6_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case3_sc6_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case3_sc6_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc6_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc6_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case3_sc6_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case3_sc6_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(2*theta_B + theta_b - 3)/((theta_B - 1)*(theta_B + theta_b - 2)) + (2*theta_B + 1)*(bj*nx**2 + bm)/(theta_B*(theta_B + 1))
+def M_case3_sc6_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(2*theta_b + theta_bb - 3)/((theta_b - 1)*(theta_b + theta_bb - 2)) + (2*theta_b + 1)*(eps_jump*nx**2 + eps_m)/(theta_b*(theta_b + 1))
 
-def M_case3_sc6_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_B - 1)/((theta_b - 1)*(theta_B + theta_b - 2))
+def M_case3_sc6_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_b - 1)/((theta_bb - 1)*(theta_b + theta_bb - 2))
 
-def M_case3_sc6_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc6_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc6_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_b - 1)/((theta_B - 1)*(theta_B + theta_b - 2))
+def M_case3_sc6_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_bb - 1)/((theta_b - 1)*(theta_b + theta_bb - 2))
 
-def M_case3_sc6_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_B + 2*theta_b - 3)/((theta_b - 1)*(theta_B + theta_b - 2)) - (2*theta_b + 1)*(bj*nx**2 + bm)/(theta_b*(theta_b + 1))
+def M_case3_sc6_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_b + 2*theta_bb - 3)/((theta_bb - 1)*(theta_b + theta_bb - 2)) - (2*theta_bb + 1)*(eps_jump*nx**2 + eps_m)/(theta_bb*(theta_bb + 1))
 
-def d_case3_sc6_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny + a_val*bp*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + b_val*dx*nx
+def d_case3_sc6_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny + a_val*eps_p*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + b_val*dx*nx
 
-def d_case3_sc6_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx + a_val*bp*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1)) + b_val*dy*ny
+def d_case3_sc6_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx + a_val*eps_p*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1)) + b_val*dy*ny
 
-def d_case3_sc6_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx - a_val*bp*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1)) + b_val*dy*ny
+def d_case3_sc6_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx - a_val*eps_p*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1)) + b_val*dy*ny
 
-def N_case3_sc6_eta_m1_r0_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_L - 1)/(theta_L - 2)
+def N_case3_sc6_eta_m1_r0_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_l - 1)/(theta_l - 2)
 
-def N_case3_sc6_eta_m1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_L - 2)/(theta_L - 1)
+def N_case3_sc6_eta_m1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_l - 2)/(theta_l - 1)
 
-def N_case3_sc6_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_L**2 + bj*dx*nx*ny*theta_B*theta_L - bj*dx*nx*ny*theta_L + bj*dy*ny**2*theta_B*theta_L + bj*dy*ny**2*theta_B + bm*dy*theta_B*theta_L + bm*dy*theta_B)/(dy*theta_B*theta_L)
+def N_case3_sc6_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_l**2 + eps_jump*dx*nx*ny*theta_b*theta_l - eps_jump*dx*nx*ny*theta_l + eps_jump*dy*ny**2*theta_b*theta_l + eps_jump*dy*ny**2*theta_b + eps_m*dy*theta_b*theta_l + eps_m*dy*theta_b)/(dy*theta_b*theta_l)
 
-def N_case3_sc6_eta_m1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_B*theta_L + theta_B + theta_L)/(dy*(theta_B + 1))
+def N_case3_sc6_eta_m1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_b*theta_l + theta_b + theta_l)/(dy*(theta_b + 1))
 
-def N_case3_sc6_eta_m1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_L*(bj*dx*nx*ny*theta_L + bj*dx*nx*ny + bj*dy*ny**2 + bm*dy)/(dy*(theta_L + 1))
+def N_case3_sc6_eta_m1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_l*(eps_jump*dx*nx*ny*theta_l + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 + eps_m*dy)/(dy*(theta_l + 1))
 
-def N_case3_sc6_eta_m1_r0_op1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_L/dy
+def N_case3_sc6_eta_m1_r0_op1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case3_sc6_eta_m1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1))
+def N_case3_sc6_eta_m1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1))
 
-def N_case3_sc6_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_L + bj*dx*nx**2*theta_L + bj*dy*nx*ny*theta_B**2*theta_L + bj*dy*nx*ny*theta_B*theta_L - bj*dy*nx*ny*theta_B + bm*dx*theta_B*theta_L + bm*dx*theta_L)/(dx*theta_B*theta_L)
+def N_case3_sc6_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_l + eps_jump*dx*nx**2*theta_l + eps_jump*dy*nx*ny*theta_b**2*theta_l + eps_jump*dy*nx*ny*theta_b*theta_l - eps_jump*dy*nx*ny*theta_b + eps_m*dx*theta_b*theta_l + eps_m*dx*theta_l)/(dx*theta_b*theta_l)
 
-def N_case3_sc6_eta_m1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_B*(bj*dx*nx**2 + bj*dy*nx*ny*theta_B + bj*dy*nx*ny + bm*dx)/(dx*(theta_B + 1))
+def N_case3_sc6_eta_m1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_b*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_b + eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_b + 1))
 
-def N_case3_sc6_eta_m1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_B*theta_L + theta_B + theta_L)/(dx*(theta_L + 1))
+def N_case3_sc6_eta_m1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_b*theta_l + theta_b + theta_l)/(dx*(theta_l + 1))
 
-def N_case3_sc6_eta_m1_r1_op1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_B/dx
+def N_case3_sc6_eta_m1_r1_op1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case3_sc6_eta_m1_r2_om1_m3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_b/dx
+def N_case3_sc6_eta_m1_r2_om1_m3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_bb/dx
 
-def N_case3_sc6_eta_m1_r2_om1_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dy*nx*ny*(2*theta_b + 1)/dx
+def N_case3_sc6_eta_m1_r2_om1_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dy*nx*ny*(2*theta_bb + 1)/dx
 
-def N_case3_sc6_eta_m1_r2_op0_m3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_b*(bj*dx*nx**2 + bj*dy*nx*ny*theta_b + bj*dy*nx*ny + bm*dx)/(dx*(theta_b + 1))
+def N_case3_sc6_eta_m1_r2_op0_m3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_bb*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_bb + eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_bb + 1))
 
-def N_case3_sc6_eta_m1_r2_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_b + bj*dx*nx**2 + bj*dy*nx*ny*theta_b**2 + bm*dx*theta_b + bm*dx)/(dx*theta_b)
+def N_case3_sc6_eta_m1_r2_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_bb + eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_bb**2 + eps_m*dx*theta_bb + eps_m*dx)/(dx*theta_bb)
 
-def N_case3_sc6_eta_m1_r2_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1))
+def N_case3_sc6_eta_m1_r2_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1))
 
-def N_case3_sc6_eta_m1_r2_op1_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dy*nx*ny/dx
+def N_case3_sc6_eta_m1_r2_op1_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dy*nx*ny/dx
 
-def M_case3_sc6_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + (2*theta_L + 1)*(bj*ny**2 - bp)/(theta_L*(theta_L + 1))
+def M_case3_sc6_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + (2*theta_l + 1)*(eps_jump*ny**2 - eps_p)/(theta_l*(theta_l + 1))
 
-def M_case3_sc6_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case3_sc6_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case3_sc6_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc6_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc6_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case3_sc6_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case3_sc6_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(2*theta_B + theta_b - 3)/((theta_B - 1)*(theta_B + theta_b - 2)) + (2*theta_B + 1)*(bj*nx**2 - bp)/(theta_B*(theta_B + 1))
+def M_case3_sc6_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(2*theta_b + theta_bb - 3)/((theta_b - 1)*(theta_b + theta_bb - 2)) + (2*theta_b + 1)*(eps_jump*nx**2 - eps_p)/(theta_b*(theta_b + 1))
 
-def M_case3_sc6_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_B - 1)/((theta_b - 1)*(theta_B + theta_b - 2))
+def M_case3_sc6_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_b - 1)/((theta_bb - 1)*(theta_b + theta_bb - 2))
 
-def M_case3_sc6_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc6_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc6_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_b - 1)/((theta_B - 1)*(theta_B + theta_b - 2))
+def M_case3_sc6_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_bb - 1)/((theta_b - 1)*(theta_b + theta_bb - 2))
 
-def M_case3_sc6_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_B + 2*theta_b - 3)/((theta_b - 1)*(theta_B + theta_b - 2)) - (2*theta_b + 1)*(bj*nx**2 - bp)/(theta_b*(theta_b + 1))
+def M_case3_sc6_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_b + 2*theta_bb - 3)/((theta_bb - 1)*(theta_b + theta_bb - 2)) - (2*theta_bb + 1)*(eps_jump*nx**2 - eps_p)/(theta_bb*(theta_bb + 1))
 
-def d_case3_sc6_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny + a_val*bm*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + b_val*dx*nx
+def d_case3_sc6_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny + a_val*eps_m*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + b_val*dx*nx
 
-def d_case3_sc6_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx + a_val*bm*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1)) + b_val*dy*ny
+def d_case3_sc6_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx + a_val*eps_m*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1)) + b_val*dy*ny
 
-def d_case3_sc6_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx - a_val*bm*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1)) + b_val*dy*ny
+def d_case3_sc6_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx - a_val*eps_m*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1)) + b_val*dy*ny
 
-def N_case3_sc6_eta_p1_r0_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_L - 1)/(theta_L - 2)
+def N_case3_sc6_eta_p1_r0_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_l - 1)/(theta_l - 2)
 
-def N_case3_sc6_eta_p1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_L - 2)/(theta_L - 1)
+def N_case3_sc6_eta_p1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_l - 2)/(theta_l - 1)
 
-def N_case3_sc6_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_L**2 + bj*dx*nx*ny*theta_B*theta_L - bj*dx*nx*ny*theta_L + bj*dy*ny**2*theta_B*theta_L + bj*dy*ny**2*theta_B - bp*dy*theta_B*theta_L - bp*dy*theta_B)/(dy*theta_B*theta_L)
+def N_case3_sc6_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_l**2 + eps_jump*dx*nx*ny*theta_b*theta_l - eps_jump*dx*nx*ny*theta_l + eps_jump*dy*ny**2*theta_b*theta_l + eps_jump*dy*ny**2*theta_b - eps_p*dy*theta_b*theta_l - eps_p*dy*theta_b)/(dy*theta_b*theta_l)
 
-def N_case3_sc6_eta_p1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_B*theta_L + theta_B + theta_L)/(dy*(theta_B + 1))
+def N_case3_sc6_eta_p1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_b*theta_l + theta_b + theta_l)/(dy*(theta_b + 1))
 
-def N_case3_sc6_eta_p1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_L*(bj*dx*nx*ny*theta_L + bj*dx*nx*ny + bj*dy*ny**2 - bp*dy)/(dy*(theta_L + 1))
+def N_case3_sc6_eta_p1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_l*(eps_jump*dx*nx*ny*theta_l + eps_jump*dx*nx*ny + eps_jump*dy*ny**2 - eps_p*dy)/(dy*(theta_l + 1))
 
-def N_case3_sc6_eta_p1_r0_op1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_L/dy
+def N_case3_sc6_eta_p1_r0_op1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case3_sc6_eta_p1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1))
+def N_case3_sc6_eta_p1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1))
 
-def N_case3_sc6_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_L + bj*dx*nx**2*theta_L + bj*dy*nx*ny*theta_B**2*theta_L + bj*dy*nx*ny*theta_B*theta_L - bj*dy*nx*ny*theta_B - bp*dx*theta_B*theta_L - bp*dx*theta_L)/(dx*theta_B*theta_L)
+def N_case3_sc6_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_l + eps_jump*dx*nx**2*theta_l + eps_jump*dy*nx*ny*theta_b**2*theta_l + eps_jump*dy*nx*ny*theta_b*theta_l - eps_jump*dy*nx*ny*theta_b - eps_p*dx*theta_b*theta_l - eps_p*dx*theta_l)/(dx*theta_b*theta_l)
 
-def N_case3_sc6_eta_p1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_B*(bj*dx*nx**2 + bj*dy*nx*ny*theta_B + bj*dy*nx*ny - bp*dx)/(dx*(theta_B + 1))
+def N_case3_sc6_eta_p1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_b*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_b + eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_b + 1))
 
-def N_case3_sc6_eta_p1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_B*theta_L + theta_B + theta_L)/(dx*(theta_L + 1))
+def N_case3_sc6_eta_p1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_b*theta_l + theta_b + theta_l)/(dx*(theta_l + 1))
 
-def N_case3_sc6_eta_p1_r1_op1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_B/dx
+def N_case3_sc6_eta_p1_r1_op1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case3_sc6_eta_p1_r2_om1_m3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_b/dx
+def N_case3_sc6_eta_p1_r2_om1_m3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_bb/dx
 
-def N_case3_sc6_eta_p1_r2_om1_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dy*nx*ny*(2*theta_b + 1)/dx
+def N_case3_sc6_eta_p1_r2_om1_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dy*nx*ny*(2*theta_bb + 1)/dx
 
-def N_case3_sc6_eta_p1_r2_op0_m3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_b*(bj*dx*nx**2 + bj*dy*nx*ny*theta_b + bj*dy*nx*ny - bp*dx)/(dx*(theta_b + 1))
+def N_case3_sc6_eta_p1_r2_op0_m3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_bb*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_bb + eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_bb + 1))
 
-def N_case3_sc6_eta_p1_r2_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_b + bj*dx*nx**2 + bj*dy*nx*ny*theta_b**2 - bp*dx*theta_b - bp*dx)/(dx*theta_b)
+def N_case3_sc6_eta_p1_r2_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_bb + eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_bb**2 - eps_p*dx*theta_bb - eps_p*dx)/(dx*theta_bb)
 
-def N_case3_sc6_eta_p1_r2_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1))
+def N_case3_sc6_eta_p1_r2_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1))
 
-def N_case3_sc6_eta_p1_r2_op1_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dy*nx*ny/dx
+def N_case3_sc6_eta_p1_r2_op1_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dy*nx*ny/dx
 
-def M_case3_sc7_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(2*theta_B + theta_b - 3)/((theta_B - 1)*(theta_B + theta_b - 2)) + (2*theta_B + 1)*(bj*nx**2 + bm)/(theta_B*(theta_B + 1))
+def M_case3_sc7_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(2*theta_b + theta_bb - 3)/((theta_b - 1)*(theta_b + theta_bb - 2)) + (2*theta_b + 1)*(eps_jump*nx**2 + eps_m)/(theta_b*(theta_b + 1))
 
-def M_case3_sc7_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case3_sc7_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case3_sc7_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_B - 1)/((theta_b - 1)*(theta_B + theta_b - 2))
+def M_case3_sc7_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_b - 1)/((theta_bb - 1)*(theta_b + theta_bb - 2))
 
-def M_case3_sc7_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case3_sc7_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case3_sc7_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) - (2*theta_R + 1)*(bj*ny**2 + bm)/(theta_R*(theta_R + 1))
+def M_case3_sc7_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) - (2*theta_r + 1)*(eps_jump*ny**2 + eps_m)/(theta_r*(theta_r + 1))
 
-def M_case3_sc7_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc7_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc7_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_b - 1)/((theta_B - 1)*(theta_B + theta_b - 2))
+def M_case3_sc7_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_bb - 1)/((theta_b - 1)*(theta_b + theta_bb - 2))
 
-def M_case3_sc7_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc7_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc7_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_B + 2*theta_b - 3)/((theta_b - 1)*(theta_B + theta_b - 2)) - (2*theta_b + 1)*(bj*nx**2 + bm)/(theta_b*(theta_b + 1))
+def M_case3_sc7_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_b + 2*theta_bb - 3)/((theta_bb - 1)*(theta_b + theta_bb - 2)) - (2*theta_bb + 1)*(eps_jump*nx**2 + eps_m)/(theta_bb*(theta_bb + 1))
 
-def d_case3_sc7_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx + a_val*bp*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1)) + b_val*dy*ny
+def d_case3_sc7_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx + a_val*eps_p*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1)) + b_val*dy*ny
 
-def d_case3_sc7_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny - a_val*bp*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + b_val*dx*nx
+def d_case3_sc7_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny - a_val*eps_p*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + b_val*dx*nx
 
-def d_case3_sc7_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx - a_val*bp*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1)) + b_val*dy*ny
+def d_case3_sc7_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx - a_val*eps_p*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1)) + b_val*dy*ny
 
-def N_case3_sc7_eta_m1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dx*(theta_R + 1))
+def N_case3_sc7_eta_m1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dx*(theta_r + 1))
 
-def N_case3_sc7_eta_m1_r0_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_B/dx
+def N_case3_sc7_eta_m1_r0_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case3_sc7_eta_m1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1))
+def N_case3_sc7_eta_m1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1))
 
-def N_case3_sc7_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_R + bj*dx*nx**2*theta_R - bj*dy*nx*ny*theta_B**2*theta_R - bj*dy*nx*ny*theta_B*theta_R + bj*dy*nx*ny*theta_B + bm*dx*theta_B*theta_R + bm*dx*theta_R)/(dx*theta_B*theta_R)
+def N_case3_sc7_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_r + eps_jump*dx*nx**2*theta_r - eps_jump*dy*nx*ny*theta_b**2*theta_r - eps_jump*dy*nx*ny*theta_b*theta_r + eps_jump*dy*nx*ny*theta_b + eps_m*dx*theta_b*theta_r + eps_m*dx*theta_r)/(dx*theta_b*theta_r)
 
-def N_case3_sc7_eta_m1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_B*(bj*dx*nx**2 - bj*dy*nx*ny*theta_B - bj*dy*nx*ny + bm*dx)/(dx*(theta_B + 1))
+def N_case3_sc7_eta_m1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_b*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_b - eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_b + 1))
 
-def N_case3_sc7_eta_m1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_R*(bj*dx*nx*ny*theta_R + bj*dx*nx*ny - bj*dy*ny**2 - bm*dy)/(dy*(theta_R + 1))
+def N_case3_sc7_eta_m1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_r*(eps_jump*dx*nx*ny*theta_r + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 - eps_m*dy)/(dy*(theta_r + 1))
 
-def N_case3_sc7_eta_m1_r1_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_R/dy
+def N_case3_sc7_eta_m1_r1_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case3_sc7_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_R**2 + bj*dx*nx*ny*theta_B*theta_R - bj*dx*nx*ny*theta_R - bj*dy*ny**2*theta_B*theta_R - bj*dy*ny**2*theta_B - bm*dy*theta_B*theta_R - bm*dy*theta_B)/(dy*theta_B*theta_R)
+def N_case3_sc7_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_r**2 + eps_jump*dx*nx*ny*theta_b*theta_r - eps_jump*dx*nx*ny*theta_r - eps_jump*dy*ny**2*theta_b*theta_r - eps_jump*dy*ny**2*theta_b - eps_m*dy*theta_b*theta_r - eps_m*dy*theta_b)/(dy*theta_b*theta_r)
 
-def N_case3_sc7_eta_m1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dy*(theta_B + 1))
+def N_case3_sc7_eta_m1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dy*(theta_b + 1))
 
-def N_case3_sc7_eta_m1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_R - 2)/(theta_R - 1)
+def N_case3_sc7_eta_m1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_r - 2)/(theta_r - 1)
 
-def N_case3_sc7_eta_m1_r1_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_R - 1)/(theta_R - 2)
+def N_case3_sc7_eta_m1_r1_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_r - 1)/(theta_r - 2)
 
-def N_case3_sc7_eta_m1_r2_om1_m3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_b/dx
+def N_case3_sc7_eta_m1_r2_om1_m3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_bb/dx
 
-def N_case3_sc7_eta_m1_r2_om1_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dy*nx*ny*(2*theta_b + 1)/dx
+def N_case3_sc7_eta_m1_r2_om1_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dy*nx*ny*(2*theta_bb + 1)/dx
 
-def N_case3_sc7_eta_m1_r2_op0_m3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_b*(bj*dx*nx**2 + bj*dy*nx*ny*theta_b + bj*dy*nx*ny + bm*dx)/(dx*(theta_b + 1))
+def N_case3_sc7_eta_m1_r2_op0_m3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_bb*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_bb + eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_bb + 1))
 
-def N_case3_sc7_eta_m1_r2_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_b + bj*dx*nx**2 + bj*dy*nx*ny*theta_b**2 + bm*dx*theta_b + bm*dx)/(dx*theta_b)
+def N_case3_sc7_eta_m1_r2_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_bb + eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_bb**2 + eps_m*dx*theta_bb + eps_m*dx)/(dx*theta_bb)
 
-def N_case3_sc7_eta_m1_r2_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1))
+def N_case3_sc7_eta_m1_r2_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1))
 
-def N_case3_sc7_eta_m1_r2_op1_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dy*nx*ny/dx
+def N_case3_sc7_eta_m1_r2_op1_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dy*nx*ny/dx
 
-def M_case3_sc7_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(2*theta_B + theta_b - 3)/((theta_B - 1)*(theta_B + theta_b - 2)) + (2*theta_B + 1)*(bj*nx**2 - bp)/(theta_B*(theta_B + 1))
+def M_case3_sc7_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(2*theta_b + theta_bb - 3)/((theta_b - 1)*(theta_b + theta_bb - 2)) + (2*theta_b + 1)*(eps_jump*nx**2 - eps_p)/(theta_b*(theta_b + 1))
 
-def M_case3_sc7_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case3_sc7_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case3_sc7_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_B - 1)/((theta_b - 1)*(theta_B + theta_b - 2))
+def M_case3_sc7_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_b - 1)/((theta_bb - 1)*(theta_b + theta_bb - 2))
 
-def M_case3_sc7_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case3_sc7_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case3_sc7_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) - (2*theta_R + 1)*(bj*ny**2 - bp)/(theta_R*(theta_R + 1))
+def M_case3_sc7_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) - (2*theta_r + 1)*(eps_jump*ny**2 - eps_p)/(theta_r*(theta_r + 1))
 
-def M_case3_sc7_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc7_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc7_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_b - 1)/((theta_B - 1)*(theta_B + theta_b - 2))
+def M_case3_sc7_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_bb - 1)/((theta_b - 1)*(theta_b + theta_bb - 2))
 
-def M_case3_sc7_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc7_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc7_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_B + 2*theta_b - 3)/((theta_b - 1)*(theta_B + theta_b - 2)) - (2*theta_b + 1)*(bj*nx**2 - bp)/(theta_b*(theta_b + 1))
+def M_case3_sc7_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_b + 2*theta_bb - 3)/((theta_bb - 1)*(theta_b + theta_bb - 2)) - (2*theta_bb + 1)*(eps_jump*nx**2 - eps_p)/(theta_bb*(theta_bb + 1))
 
-def d_case3_sc7_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx + a_val*bm*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1)) + b_val*dy*ny
+def d_case3_sc7_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx + a_val*eps_m*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1)) + b_val*dy*ny
 
-def d_case3_sc7_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny - a_val*bm*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + b_val*dx*nx
+def d_case3_sc7_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny - a_val*eps_m*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + b_val*dx*nx
 
-def d_case3_sc7_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx - a_val*bm*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1)) + b_val*dy*ny
+def d_case3_sc7_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx - a_val*eps_m*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1)) + b_val*dy*ny
 
-def N_case3_sc7_eta_p1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dx*(theta_R + 1))
+def N_case3_sc7_eta_p1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dx*(theta_r + 1))
 
-def N_case3_sc7_eta_p1_r0_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_B/dx
+def N_case3_sc7_eta_p1_r0_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case3_sc7_eta_p1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1))
+def N_case3_sc7_eta_p1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1))
 
-def N_case3_sc7_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_R + bj*dx*nx**2*theta_R - bj*dy*nx*ny*theta_B**2*theta_R - bj*dy*nx*ny*theta_B*theta_R + bj*dy*nx*ny*theta_B - bp*dx*theta_B*theta_R - bp*dx*theta_R)/(dx*theta_B*theta_R)
+def N_case3_sc7_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_r + eps_jump*dx*nx**2*theta_r - eps_jump*dy*nx*ny*theta_b**2*theta_r - eps_jump*dy*nx*ny*theta_b*theta_r + eps_jump*dy*nx*ny*theta_b - eps_p*dx*theta_b*theta_r - eps_p*dx*theta_r)/(dx*theta_b*theta_r)
 
-def N_case3_sc7_eta_p1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_B*(bj*dx*nx**2 - bj*dy*nx*ny*theta_B - bj*dy*nx*ny - bp*dx)/(dx*(theta_B + 1))
+def N_case3_sc7_eta_p1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_b*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_b - eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_b + 1))
 
-def N_case3_sc7_eta_p1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_R*(bj*dx*nx*ny*theta_R + bj*dx*nx*ny - bj*dy*ny**2 + bp*dy)/(dy*(theta_R + 1))
+def N_case3_sc7_eta_p1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_r*(eps_jump*dx*nx*ny*theta_r + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 + eps_p*dy)/(dy*(theta_r + 1))
 
-def N_case3_sc7_eta_p1_r1_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_R/dy
+def N_case3_sc7_eta_p1_r1_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case3_sc7_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_R**2 + bj*dx*nx*ny*theta_B*theta_R - bj*dx*nx*ny*theta_R - bj*dy*ny**2*theta_B*theta_R - bj*dy*ny**2*theta_B + bp*dy*theta_B*theta_R + bp*dy*theta_B)/(dy*theta_B*theta_R)
+def N_case3_sc7_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_r**2 + eps_jump*dx*nx*ny*theta_b*theta_r - eps_jump*dx*nx*ny*theta_r - eps_jump*dy*ny**2*theta_b*theta_r - eps_jump*dy*ny**2*theta_b + eps_p*dy*theta_b*theta_r + eps_p*dy*theta_b)/(dy*theta_b*theta_r)
 
-def N_case3_sc7_eta_p1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dy*(theta_B + 1))
+def N_case3_sc7_eta_p1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dy*(theta_b + 1))
 
-def N_case3_sc7_eta_p1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_R - 2)/(theta_R - 1)
+def N_case3_sc7_eta_p1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_r - 2)/(theta_r - 1)
 
-def N_case3_sc7_eta_p1_r1_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_R - 1)/(theta_R - 2)
+def N_case3_sc7_eta_p1_r1_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_r - 1)/(theta_r - 2)
 
-def N_case3_sc7_eta_p1_r2_om1_m3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_b/dx
+def N_case3_sc7_eta_p1_r2_om1_m3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_bb/dx
 
-def N_case3_sc7_eta_p1_r2_om1_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dy*nx*ny*(2*theta_b + 1)/dx
+def N_case3_sc7_eta_p1_r2_om1_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dy*nx*ny*(2*theta_bb + 1)/dx
 
-def N_case3_sc7_eta_p1_r2_op0_m3(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_b*(bj*dx*nx**2 + bj*dy*nx*ny*theta_b + bj*dy*nx*ny - bp*dx)/(dx*(theta_b + 1))
+def N_case3_sc7_eta_p1_r2_op0_m3(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_bb*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_bb + eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_bb + 1))
 
-def N_case3_sc7_eta_p1_r2_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_b + bj*dx*nx**2 + bj*dy*nx*ny*theta_b**2 - bp*dx*theta_b - bp*dx)/(dx*theta_b)
+def N_case3_sc7_eta_p1_r2_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_bb + eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_bb**2 - eps_p*dx*theta_bb - eps_p*dx)/(dx*theta_bb)
 
-def N_case3_sc7_eta_p1_r2_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_B + theta_b - 2)/((theta_B - 1)*(theta_b - 1))
+def N_case3_sc7_eta_p1_r2_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_b + theta_bb - 2)/((theta_b - 1)*(theta_bb - 1))
 
-def N_case3_sc7_eta_p1_r2_op1_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dy*nx*ny/dx
+def N_case3_sc7_eta_p1_r2_op1_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dy*nx*ny/dx
 
-def M_case3_sc8_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + (2*theta_B + 1)*(bj*nx**2 + bm)/(theta_B*(theta_B + 1))
+def M_case3_sc8_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + (2*theta_b + 1)*(eps_jump*nx**2 + eps_m)/(theta_b*(theta_b + 1))
 
-def M_case3_sc8_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case3_sc8_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case3_sc8_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc8_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc8_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case3_sc8_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case3_sc8_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(2*theta_R + theta_r - 3)/((theta_R - 1)*(theta_R + theta_r - 2)) - (2*theta_R + 1)*(bj*ny**2 + bm)/(theta_R*(theta_R + 1))
+def M_case3_sc8_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(2*theta_r + theta_rr - 3)/((theta_r - 1)*(theta_r + theta_rr - 2)) - (2*theta_r + 1)*(eps_jump*ny**2 + eps_m)/(theta_r*(theta_r + 1))
 
-def M_case3_sc8_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_R - 1)/((theta_r - 1)*(theta_R + theta_r - 2))
+def M_case3_sc8_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_r - 1)/((theta_rr - 1)*(theta_r + theta_rr - 2))
 
-def M_case3_sc8_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc8_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc8_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_r - 1)/((theta_R - 1)*(theta_R + theta_r - 2))
+def M_case3_sc8_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_rr - 1)/((theta_r - 1)*(theta_r + theta_rr - 2))
 
-def M_case3_sc8_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_R + 2*theta_r - 3)/((theta_r - 1)*(theta_R + theta_r - 2)) + (2*theta_r + 1)*(bj*ny**2 + bm)/(theta_r*(theta_r + 1))
+def M_case3_sc8_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_r + 2*theta_rr - 3)/((theta_rr - 1)*(theta_r + theta_rr - 2)) + (2*theta_rr + 1)*(eps_jump*ny**2 + eps_m)/(theta_rr*(theta_rr + 1))
 
-def d_case3_sc8_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx + a_val*bp*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + b_val*dy*ny
+def d_case3_sc8_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx + a_val*eps_p*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + b_val*dy*ny
 
-def d_case3_sc8_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny - a_val*bp*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1)) + b_val*dx*nx
+def d_case3_sc8_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny - a_val*eps_p*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1)) + b_val*dx*nx
 
-def d_case3_sc8_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny + a_val*bp*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1)) + b_val*dx*nx
+def d_case3_sc8_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny + a_val*eps_p*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1)) + b_val*dx*nx
 
-def N_case3_sc8_eta_m1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dx*(theta_R + 1))
+def N_case3_sc8_eta_m1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dx*(theta_r + 1))
 
-def N_case3_sc8_eta_m1_r0_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_B/dx
+def N_case3_sc8_eta_m1_r0_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case3_sc8_eta_m1_r0_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_B - 1)/(theta_B - 2)
+def N_case3_sc8_eta_m1_r0_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_b - 1)/(theta_b - 2)
 
-def N_case3_sc8_eta_m1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_B - 2)/(theta_B - 1)
+def N_case3_sc8_eta_m1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_b - 2)/(theta_b - 1)
 
-def N_case3_sc8_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_R + bj*dx*nx**2*theta_R - bj*dy*nx*ny*theta_B**2*theta_R - bj*dy*nx*ny*theta_B*theta_R + bj*dy*nx*ny*theta_B + bm*dx*theta_B*theta_R + bm*dx*theta_R)/(dx*theta_B*theta_R)
+def N_case3_sc8_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_r + eps_jump*dx*nx**2*theta_r - eps_jump*dy*nx*ny*theta_b**2*theta_r - eps_jump*dy*nx*ny*theta_b*theta_r + eps_jump*dy*nx*ny*theta_b + eps_m*dx*theta_b*theta_r + eps_m*dx*theta_r)/(dx*theta_b*theta_r)
 
-def N_case3_sc8_eta_m1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_B*(bj*dx*nx**2 - bj*dy*nx*ny*theta_B - bj*dy*nx*ny + bm*dx)/(dx*(theta_B + 1))
+def N_case3_sc8_eta_m1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_b*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_b - eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_b + 1))
 
-def N_case3_sc8_eta_m1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_R*(bj*dx*nx*ny*theta_R + bj*dx*nx*ny - bj*dy*ny**2 - bm*dy)/(dy*(theta_R + 1))
+def N_case3_sc8_eta_m1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_r*(eps_jump*dx*nx*ny*theta_r + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 - eps_m*dy)/(dy*(theta_r + 1))
 
-def N_case3_sc8_eta_m1_r1_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_R/dy
+def N_case3_sc8_eta_m1_r1_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case3_sc8_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_R**2 + bj*dx*nx*ny*theta_B*theta_R - bj*dx*nx*ny*theta_R - bj*dy*ny**2*theta_B*theta_R - bj*dy*ny**2*theta_B - bm*dy*theta_B*theta_R - bm*dy*theta_B)/(dy*theta_B*theta_R)
+def N_case3_sc8_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_r**2 + eps_jump*dx*nx*ny*theta_b*theta_r - eps_jump*dx*nx*ny*theta_r - eps_jump*dy*ny**2*theta_b*theta_r - eps_jump*dy*ny**2*theta_b - eps_m*dy*theta_b*theta_r - eps_m*dy*theta_b)/(dy*theta_b*theta_r)
 
-def N_case3_sc8_eta_m1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dy*(theta_B + 1))
+def N_case3_sc8_eta_m1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dy*(theta_b + 1))
 
-def N_case3_sc8_eta_m1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1))
+def N_case3_sc8_eta_m1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1))
 
-def N_case3_sc8_eta_m1_r2_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1))
+def N_case3_sc8_eta_m1_r2_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1))
 
-def N_case3_sc8_eta_m1_r2_op2_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dx*nx*ny*(2*theta_r + 1)/dy
+def N_case3_sc8_eta_m1_r2_op2_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dx*nx*ny*(2*theta_rr + 1)/dy
 
-def N_case3_sc8_eta_m1_r2_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_r**2 - bj*dy*ny**2*theta_r - bj*dy*ny**2 - bm*dy*theta_r - bm*dy)/(dy*theta_r)
+def N_case3_sc8_eta_m1_r2_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_rr**2 - eps_jump*dy*ny**2*theta_rr - eps_jump*dy*ny**2 - eps_m*dy*theta_rr - eps_m*dy)/(dy*theta_rr)
 
-def N_case3_sc8_eta_m1_r2_op2_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dx*nx*ny/dy
+def N_case3_sc8_eta_m1_r2_op2_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dx*nx*ny/dy
 
-def N_case3_sc8_eta_m1_r2_op3_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_r/dy
+def N_case3_sc8_eta_m1_r2_op3_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_rr/dy
 
-def N_case3_sc8_eta_m1_r2_op3_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_r*(bj*dx*nx*ny*theta_r + bj*dx*nx*ny - bj*dy*ny**2 - bm*dy)/(dy*(theta_r + 1))
+def N_case3_sc8_eta_m1_r2_op3_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_rr*(eps_jump*dx*nx*ny*theta_rr + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 - eps_m*dy)/(dy*(theta_rr + 1))
 
-def M_case3_sc8_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + (2*theta_B + 1)*(bj*nx**2 - bp)/(theta_B*(theta_B + 1))
+def M_case3_sc8_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + (2*theta_b + 1)*(eps_jump*nx**2 - eps_p)/(theta_b*(theta_b + 1))
 
-def M_case3_sc8_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case3_sc8_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case3_sc8_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc8_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc8_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case3_sc8_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case3_sc8_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(2*theta_R + theta_r - 3)/((theta_R - 1)*(theta_R + theta_r - 2)) - (2*theta_R + 1)*(bj*ny**2 - bp)/(theta_R*(theta_R + 1))
+def M_case3_sc8_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(2*theta_r + theta_rr - 3)/((theta_r - 1)*(theta_r + theta_rr - 2)) - (2*theta_r + 1)*(eps_jump*ny**2 - eps_p)/(theta_r*(theta_r + 1))
 
-def M_case3_sc8_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_R - 1)/((theta_r - 1)*(theta_R + theta_r - 2))
+def M_case3_sc8_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_r - 1)/((theta_rr - 1)*(theta_r + theta_rr - 2))
 
-def M_case3_sc8_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
+def M_case3_sc8_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
     return 0
 
-def M_case3_sc8_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_r - 1)/((theta_R - 1)*(theta_R + theta_r - 2))
+def M_case3_sc8_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_rr - 1)/((theta_r - 1)*(theta_r + theta_rr - 2))
 
-def M_case3_sc8_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_R + 2*theta_r - 3)/((theta_r - 1)*(theta_R + theta_r - 2)) + (2*theta_r + 1)*(bj*ny**2 - bp)/(theta_r*(theta_r + 1))
+def M_case3_sc8_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_r + 2*theta_rr - 3)/((theta_rr - 1)*(theta_r + theta_rr - 2)) + (2*theta_rr + 1)*(eps_jump*ny**2 - eps_p)/(theta_rr*(theta_rr + 1))
 
-def d_case3_sc8_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx + a_val*bm*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + b_val*dy*ny
+def d_case3_sc8_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx + a_val*eps_m*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + b_val*dy*ny
 
-def d_case3_sc8_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny - a_val*bm*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1)) + b_val*dx*nx
+def d_case3_sc8_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny - a_val*eps_m*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1)) + b_val*dx*nx
 
-def d_case3_sc8_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny + a_val*bm*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1)) + b_val*dx*nx
+def d_case3_sc8_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny + a_val*eps_m*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1)) + b_val*dx*nx
 
-def N_case3_sc8_eta_p1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dx*(theta_R + 1))
+def N_case3_sc8_eta_p1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dx*(theta_r + 1))
 
-def N_case3_sc8_eta_p1_r0_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_B/dx
+def N_case3_sc8_eta_p1_r0_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case3_sc8_eta_p1_r0_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_B - 1)/(theta_B - 2)
+def N_case3_sc8_eta_p1_r0_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_b - 1)/(theta_b - 2)
 
-def N_case3_sc8_eta_p1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_B - 2)/(theta_B - 1)
+def N_case3_sc8_eta_p1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_b - 2)/(theta_b - 1)
 
-def N_case3_sc8_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_R + bj*dx*nx**2*theta_R - bj*dy*nx*ny*theta_B**2*theta_R - bj*dy*nx*ny*theta_B*theta_R + bj*dy*nx*ny*theta_B - bp*dx*theta_B*theta_R - bp*dx*theta_R)/(dx*theta_B*theta_R)
+def N_case3_sc8_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_r + eps_jump*dx*nx**2*theta_r - eps_jump*dy*nx*ny*theta_b**2*theta_r - eps_jump*dy*nx*ny*theta_b*theta_r + eps_jump*dy*nx*ny*theta_b - eps_p*dx*theta_b*theta_r - eps_p*dx*theta_r)/(dx*theta_b*theta_r)
 
-def N_case3_sc8_eta_p1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_B*(bj*dx*nx**2 - bj*dy*nx*ny*theta_B - bj*dy*nx*ny - bp*dx)/(dx*(theta_B + 1))
+def N_case3_sc8_eta_p1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_b*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_b - eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_b + 1))
 
-def N_case3_sc8_eta_p1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_R*(bj*dx*nx*ny*theta_R + bj*dx*nx*ny - bj*dy*ny**2 + bp*dy)/(dy*(theta_R + 1))
+def N_case3_sc8_eta_p1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_r*(eps_jump*dx*nx*ny*theta_r + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 + eps_p*dy)/(dy*(theta_r + 1))
 
-def N_case3_sc8_eta_p1_r1_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_R/dy
+def N_case3_sc8_eta_p1_r1_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case3_sc8_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_R**2 + bj*dx*nx*ny*theta_B*theta_R - bj*dx*nx*ny*theta_R - bj*dy*ny**2*theta_B*theta_R - bj*dy*ny**2*theta_B + bp*dy*theta_B*theta_R + bp*dy*theta_B)/(dy*theta_B*theta_R)
+def N_case3_sc8_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_r**2 + eps_jump*dx*nx*ny*theta_b*theta_r - eps_jump*dx*nx*ny*theta_r - eps_jump*dy*ny**2*theta_b*theta_r - eps_jump*dy*ny**2*theta_b + eps_p*dy*theta_b*theta_r + eps_p*dy*theta_b)/(dy*theta_b*theta_r)
 
-def N_case3_sc8_eta_p1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dy*(theta_B + 1))
+def N_case3_sc8_eta_p1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dy*(theta_b + 1))
 
-def N_case3_sc8_eta_p1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1))
+def N_case3_sc8_eta_p1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1))
 
-def N_case3_sc8_eta_p1_r2_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_R + theta_r - 2)/((theta_R - 1)*(theta_r - 1))
+def N_case3_sc8_eta_p1_r2_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_r + theta_rr - 2)/((theta_r - 1)*(theta_rr - 1))
 
-def N_case3_sc8_eta_p1_r2_op2_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (1/2)*bj*dx*nx*ny*(2*theta_r + 1)/dy
+def N_case3_sc8_eta_p1_r2_op2_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (1/2)*eps_jump*dx*nx*ny*(2*theta_rr + 1)/dy
 
-def N_case3_sc8_eta_p1_r2_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_r**2 - bj*dy*ny**2*theta_r - bj*dy*ny**2 + bp*dy*theta_r + bp*dy)/(dy*theta_r)
+def N_case3_sc8_eta_p1_r2_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_rr**2 - eps_jump*dy*ny**2*theta_rr - eps_jump*dy*ny**2 + eps_p*dy*theta_rr + eps_p*dy)/(dy*theta_rr)
 
-def N_case3_sc8_eta_p1_r2_op2_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -1/2*bj*dx*nx*ny/dy
+def N_case3_sc8_eta_p1_r2_op2_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -1/2*eps_jump*dx*nx*ny/dy
 
-def N_case3_sc8_eta_p1_r2_op3_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_r/dy
+def N_case3_sc8_eta_p1_r2_op3_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_rr/dy
 
-def N_case3_sc8_eta_p1_r2_op3_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_r*(bj*dx*nx*ny*theta_r + bj*dx*nx*ny - bj*dy*ny**2 + bp*dy)/(dy*(theta_r + 1))
+def N_case3_sc8_eta_p1_r2_op3_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_rr*(eps_jump*dx*nx*ny*theta_rr + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 + eps_p*dy)/(dy*(theta_rr + 1))
 
-def M_case4_sc1_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*ny*(dx*nx*theta_L*theta_R - dx*nx*theta_R - dy*ny*theta_L - 2*dy*ny*theta_R)/(dy*theta_R*(theta_L + theta_R)) - bm*(theta_L + 2*theta_R)/(theta_R*(theta_L + theta_R)) + bp*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1))
+def M_case4_sc1_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*ny*(dx*nx*theta_l*theta_r - dx*nx*theta_r - dy*ny*theta_l - 2*dy*ny*theta_r)/(dy*theta_r*(theta_l + theta_r)) - eps_m*(theta_l + 2*theta_r)/(theta_r*(theta_l + theta_r)) + eps_p*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1))
 
-def M_case4_sc1_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case4_sc1_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case4_sc1_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*ny*theta_R*(dx*nx*theta_R + dx*nx + dy*ny)/(dy*theta_L*(theta_L + theta_R)) - bm*theta_R/(theta_L*(theta_L + theta_R))
+def M_case4_sc1_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*ny*theta_r*(dx*nx*theta_r + dx*nx + dy*ny)/(dy*theta_l*(theta_l + theta_r)) - eps_m*theta_r/(theta_l*(theta_l + theta_r))
 
-def M_case4_sc1_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_L*theta_T + theta_L - theta_T)/(dx*theta_R*(theta_L + theta_R))
+def M_case4_sc1_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_l*theta_t + theta_l - theta_t)/(dx*theta_r*(theta_l + theta_r))
 
-def M_case4_sc1_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) - (2*theta_T + 1)*(bj*nx**2 + bm)/(theta_T*(theta_T + 1))
+def M_case4_sc1_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) - (2*theta_t + 1)*(eps_jump*nx**2 + eps_m)/(theta_t*(theta_t + 1))
 
-def M_case4_sc1_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dx*theta_L*(theta_L + theta_R))
+def M_case4_sc1_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dx*theta_l*(theta_l + theta_r))
 
-def M_case4_sc1_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*ny*theta_L*(dx*nx*theta_L - dx*nx - dy*ny)/(dy*theta_R*(theta_L + theta_R)) + bm*theta_L/(theta_R*(theta_L + theta_R))
+def M_case4_sc1_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*ny*theta_l*(dx*nx*theta_l - dx*nx - dy*ny)/(dy*theta_r*(theta_l + theta_r)) + eps_m*theta_l/(theta_r*(theta_l + theta_r))
 
-def M_case4_sc1_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case4_sc1_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case4_sc1_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*ny*(dx*nx*theta_L*theta_R + dx*nx*theta_L + 2*dy*ny*theta_L + dy*ny*theta_R)/(dy*theta_L*(theta_L + theta_R)) + bm*(2*theta_L + theta_R)/(theta_L*(theta_L + theta_R)) - bp*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1))
+def M_case4_sc1_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*ny*(dx*nx*theta_l*theta_r + dx*nx*theta_l + 2*dy*ny*theta_l + dy*ny*theta_r)/(dy*theta_l*(theta_l + theta_r)) + eps_m*(2*theta_l + theta_r)/(theta_l*(theta_l + theta_r)) - eps_p*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1))
 
-def d_case4_sc1_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny - a_val*bp*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + b_val*dx*nx
+def d_case4_sc1_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny - a_val*eps_p*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + b_val*dx*nx
 
-def d_case4_sc1_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx - a_val*bp*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + b_val*dy*ny
+def d_case4_sc1_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx - a_val*eps_p*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + b_val*dy*ny
 
-def d_case4_sc1_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny + a_val*bp*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + b_val*dx*nx
+def d_case4_sc1_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny + a_val*eps_p*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + b_val*dx*nx
 
-def N_case4_sc1_eta_m1_r0_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_R/dy
+def N_case4_sc1_eta_m1_r0_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case4_sc1_eta_m1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dy*(theta_T + 1))
+def N_case4_sc1_eta_m1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dy*(theta_t + 1))
 
-def N_case4_sc1_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_L*theta_R - bj*dx*nx*ny*theta_R**2*theta_T - bj*dx*nx*ny*theta_R*theta_T - bj*dy*ny**2*theta_L*theta_T - bj*dy*ny**2*theta_R*theta_T - bm*dy*theta_L*theta_T - bm*dy*theta_R*theta_T)/(dy*theta_L*theta_R*theta_T)
+def N_case4_sc1_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_l*theta_r - eps_jump*dx*nx*ny*theta_r**2*theta_t - eps_jump*dx*nx*ny*theta_r*theta_t - eps_jump*dy*ny**2*theta_l*theta_t - eps_jump*dy*ny**2*theta_r*theta_t - eps_m*dy*theta_l*theta_t - eps_m*dy*theta_r*theta_t)/(dy*theta_l*theta_r*theta_t)
 
-def N_case4_sc1_eta_m1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_R - 2)/(theta_R - 1)
+def N_case4_sc1_eta_m1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_r - 2)/(theta_r - 1)
 
-def N_case4_sc1_eta_m1_r0_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_R - 1)/(theta_R - 2)
+def N_case4_sc1_eta_m1_r0_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_r - 1)/(theta_r - 2)
 
-def N_case4_sc1_eta_m1_r1_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_T/dx
+def N_case4_sc1_eta_m1_r1_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case4_sc1_eta_m1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_T*(bj*dx*nx**2 + bj*dy*nx*ny*theta_T + bj*dy*nx*ny + bm*dx)/(dx*(theta_T + 1))
+def N_case4_sc1_eta_m1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_t*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_t + eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_t + 1))
 
-def N_case4_sc1_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_L*theta_R*theta_T + bj*dx*nx**2*theta_L*theta_R - bj*dy*nx*ny*theta_L*theta_T**2 - bj*dy*nx*ny*theta_L*theta_T + bj*dy*nx*ny*theta_R*theta_T**2 + bj*dy*nx*ny*theta_R*theta_T + bj*dy*nx*ny*theta_T**2 + bm*dx*theta_L*theta_R*theta_T + bm*dx*theta_L*theta_R)/(dx*theta_L*theta_R*theta_T)
+def N_case4_sc1_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_l*theta_r*theta_t + eps_jump*dx*nx**2*theta_l*theta_r - eps_jump*dy*nx*ny*theta_l*theta_t**2 - eps_jump*dy*nx*ny*theta_l*theta_t + eps_jump*dy*nx*ny*theta_r*theta_t**2 + eps_jump*dy*nx*ny*theta_r*theta_t + eps_jump*dy*nx*ny*theta_t**2 + eps_m*dx*theta_l*theta_r*theta_t + eps_m*dx*theta_l*theta_r)/(dx*theta_l*theta_r*theta_t)
 
-def N_case4_sc1_eta_m1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_T - 2)/(theta_T - 1)
+def N_case4_sc1_eta_m1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_t - 2)/(theta_t - 1)
 
-def N_case4_sc1_eta_m1_r1_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_T - 1)/(theta_T - 2)
+def N_case4_sc1_eta_m1_r1_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_t - 1)/(theta_t - 2)
 
-def N_case4_sc1_eta_m1_r2_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_L - 1)/(theta_L - 2)
+def N_case4_sc1_eta_m1_r2_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_l - 1)/(theta_l - 2)
 
-def N_case4_sc1_eta_m1_r2_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_L/dy
+def N_case4_sc1_eta_m1_r2_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case4_sc1_eta_m1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_L - 2)/(theta_L - 1)
+def N_case4_sc1_eta_m1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_l - 2)/(theta_l - 1)
 
-def N_case4_sc1_eta_m1_r2_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_L*theta_T + theta_L - theta_T)/(dy*(theta_T + 1))
+def N_case4_sc1_eta_m1_r2_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_l*theta_t + theta_l - theta_t)/(dy*(theta_t + 1))
 
-def N_case4_sc1_eta_m1_r2_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_L**2*theta_T - bj*dx*nx*ny*theta_L*theta_R - bj*dx*nx*ny*theta_L*theta_T - bj*dy*ny**2*theta_L*theta_T - bj*dy*ny**2*theta_R*theta_T - bm*dy*theta_L*theta_T - bm*dy*theta_R*theta_T)/(dy*theta_L*theta_R*theta_T)
+def N_case4_sc1_eta_m1_r2_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_l**2*theta_t - eps_jump*dx*nx*ny*theta_l*theta_r - eps_jump*dx*nx*ny*theta_l*theta_t - eps_jump*dy*ny**2*theta_l*theta_t - eps_jump*dy*ny**2*theta_r*theta_t - eps_m*dy*theta_l*theta_t - eps_m*dy*theta_r*theta_t)/(dy*theta_l*theta_r*theta_t)
 
-def M_case4_sc1_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*ny*(dx*nx*theta_L*theta_R - dx*nx*theta_R - dy*ny*theta_L - 2*dy*ny*theta_R)/(dy*theta_R*(theta_L + theta_R)) - bm*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + bp*(theta_L + 2*theta_R)/(theta_R*(theta_L + theta_R))
+def M_case4_sc1_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*ny*(dx*nx*theta_l*theta_r - dx*nx*theta_r - dy*ny*theta_l - 2*dy*ny*theta_r)/(dy*theta_r*(theta_l + theta_r)) - eps_m*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + eps_p*(theta_l + 2*theta_r)/(theta_r*(theta_l + theta_r))
 
-def M_case4_sc1_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case4_sc1_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case4_sc1_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*ny*theta_R*(dx*nx*theta_R + dx*nx + dy*ny)/(dy*theta_L*(theta_L + theta_R)) + bp*theta_R/(theta_L*(theta_L + theta_R))
+def M_case4_sc1_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*ny*theta_r*(dx*nx*theta_r + dx*nx + dy*ny)/(dy*theta_l*(theta_l + theta_r)) + eps_p*theta_r/(theta_l*(theta_l + theta_r))
 
-def M_case4_sc1_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_L*theta_T + theta_L - theta_T)/(dx*theta_R*(theta_L + theta_R))
+def M_case4_sc1_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_l*theta_t + theta_l - theta_t)/(dx*theta_r*(theta_l + theta_r))
 
-def M_case4_sc1_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) - (2*theta_T + 1)*(bj*nx**2 - bp)/(theta_T*(theta_T + 1))
+def M_case4_sc1_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) - (2*theta_t + 1)*(eps_jump*nx**2 - eps_p)/(theta_t*(theta_t + 1))
 
-def M_case4_sc1_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dx*theta_L*(theta_L + theta_R))
+def M_case4_sc1_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dx*theta_l*(theta_l + theta_r))
 
-def M_case4_sc1_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*ny*theta_L*(dx*nx*theta_L - dx*nx - dy*ny)/(dy*theta_R*(theta_L + theta_R)) - bp*theta_L/(theta_R*(theta_L + theta_R))
+def M_case4_sc1_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*ny*theta_l*(dx*nx*theta_l - dx*nx - dy*ny)/(dy*theta_r*(theta_l + theta_r)) - eps_p*theta_l/(theta_r*(theta_l + theta_r))
 
-def M_case4_sc1_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny/(dy*theta_T*(theta_T + 1))
+def M_case4_sc1_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny/(dy*theta_t*(theta_t + 1))
 
-def M_case4_sc1_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*ny*(dx*nx*theta_L*theta_R + dx*nx*theta_L + 2*dy*ny*theta_L + dy*ny*theta_R)/(dy*theta_L*(theta_L + theta_R)) + bm*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) - bp*(2*theta_L + theta_R)/(theta_L*(theta_L + theta_R))
+def M_case4_sc1_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*ny*(dx*nx*theta_l*theta_r + dx*nx*theta_l + 2*dy*ny*theta_l + dy*ny*theta_r)/(dy*theta_l*(theta_l + theta_r)) + eps_m*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) - eps_p*(2*theta_l + theta_r)/(theta_l*(theta_l + theta_r))
 
-def d_case4_sc1_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny - a_val*bm*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + b_val*dx*nx
+def d_case4_sc1_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny - a_val*eps_m*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + b_val*dx*nx
 
-def d_case4_sc1_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx - a_val*bm*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + b_val*dy*ny
+def d_case4_sc1_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx - a_val*eps_m*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + b_val*dy*ny
 
-def d_case4_sc1_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny + a_val*bm*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + b_val*dx*nx
+def d_case4_sc1_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny + a_val*eps_m*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + b_val*dx*nx
 
-def N_case4_sc1_eta_p1_r0_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_R/dy
+def N_case4_sc1_eta_p1_r0_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case4_sc1_eta_p1_r0_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_R*theta_T + theta_R + theta_T)/(dy*(theta_T + 1))
+def N_case4_sc1_eta_p1_r0_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_r*theta_t + theta_r + theta_t)/(dy*(theta_t + 1))
 
-def N_case4_sc1_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_L*theta_R - bj*dx*nx*ny*theta_R**2*theta_T - bj*dx*nx*ny*theta_R*theta_T - bj*dy*ny**2*theta_L*theta_T - bj*dy*ny**2*theta_R*theta_T + bp*dy*theta_L*theta_T + bp*dy*theta_R*theta_T)/(dy*theta_L*theta_R*theta_T)
+def N_case4_sc1_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_l*theta_r - eps_jump*dx*nx*ny*theta_r**2*theta_t - eps_jump*dx*nx*ny*theta_r*theta_t - eps_jump*dy*ny**2*theta_l*theta_t - eps_jump*dy*ny**2*theta_r*theta_t + eps_p*dy*theta_l*theta_t + eps_p*dy*theta_r*theta_t)/(dy*theta_l*theta_r*theta_t)
 
-def N_case4_sc1_eta_p1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_R - 2)/(theta_R - 1)
+def N_case4_sc1_eta_p1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_r - 2)/(theta_r - 1)
 
-def N_case4_sc1_eta_p1_r0_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_R - 1)/(theta_R - 2)
+def N_case4_sc1_eta_p1_r0_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_r - 1)/(theta_r - 2)
 
-def N_case4_sc1_eta_p1_r1_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_T/dx
+def N_case4_sc1_eta_p1_r1_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case4_sc1_eta_p1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_T*(bj*dx*nx**2 + bj*dy*nx*ny*theta_T + bj*dy*nx*ny - bp*dx)/(dx*(theta_T + 1))
+def N_case4_sc1_eta_p1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_t*(eps_jump*dx*nx**2 + eps_jump*dy*nx*ny*theta_t + eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_t + 1))
 
-def N_case4_sc1_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_L*theta_R*theta_T + bj*dx*nx**2*theta_L*theta_R - bj*dy*nx*ny*theta_L*theta_T**2 - bj*dy*nx*ny*theta_L*theta_T + bj*dy*nx*ny*theta_R*theta_T**2 + bj*dy*nx*ny*theta_R*theta_T + bj*dy*nx*ny*theta_T**2 - bp*dx*theta_L*theta_R*theta_T - bp*dx*theta_L*theta_R)/(dx*theta_L*theta_R*theta_T)
+def N_case4_sc1_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_l*theta_r*theta_t + eps_jump*dx*nx**2*theta_l*theta_r - eps_jump*dy*nx*ny*theta_l*theta_t**2 - eps_jump*dy*nx*ny*theta_l*theta_t + eps_jump*dy*nx*ny*theta_r*theta_t**2 + eps_jump*dy*nx*ny*theta_r*theta_t + eps_jump*dy*nx*ny*theta_t**2 - eps_p*dx*theta_l*theta_r*theta_t - eps_p*dx*theta_l*theta_r)/(dx*theta_l*theta_r*theta_t)
 
-def N_case4_sc1_eta_p1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_T - 2)/(theta_T - 1)
+def N_case4_sc1_eta_p1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_t - 2)/(theta_t - 1)
 
-def N_case4_sc1_eta_p1_r1_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_T - 1)/(theta_T - 2)
+def N_case4_sc1_eta_p1_r1_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_t - 1)/(theta_t - 2)
 
-def N_case4_sc1_eta_p1_r2_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_L - 1)/(theta_L - 2)
+def N_case4_sc1_eta_p1_r2_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_l - 1)/(theta_l - 2)
 
-def N_case4_sc1_eta_p1_r2_om1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_L/dy
+def N_case4_sc1_eta_p1_r2_om1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case4_sc1_eta_p1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_L - 2)/(theta_L - 1)
+def N_case4_sc1_eta_p1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_l - 2)/(theta_l - 1)
 
-def N_case4_sc1_eta_p1_r2_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_L*theta_T + theta_L - theta_T)/(dy*(theta_T + 1))
+def N_case4_sc1_eta_p1_r2_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_l*theta_t + theta_l - theta_t)/(dy*(theta_t + 1))
 
-def N_case4_sc1_eta_p1_r2_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx*ny*theta_L**2*theta_T - bj*dx*nx*ny*theta_L*theta_R - bj*dx*nx*ny*theta_L*theta_T - bj*dy*ny**2*theta_L*theta_T - bj*dy*ny**2*theta_R*theta_T + bp*dy*theta_L*theta_T + bp*dy*theta_R*theta_T)/(dy*theta_L*theta_R*theta_T)
+def N_case4_sc1_eta_p1_r2_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx*ny*theta_l**2*theta_t - eps_jump*dx*nx*ny*theta_l*theta_r - eps_jump*dx*nx*ny*theta_l*theta_t - eps_jump*dy*ny**2*theta_l*theta_t - eps_jump*dy*ny**2*theta_r*theta_t + eps_p*dy*theta_l*theta_t + eps_p*dy*theta_r*theta_t)/(dy*theta_l*theta_r*theta_t)
 
-def M_case4_sc2_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) - (2*theta_R + 1)*(bj*ny**2 + bm)/(theta_R*(theta_R + 1))
+def M_case4_sc2_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) - (2*theta_r + 1)*(eps_jump*ny**2 + eps_m)/(theta_r*(theta_r + 1))
 
-def M_case4_sc2_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dy*theta_T*(theta_B + theta_T))
+def M_case4_sc2_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dy*theta_t*(theta_b + theta_t))
 
-def M_case4_sc2_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_R*theta_T - theta_R + theta_T)/(dy*theta_B*(theta_B + theta_T))
+def M_case4_sc2_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_r*theta_t - theta_r + theta_t)/(dy*theta_b*(theta_b + theta_t))
 
-def M_case4_sc2_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case4_sc2_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case4_sc2_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*nx*(dx*nx*theta_B + 2*dx*nx*theta_T - dy*ny*theta_B*theta_T - dy*ny*theta_T)/(dx*theta_T*(theta_B + theta_T)) - bm*(theta_B + 2*theta_T)/(theta_T*(theta_B + theta_T)) + bp*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1))
+def M_case4_sc2_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*nx*(dx*nx*theta_b + 2*dx*nx*theta_t - dy*ny*theta_b*theta_t - dy*ny*theta_t)/(dx*theta_t*(theta_b + theta_t)) - eps_m*(theta_b + 2*theta_t)/(theta_t*(theta_b + theta_t)) + eps_p*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1))
 
-def M_case4_sc2_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*nx*theta_T*(dx*nx + dy*ny*theta_T - dy*ny)/(dx*theta_B*(theta_B + theta_T)) - bm*theta_T/(theta_B*(theta_B + theta_T))
+def M_case4_sc2_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*nx*theta_t*(dx*nx + dy*ny*theta_t - dy*ny)/(dx*theta_b*(theta_b + theta_t)) - eps_m*theta_t/(theta_b*(theta_b + theta_t))
 
-def M_case4_sc2_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case4_sc2_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case4_sc2_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*nx*theta_B*(dx*nx - dy*ny*theta_B - dy*ny)/(dx*theta_T*(theta_B + theta_T)) + bm*theta_B/(theta_T*(theta_B + theta_T))
+def M_case4_sc2_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*nx*theta_b*(dx*nx - dy*ny*theta_b - dy*ny)/(dx*theta_t*(theta_b + theta_t)) + eps_m*theta_b/(theta_t*(theta_b + theta_t))
 
-def M_case4_sc2_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*nx*(2*dx*nx*theta_B + dx*nx*theta_T + dy*ny*theta_B*theta_T - dy*ny*theta_B)/(dx*theta_B*(theta_B + theta_T)) + bm*(2*theta_B + theta_T)/(theta_B*(theta_B + theta_T)) - bp*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1))
+def M_case4_sc2_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*nx*(2*dx*nx*theta_b + dx*nx*theta_t + dy*ny*theta_b*theta_t - dy*ny*theta_b)/(dx*theta_b*(theta_b + theta_t)) + eps_m*(2*theta_b + theta_t)/(theta_b*(theta_b + theta_t)) - eps_p*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1))
 
-def d_case4_sc2_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny - a_val*bp*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + b_val*dx*nx
+def d_case4_sc2_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny - a_val*eps_p*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + b_val*dx*nx
 
-def d_case4_sc2_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx - a_val*bp*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + b_val*dy*ny
+def d_case4_sc2_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx - a_val*eps_p*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + b_val*dy*ny
 
-def d_case4_sc2_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx + a_val*bp*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + b_val*dy*ny
+def d_case4_sc2_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx + a_val*eps_p*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + b_val*dy*ny
 
-def N_case4_sc2_eta_m1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_R*(bj*dx*nx*ny*theta_R + bj*dx*nx*ny - bj*dy*ny**2 - bm*dy)/(dy*(theta_R + 1))
+def N_case4_sc2_eta_m1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_r*(eps_jump*dx*nx*ny*theta_r + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 - eps_m*dy)/(dy*(theta_r + 1))
 
-def N_case4_sc2_eta_m1_r0_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_R/dy
+def N_case4_sc2_eta_m1_r0_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case4_sc2_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_R**2 + bj*dx*nx*ny*theta_B*theta_R - bj*dx*nx*ny*theta_R**2*theta_T + bj*dx*nx*ny*theta_R**2 - bj*dx*nx*ny*theta_R*theta_T - bj*dy*ny**2*theta_B*theta_R*theta_T - bj*dy*ny**2*theta_B*theta_T - bm*dy*theta_B*theta_R*theta_T - bm*dy*theta_B*theta_T)/(dy*theta_B*theta_R*theta_T)
+def N_case4_sc2_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_r**2 + eps_jump*dx*nx*ny*theta_b*theta_r - eps_jump*dx*nx*ny*theta_r**2*theta_t + eps_jump*dx*nx*ny*theta_r**2 - eps_jump*dx*nx*ny*theta_r*theta_t - eps_jump*dy*ny**2*theta_b*theta_r*theta_t - eps_jump*dy*ny**2*theta_b*theta_t - eps_m*dy*theta_b*theta_r*theta_t - eps_m*dy*theta_b*theta_t)/(dy*theta_b*theta_r*theta_t)
 
-def N_case4_sc2_eta_m1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_R - 2)/(theta_R - 1)
+def N_case4_sc2_eta_m1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_r - 2)/(theta_r - 1)
 
-def N_case4_sc2_eta_m1_r0_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_R - 1)/(theta_R - 2)
+def N_case4_sc2_eta_m1_r0_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_r - 1)/(theta_r - 2)
 
-def N_case4_sc2_eta_m1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_R*theta_T - theta_R + theta_T)/(dx*(theta_R + 1))
+def N_case4_sc2_eta_m1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_r*theta_t - theta_r + theta_t)/(dx*(theta_r + 1))
 
-def N_case4_sc2_eta_m1_r1_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_T/dx
+def N_case4_sc2_eta_m1_r1_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case4_sc2_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_B*theta_R + bj*dx*nx**2*theta_R*theta_T - bj*dy*nx*ny*theta_B*theta_T + bj*dy*nx*ny*theta_R*theta_T**2 - bj*dy*nx*ny*theta_R*theta_T + bm*dx*theta_B*theta_R + bm*dx*theta_R*theta_T)/(dx*theta_B*theta_R*theta_T)
+def N_case4_sc2_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_b*theta_r + eps_jump*dx*nx**2*theta_r*theta_t - eps_jump*dy*nx*ny*theta_b*theta_t + eps_jump*dy*nx*ny*theta_r*theta_t**2 - eps_jump*dy*nx*ny*theta_r*theta_t + eps_m*dx*theta_b*theta_r + eps_m*dx*theta_r*theta_t)/(dx*theta_b*theta_r*theta_t)
 
-def N_case4_sc2_eta_m1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_T - 2)/(theta_T - 1)
+def N_case4_sc2_eta_m1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_t - 2)/(theta_t - 1)
 
-def N_case4_sc2_eta_m1_r1_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_T - 1)/(theta_T - 2)
+def N_case4_sc2_eta_m1_r1_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_t - 1)/(theta_t - 2)
 
-def N_case4_sc2_eta_m1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dx*(theta_R + 1))
+def N_case4_sc2_eta_m1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dx*(theta_r + 1))
 
-def N_case4_sc2_eta_m1_r2_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_B/dx
+def N_case4_sc2_eta_m1_r2_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case4_sc2_eta_m1_r2_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_B - 1)/(theta_B - 2)
+def N_case4_sc2_eta_m1_r2_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_b - 1)/(theta_b - 2)
 
-def N_case4_sc2_eta_m1_r2_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_B - 2)/(theta_B - 1)
+def N_case4_sc2_eta_m1_r2_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_b - 2)/(theta_b - 1)
 
-def N_case4_sc2_eta_m1_r2_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_R + bj*dx*nx**2*theta_R*theta_T - bj*dy*nx*ny*theta_B**2*theta_R - bj*dy*nx*ny*theta_B*theta_R + bj*dy*nx*ny*theta_B*theta_T + bm*dx*theta_B*theta_R + bm*dx*theta_R*theta_T)/(dx*theta_B*theta_R*theta_T)
+def N_case4_sc2_eta_m1_r2_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_r + eps_jump*dx*nx**2*theta_r*theta_t - eps_jump*dy*nx*ny*theta_b**2*theta_r - eps_jump*dy*nx*ny*theta_b*theta_r + eps_jump*dy*nx*ny*theta_b*theta_t + eps_m*dx*theta_b*theta_r + eps_m*dx*theta_r*theta_t)/(dx*theta_b*theta_r*theta_t)
 
-def M_case4_sc2_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) - (2*theta_R + 1)*(bj*ny**2 - bp)/(theta_R*(theta_R + 1))
+def M_case4_sc2_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) - (2*theta_r + 1)*(eps_jump*ny**2 - eps_p)/(theta_r*(theta_r + 1))
 
-def M_case4_sc2_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dy*theta_T*(theta_B + theta_T))
+def M_case4_sc2_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dy*theta_t*(theta_b + theta_t))
 
-def M_case4_sc2_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_R*theta_T - theta_R + theta_T)/(dy*theta_B*(theta_B + theta_T))
+def M_case4_sc2_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_r*theta_t - theta_r + theta_t)/(dy*theta_b*(theta_b + theta_t))
 
-def M_case4_sc2_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case4_sc2_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case4_sc2_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*nx*(dx*nx*theta_B + 2*dx*nx*theta_T - dy*ny*theta_B*theta_T - dy*ny*theta_T)/(dx*theta_T*(theta_B + theta_T)) - bm*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + bp*(theta_B + 2*theta_T)/(theta_T*(theta_B + theta_T))
+def M_case4_sc2_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*nx*(dx*nx*theta_b + 2*dx*nx*theta_t - dy*ny*theta_b*theta_t - dy*ny*theta_t)/(dx*theta_t*(theta_b + theta_t)) - eps_m*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + eps_p*(theta_b + 2*theta_t)/(theta_t*(theta_b + theta_t))
 
-def M_case4_sc2_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*nx*theta_T*(dx*nx + dy*ny*theta_T - dy*ny)/(dx*theta_B*(theta_B + theta_T)) + bp*theta_T/(theta_B*(theta_B + theta_T))
+def M_case4_sc2_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*nx*theta_t*(dx*nx + dy*ny*theta_t - dy*ny)/(dx*theta_b*(theta_b + theta_t)) + eps_p*theta_t/(theta_b*(theta_b + theta_t))
 
-def M_case4_sc2_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny/(dx*theta_R*(theta_R + 1))
+def M_case4_sc2_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny/(dx*theta_r*(theta_r + 1))
 
-def M_case4_sc2_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*nx*theta_B*(dx*nx - dy*ny*theta_B - dy*ny)/(dx*theta_T*(theta_B + theta_T)) - bp*theta_B/(theta_T*(theta_B + theta_T))
+def M_case4_sc2_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*nx*theta_b*(dx*nx - dy*ny*theta_b - dy*ny)/(dx*theta_t*(theta_b + theta_t)) - eps_p*theta_b/(theta_t*(theta_b + theta_t))
 
-def M_case4_sc2_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*nx*(2*dx*nx*theta_B + dx*nx*theta_T + dy*ny*theta_B*theta_T - dy*ny*theta_B)/(dx*theta_B*(theta_B + theta_T)) + bm*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) - bp*(2*theta_B + theta_T)/(theta_B*(theta_B + theta_T))
+def M_case4_sc2_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*nx*(2*dx*nx*theta_b + dx*nx*theta_t + dy*ny*theta_b*theta_t - dy*ny*theta_b)/(dx*theta_b*(theta_b + theta_t)) + eps_m*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) - eps_p*(2*theta_b + theta_t)/(theta_b*(theta_b + theta_t))
 
-def d_case4_sc2_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny - a_val*bm*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + b_val*dx*nx
+def d_case4_sc2_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny - a_val*eps_m*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + b_val*dx*nx
 
-def d_case4_sc2_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx - a_val*bm*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + b_val*dy*ny
+def d_case4_sc2_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx - a_val*eps_m*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + b_val*dy*ny
 
-def d_case4_sc2_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx + a_val*bm*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + b_val*dy*ny
+def d_case4_sc2_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx + a_val*eps_m*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + b_val*dy*ny
 
-def N_case4_sc2_eta_p1_r0_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_R*(bj*dx*nx*ny*theta_R + bj*dx*nx*ny - bj*dy*ny**2 + bp*dy)/(dy*(theta_R + 1))
+def N_case4_sc2_eta_p1_r0_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_r*(eps_jump*dx*nx*ny*theta_r + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 + eps_p*dy)/(dy*(theta_r + 1))
 
-def N_case4_sc2_eta_p1_r0_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_R/dy
+def N_case4_sc2_eta_p1_r0_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case4_sc2_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_R**2 + bj*dx*nx*ny*theta_B*theta_R - bj*dx*nx*ny*theta_R**2*theta_T + bj*dx*nx*ny*theta_R**2 - bj*dx*nx*ny*theta_R*theta_T - bj*dy*ny**2*theta_B*theta_R*theta_T - bj*dy*ny**2*theta_B*theta_T + bp*dy*theta_B*theta_R*theta_T + bp*dy*theta_B*theta_T)/(dy*theta_B*theta_R*theta_T)
+def N_case4_sc2_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_r**2 + eps_jump*dx*nx*ny*theta_b*theta_r - eps_jump*dx*nx*ny*theta_r**2*theta_t + eps_jump*dx*nx*ny*theta_r**2 - eps_jump*dx*nx*ny*theta_r*theta_t - eps_jump*dy*ny**2*theta_b*theta_r*theta_t - eps_jump*dy*ny**2*theta_b*theta_t + eps_p*dy*theta_b*theta_r*theta_t + eps_p*dy*theta_b*theta_t)/(dy*theta_b*theta_r*theta_t)
 
-def N_case4_sc2_eta_p1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_R - 2)/(theta_R - 1)
+def N_case4_sc2_eta_p1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_r - 2)/(theta_r - 1)
 
-def N_case4_sc2_eta_p1_r0_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_R - 1)/(theta_R - 2)
+def N_case4_sc2_eta_p1_r0_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_r - 1)/(theta_r - 2)
 
-def N_case4_sc2_eta_p1_r1_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_R*theta_T - theta_R + theta_T)/(dx*(theta_R + 1))
+def N_case4_sc2_eta_p1_r1_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_r*theta_t - theta_r + theta_t)/(dx*(theta_r + 1))
 
-def N_case4_sc2_eta_p1_r1_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_T/dx
+def N_case4_sc2_eta_p1_r1_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case4_sc2_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_B*theta_R + bj*dx*nx**2*theta_R*theta_T - bj*dy*nx*ny*theta_B*theta_T + bj*dy*nx*ny*theta_R*theta_T**2 - bj*dy*nx*ny*theta_R*theta_T - bp*dx*theta_B*theta_R - bp*dx*theta_R*theta_T)/(dx*theta_B*theta_R*theta_T)
+def N_case4_sc2_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_b*theta_r + eps_jump*dx*nx**2*theta_r*theta_t - eps_jump*dy*nx*ny*theta_b*theta_t + eps_jump*dy*nx*ny*theta_r*theta_t**2 - eps_jump*dy*nx*ny*theta_r*theta_t - eps_p*dx*theta_b*theta_r - eps_p*dx*theta_r*theta_t)/(dx*theta_b*theta_r*theta_t)
 
-def N_case4_sc2_eta_p1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_T - 2)/(theta_T - 1)
+def N_case4_sc2_eta_p1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_t - 2)/(theta_t - 1)
 
-def N_case4_sc2_eta_p1_r1_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_T - 1)/(theta_T - 2)
+def N_case4_sc2_eta_p1_r1_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_t - 1)/(theta_t - 2)
 
-def N_case4_sc2_eta_p1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dx*(theta_R + 1))
+def N_case4_sc2_eta_p1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dx*(theta_r + 1))
 
-def N_case4_sc2_eta_p1_r2_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_B/dx
+def N_case4_sc2_eta_p1_r2_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case4_sc2_eta_p1_r2_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_B - 1)/(theta_B - 2)
+def N_case4_sc2_eta_p1_r2_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_b - 1)/(theta_b - 2)
 
-def N_case4_sc2_eta_p1_r2_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_B - 2)/(theta_B - 1)
+def N_case4_sc2_eta_p1_r2_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_b - 2)/(theta_b - 1)
 
-def N_case4_sc2_eta_p1_r2_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_R + bj*dx*nx**2*theta_R*theta_T - bj*dy*nx*ny*theta_B**2*theta_R - bj*dy*nx*ny*theta_B*theta_R + bj*dy*nx*ny*theta_B*theta_T - bp*dx*theta_B*theta_R - bp*dx*theta_R*theta_T)/(dx*theta_B*theta_R*theta_T)
+def N_case4_sc2_eta_p1_r2_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_r + eps_jump*dx*nx**2*theta_r*theta_t - eps_jump*dy*nx*ny*theta_b**2*theta_r - eps_jump*dy*nx*ny*theta_b*theta_r + eps_jump*dy*nx*ny*theta_b*theta_t - eps_p*dx*theta_b*theta_r - eps_p*dx*theta_r*theta_t)/(dx*theta_b*theta_r*theta_t)
 
-def M_case4_sc3_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*ny*(dx*nx*theta_L*theta_R - dx*nx*theta_R + dy*ny*theta_L + 2*dy*ny*theta_R)/(dy*theta_R*(theta_L + theta_R)) - bm*(theta_L + 2*theta_R)/(theta_R*(theta_L + theta_R)) + bp*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1))
+def M_case4_sc3_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*ny*(dx*nx*theta_l*theta_r - dx*nx*theta_r + dy*ny*theta_l + 2*dy*ny*theta_r)/(dy*theta_r*(theta_l + theta_r)) - eps_m*(theta_l + 2*theta_r)/(theta_r*(theta_l + theta_r)) + eps_p*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1))
 
-def M_case4_sc3_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case4_sc3_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case4_sc3_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*ny*theta_R*(dx*nx*theta_R + dx*nx - dy*ny)/(dy*theta_L*(theta_L + theta_R)) - bm*theta_R/(theta_L*(theta_L + theta_R))
+def M_case4_sc3_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*ny*theta_r*(dx*nx*theta_r + dx*nx - dy*ny)/(dy*theta_l*(theta_l + theta_r)) - eps_m*theta_r/(theta_l*(theta_l + theta_r))
 
-def M_case4_sc3_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_B*theta_L - theta_B + theta_L)/(dx*theta_R*(theta_L + theta_R))
+def M_case4_sc3_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_b*theta_l - theta_b + theta_l)/(dx*theta_r*(theta_l + theta_r))
 
-def M_case4_sc3_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + (2*theta_B + 1)*(bj*nx**2 + bm)/(theta_B*(theta_B + 1))
+def M_case4_sc3_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + (2*theta_b + 1)*(eps_jump*nx**2 + eps_m)/(theta_b*(theta_b + 1))
 
-def M_case4_sc3_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dx*theta_L*(theta_L + theta_R))
+def M_case4_sc3_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dx*theta_l*(theta_l + theta_r))
 
-def M_case4_sc3_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*ny*theta_L*(dx*nx*theta_L - dx*nx + dy*ny)/(dy*theta_R*(theta_L + theta_R)) + bm*theta_L/(theta_R*(theta_L + theta_R))
+def M_case4_sc3_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*ny*theta_l*(dx*nx*theta_l - dx*nx + dy*ny)/(dy*theta_r*(theta_l + theta_r)) + eps_m*theta_l/(theta_r*(theta_l + theta_r))
 
-def M_case4_sc3_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case4_sc3_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case4_sc3_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*ny*(dx*nx*theta_L*theta_R + dx*nx*theta_L - 2*dy*ny*theta_L - dy*ny*theta_R)/(dy*theta_L*(theta_L + theta_R)) + bm*(2*theta_L + theta_R)/(theta_L*(theta_L + theta_R)) - bp*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1))
+def M_case4_sc3_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*ny*(dx*nx*theta_l*theta_r + dx*nx*theta_l - 2*dy*ny*theta_l - dy*ny*theta_r)/(dy*theta_l*(theta_l + theta_r)) + eps_m*(2*theta_l + theta_r)/(theta_l*(theta_l + theta_r)) - eps_p*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1))
 
-def d_case4_sc3_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny - a_val*bp*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + b_val*dx*nx
+def d_case4_sc3_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny - a_val*eps_p*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + b_val*dx*nx
 
-def d_case4_sc3_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx + a_val*bp*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + b_val*dy*ny
+def d_case4_sc3_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx + a_val*eps_p*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + b_val*dy*ny
 
-def d_case4_sc3_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny + a_val*bp*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + b_val*dx*nx
+def d_case4_sc3_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny + a_val*eps_p*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + b_val*dx*nx
 
-def N_case4_sc3_eta_m1_r0_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_R/dy
+def N_case4_sc3_eta_m1_r0_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case4_sc3_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_R**2 + bj*dx*nx*ny*theta_B*theta_R - bj*dx*nx*ny*theta_L*theta_R - bj*dy*ny**2*theta_B*theta_L - bj*dy*ny**2*theta_B*theta_R - bm*dy*theta_B*theta_L - bm*dy*theta_B*theta_R)/(dy*theta_B*theta_L*theta_R)
+def N_case4_sc3_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_r**2 + eps_jump*dx*nx*ny*theta_b*theta_r - eps_jump*dx*nx*ny*theta_l*theta_r - eps_jump*dy*ny**2*theta_b*theta_l - eps_jump*dy*ny**2*theta_b*theta_r - eps_m*dy*theta_b*theta_l - eps_m*dy*theta_b*theta_r)/(dy*theta_b*theta_l*theta_r)
 
-def N_case4_sc3_eta_m1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dy*(theta_B + 1))
+def N_case4_sc3_eta_m1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dy*(theta_b + 1))
 
-def N_case4_sc3_eta_m1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_R - 2)/(theta_R - 1)
+def N_case4_sc3_eta_m1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_r - 2)/(theta_r - 1)
 
-def N_case4_sc3_eta_m1_r0_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_R - 1)/(theta_R - 2)
+def N_case4_sc3_eta_m1_r0_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_r - 1)/(theta_r - 2)
 
-def N_case4_sc3_eta_m1_r1_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_B/dx
+def N_case4_sc3_eta_m1_r1_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case4_sc3_eta_m1_r1_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_B - 1)/(theta_B - 2)
+def N_case4_sc3_eta_m1_r1_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_b - 1)/(theta_b - 2)
 
-def N_case4_sc3_eta_m1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_B - 2)/(theta_B - 1)
+def N_case4_sc3_eta_m1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_b - 2)/(theta_b - 1)
 
-def N_case4_sc3_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_L*theta_R + bj*dx*nx**2*theta_L*theta_R + bj*dy*nx*ny*theta_B**2*theta_L - bj*dy*nx*ny*theta_B**2*theta_R - bj*dy*nx*ny*theta_B**2 + bj*dy*nx*ny*theta_B*theta_L - bj*dy*nx*ny*theta_B*theta_R + bm*dx*theta_B*theta_L*theta_R + bm*dx*theta_L*theta_R)/(dx*theta_B*theta_L*theta_R)
+def N_case4_sc3_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_l*theta_r + eps_jump*dx*nx**2*theta_l*theta_r + eps_jump*dy*nx*ny*theta_b**2*theta_l - eps_jump*dy*nx*ny*theta_b**2*theta_r - eps_jump*dy*nx*ny*theta_b**2 + eps_jump*dy*nx*ny*theta_b*theta_l - eps_jump*dy*nx*ny*theta_b*theta_r + eps_m*dx*theta_b*theta_l*theta_r + eps_m*dx*theta_l*theta_r)/(dx*theta_b*theta_l*theta_r)
 
-def N_case4_sc3_eta_m1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_B*(bj*dx*nx**2 - bj*dy*nx*ny*theta_B - bj*dy*nx*ny + bm*dx)/(dx*(theta_B + 1))
+def N_case4_sc3_eta_m1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_b*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_b - eps_jump*dy*nx*ny + eps_m*dx)/(dx*(theta_b + 1))
 
-def N_case4_sc3_eta_m1_r2_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_L - 1)/(theta_L - 2)
+def N_case4_sc3_eta_m1_r2_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_l - 1)/(theta_l - 2)
 
-def N_case4_sc3_eta_m1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_L - 2)/(theta_L - 1)
+def N_case4_sc3_eta_m1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_l - 2)/(theta_l - 1)
 
-def N_case4_sc3_eta_m1_r2_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_L/dy
+def N_case4_sc3_eta_m1_r2_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case4_sc3_eta_m1_r2_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_L**2 - bj*dx*nx*ny*theta_B*theta_L - bj*dx*nx*ny*theta_L*theta_R + bj*dy*ny**2*theta_B*theta_L + bj*dy*ny**2*theta_B*theta_R + bm*dy*theta_B*theta_L + bm*dy*theta_B*theta_R)/(dy*theta_B*theta_L*theta_R)
+def N_case4_sc3_eta_m1_r2_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_l**2 - eps_jump*dx*nx*ny*theta_b*theta_l - eps_jump*dx*nx*ny*theta_l*theta_r + eps_jump*dy*ny**2*theta_b*theta_l + eps_jump*dy*ny**2*theta_b*theta_r + eps_m*dy*theta_b*theta_l + eps_m*dy*theta_b*theta_r)/(dy*theta_b*theta_l*theta_r)
 
-def N_case4_sc3_eta_m1_r2_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_B*theta_L - theta_B + theta_L)/(dy*(theta_B + 1))
+def N_case4_sc3_eta_m1_r2_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_b*theta_l - theta_b + theta_l)/(dy*(theta_b + 1))
 
-def M_case4_sc3_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*ny*(dx*nx*theta_L*theta_R - dx*nx*theta_R + dy*ny*theta_L + 2*dy*ny*theta_R)/(dy*theta_R*(theta_L + theta_R)) - bm*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + bp*(theta_L + 2*theta_R)/(theta_R*(theta_L + theta_R))
+def M_case4_sc3_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*ny*(dx*nx*theta_l*theta_r - dx*nx*theta_r + dy*ny*theta_l + 2*dy*ny*theta_r)/(dy*theta_r*(theta_l + theta_r)) - eps_m*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + eps_p*(theta_l + 2*theta_r)/(theta_r*(theta_l + theta_r))
 
-def M_case4_sc3_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case4_sc3_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case4_sc3_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*ny*theta_R*(dx*nx*theta_R + dx*nx - dy*ny)/(dy*theta_L*(theta_L + theta_R)) + bp*theta_R/(theta_L*(theta_L + theta_R))
+def M_case4_sc3_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*ny*theta_r*(dx*nx*theta_r + dx*nx - dy*ny)/(dy*theta_l*(theta_l + theta_r)) + eps_p*theta_r/(theta_l*(theta_l + theta_r))
 
-def M_case4_sc3_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_B*theta_L - theta_B + theta_L)/(dx*theta_R*(theta_L + theta_R))
+def M_case4_sc3_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_b*theta_l - theta_b + theta_l)/(dx*theta_r*(theta_l + theta_r))
 
-def M_case4_sc3_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + (2*theta_B + 1)*(bj*nx**2 - bp)/(theta_B*(theta_B + 1))
+def M_case4_sc3_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + (2*theta_b + 1)*(eps_jump*nx**2 - eps_p)/(theta_b*(theta_b + 1))
 
-def M_case4_sc3_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dx*theta_L*(theta_L + theta_R))
+def M_case4_sc3_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dx*theta_l*(theta_l + theta_r))
 
-def M_case4_sc3_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*ny*theta_L*(dx*nx*theta_L - dx*nx + dy*ny)/(dy*theta_R*(theta_L + theta_R)) - bp*theta_L/(theta_R*(theta_L + theta_R))
+def M_case4_sc3_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*ny*theta_l*(dx*nx*theta_l - dx*nx + dy*ny)/(dy*theta_r*(theta_l + theta_r)) - eps_p*theta_l/(theta_r*(theta_l + theta_r))
 
-def M_case4_sc3_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny/(dy*theta_B*(theta_B + 1))
+def M_case4_sc3_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny/(dy*theta_b*(theta_b + 1))
 
-def M_case4_sc3_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*ny*(dx*nx*theta_L*theta_R + dx*nx*theta_L - 2*dy*ny*theta_L - dy*ny*theta_R)/(dy*theta_L*(theta_L + theta_R)) + bm*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) - bp*(2*theta_L + theta_R)/(theta_L*(theta_L + theta_R))
+def M_case4_sc3_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*ny*(dx*nx*theta_l*theta_r + dx*nx*theta_l - 2*dy*ny*theta_l - dy*ny*theta_r)/(dy*theta_l*(theta_l + theta_r)) + eps_m*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) - eps_p*(2*theta_l + theta_r)/(theta_l*(theta_l + theta_r))
 
-def d_case4_sc3_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny - a_val*bm*(2*theta_R - 3)/((theta_R - 2)*(theta_R - 1)) + b_val*dx*nx
+def d_case4_sc3_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny - a_val*eps_m*(2*theta_r - 3)/((theta_r - 2)*(theta_r - 1)) + b_val*dx*nx
 
-def d_case4_sc3_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx + a_val*bm*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + b_val*dy*ny
+def d_case4_sc3_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx + a_val*eps_m*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + b_val*dy*ny
 
-def d_case4_sc3_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny + a_val*bm*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + b_val*dx*nx
+def d_case4_sc3_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny + a_val*eps_m*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + b_val*dx*nx
 
-def N_case4_sc3_eta_p1_r0_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*theta_R/dy
+def N_case4_sc3_eta_p1_r0_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*theta_r/dy
 
-def N_case4_sc3_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_R**2 + bj*dx*nx*ny*theta_B*theta_R - bj*dx*nx*ny*theta_L*theta_R - bj*dy*ny**2*theta_B*theta_L - bj*dy*ny**2*theta_B*theta_R + bp*dy*theta_B*theta_L + bp*dy*theta_B*theta_R)/(dy*theta_B*theta_L*theta_R)
+def N_case4_sc3_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_r**2 + eps_jump*dx*nx*ny*theta_b*theta_r - eps_jump*dx*nx*ny*theta_l*theta_r - eps_jump*dy*ny**2*theta_b*theta_l - eps_jump*dy*ny**2*theta_b*theta_r + eps_p*dy*theta_b*theta_l + eps_p*dy*theta_b*theta_r)/(dy*theta_b*theta_l*theta_r)
 
-def N_case4_sc3_eta_p1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_B*theta_R + theta_B + theta_R)/(dy*(theta_B + 1))
+def N_case4_sc3_eta_p1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_b*theta_r + theta_b + theta_r)/(dy*(theta_b + 1))
 
-def N_case4_sc3_eta_p1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_R - 2)/(theta_R - 1)
+def N_case4_sc3_eta_p1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_r - 2)/(theta_r - 1)
 
-def N_case4_sc3_eta_p1_r0_op2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_R - 1)/(theta_R - 2)
+def N_case4_sc3_eta_p1_r0_op2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_r - 1)/(theta_r - 2)
 
-def N_case4_sc3_eta_p1_r1_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_B/dx
+def N_case4_sc3_eta_p1_r1_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case4_sc3_eta_p1_r1_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_B - 1)/(theta_B - 2)
+def N_case4_sc3_eta_p1_r1_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_b - 1)/(theta_b - 2)
 
-def N_case4_sc3_eta_p1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_B - 2)/(theta_B - 1)
+def N_case4_sc3_eta_p1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_b - 2)/(theta_b - 1)
 
-def N_case4_sc3_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_L*theta_R + bj*dx*nx**2*theta_L*theta_R + bj*dy*nx*ny*theta_B**2*theta_L - bj*dy*nx*ny*theta_B**2*theta_R - bj*dy*nx*ny*theta_B**2 + bj*dy*nx*ny*theta_B*theta_L - bj*dy*nx*ny*theta_B*theta_R - bp*dx*theta_B*theta_L*theta_R - bp*dx*theta_L*theta_R)/(dx*theta_B*theta_L*theta_R)
+def N_case4_sc3_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_l*theta_r + eps_jump*dx*nx**2*theta_l*theta_r + eps_jump*dy*nx*ny*theta_b**2*theta_l - eps_jump*dy*nx*ny*theta_b**2*theta_r - eps_jump*dy*nx*ny*theta_b**2 + eps_jump*dy*nx*ny*theta_b*theta_l - eps_jump*dy*nx*ny*theta_b*theta_r - eps_p*dx*theta_b*theta_l*theta_r - eps_p*dx*theta_l*theta_r)/(dx*theta_b*theta_l*theta_r)
 
-def N_case4_sc3_eta_p1_r1_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -theta_B*(bj*dx*nx**2 - bj*dy*nx*ny*theta_B - bj*dy*nx*ny - bp*dx)/(dx*(theta_B + 1))
+def N_case4_sc3_eta_p1_r1_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -theta_b*(eps_jump*dx*nx**2 - eps_jump*dy*nx*ny*theta_b - eps_jump*dy*nx*ny - eps_p*dx)/(dx*(theta_b + 1))
 
-def N_case4_sc3_eta_p1_r2_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_L - 1)/(theta_L - 2)
+def N_case4_sc3_eta_p1_r2_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_l - 1)/(theta_l - 2)
 
-def N_case4_sc3_eta_p1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_L - 2)/(theta_L - 1)
+def N_case4_sc3_eta_p1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_l - 2)/(theta_l - 1)
 
-def N_case4_sc3_eta_p1_r2_om1_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_L/dy
+def N_case4_sc3_eta_p1_r2_om1_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case4_sc3_eta_p1_r2_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_L**2 - bj*dx*nx*ny*theta_B*theta_L - bj*dx*nx*ny*theta_L*theta_R + bj*dy*ny**2*theta_B*theta_L + bj*dy*ny**2*theta_B*theta_R - bp*dy*theta_B*theta_L - bp*dy*theta_B*theta_R)/(dy*theta_B*theta_L*theta_R)
+def N_case4_sc3_eta_p1_r2_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_l**2 - eps_jump*dx*nx*ny*theta_b*theta_l - eps_jump*dx*nx*ny*theta_l*theta_r + eps_jump*dy*ny**2*theta_b*theta_l + eps_jump*dy*ny**2*theta_b*theta_r - eps_p*dy*theta_b*theta_l - eps_p*dy*theta_b*theta_r)/(dy*theta_b*theta_l*theta_r)
 
-def N_case4_sc3_eta_p1_r2_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_B*theta_L - theta_B + theta_L)/(dy*(theta_B + 1))
+def N_case4_sc3_eta_p1_r2_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_b*theta_l - theta_b + theta_l)/(dy*(theta_b + 1))
 
-def M_case4_sc4_eta_m1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*nx*(dx*nx*theta_B + 2*dx*nx*theta_T + dy*ny*theta_B*theta_T - dy*ny*theta_T)/(dx*theta_T*(theta_B + theta_T)) - bm*(theta_B + 2*theta_T)/(theta_T*(theta_B + theta_T)) + bp*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1))
+def M_case4_sc4_eta_m1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*nx*(dx*nx*theta_b + 2*dx*nx*theta_t + dy*ny*theta_b*theta_t - dy*ny*theta_t)/(dx*theta_t*(theta_b + theta_t)) - eps_m*(theta_b + 2*theta_t)/(theta_t*(theta_b + theta_t)) + eps_p*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1))
 
-def M_case4_sc4_eta_m1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*nx*theta_T*(dx*nx - dy*ny*theta_T - dy*ny)/(dx*theta_B*(theta_B + theta_T)) - bm*theta_T/(theta_B*(theta_B + theta_T))
+def M_case4_sc4_eta_m1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*nx*theta_t*(dx*nx - dy*ny*theta_t - dy*ny)/(dx*theta_b*(theta_b + theta_t)) - eps_m*theta_t/(theta_b*(theta_b + theta_t))
 
-def M_case4_sc4_eta_m1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case4_sc4_eta_m1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case4_sc4_eta_m1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*nx*theta_B*(dx*nx + dy*ny*theta_B - dy*ny)/(dx*theta_T*(theta_B + theta_T)) + bm*theta_B/(theta_T*(theta_B + theta_T))
+def M_case4_sc4_eta_m1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*nx*theta_b*(dx*nx + dy*ny*theta_b - dy*ny)/(dx*theta_t*(theta_b + theta_t)) + eps_m*theta_b/(theta_t*(theta_b + theta_t))
 
-def M_case4_sc4_eta_m1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*nx*(2*dx*nx*theta_B + dx*nx*theta_T - dy*ny*theta_B*theta_T - dy*ny*theta_B)/(dx*theta_B*(theta_B + theta_T)) + bm*(2*theta_B + theta_T)/(theta_B*(theta_B + theta_T)) - bp*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1))
+def M_case4_sc4_eta_m1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*nx*(2*dx*nx*theta_b + dx*nx*theta_t - dy*ny*theta_b*theta_t - dy*ny*theta_b)/(dx*theta_b*(theta_b + theta_t)) + eps_m*(2*theta_b + theta_t)/(theta_b*(theta_b + theta_t)) - eps_p*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1))
 
-def M_case4_sc4_eta_m1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case4_sc4_eta_m1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case4_sc4_eta_m1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_B*theta_L + theta_B - theta_L)/(dy*theta_T*(theta_B + theta_T))
+def M_case4_sc4_eta_m1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_b*theta_l + theta_b - theta_l)/(dy*theta_t*(theta_b + theta_t))
 
-def M_case4_sc4_eta_m1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dy*theta_B*(theta_B + theta_T))
+def M_case4_sc4_eta_m1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dy*theta_b*(theta_b + theta_t))
 
-def M_case4_sc4_eta_m1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + (2*theta_L + 1)*(bj*ny**2 + bm)/(theta_L*(theta_L + 1))
+def M_case4_sc4_eta_m1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + (2*theta_l + 1)*(eps_jump*ny**2 + eps_m)/(theta_l*(theta_l + 1))
 
-def d_case4_sc4_eta_m1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx - a_val*bp*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + b_val*dy*ny
+def d_case4_sc4_eta_m1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx - a_val*eps_p*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + b_val*dy*ny
 
-def d_case4_sc4_eta_m1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bp*dy*nx + a_val*bp*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + b_val*dy*ny
+def d_case4_sc4_eta_m1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_p*dy*nx + a_val*eps_p*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + b_val*dy*ny
 
-def d_case4_sc4_eta_m1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bp*dx*ny + a_val*bp*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + b_val*dx*nx
+def d_case4_sc4_eta_m1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_p*dx*ny + a_val*eps_p*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + b_val*dx*nx
 
-def N_case4_sc4_eta_m1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_B*theta_L + bj*dx*nx**2*theta_L*theta_T + bj*dy*nx*ny*theta_B*theta_T - bj*dy*nx*ny*theta_L*theta_T**2 - bj*dy*nx*ny*theta_L*theta_T + bm*dx*theta_B*theta_L + bm*dx*theta_L*theta_T)/(dx*theta_B*theta_L*theta_T)
+def N_case4_sc4_eta_m1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_b*theta_l + eps_jump*dx*nx**2*theta_l*theta_t + eps_jump*dy*nx*ny*theta_b*theta_t - eps_jump*dy*nx*ny*theta_l*theta_t**2 - eps_jump*dy*nx*ny*theta_l*theta_t + eps_m*dx*theta_b*theta_l + eps_m*dx*theta_l*theta_t)/(dx*theta_b*theta_l*theta_t)
 
-def N_case4_sc4_eta_m1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_T - 2)/(theta_T - 1)
+def N_case4_sc4_eta_m1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_t - 2)/(theta_t - 1)
 
-def N_case4_sc4_eta_m1_r0_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_T - 1)/(theta_T - 2)
+def N_case4_sc4_eta_m1_r0_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_t - 1)/(theta_t - 2)
 
-def N_case4_sc4_eta_m1_r0_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_T/dx
+def N_case4_sc4_eta_m1_r0_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case4_sc4_eta_m1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dx*(theta_L + 1))
+def N_case4_sc4_eta_m1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dx*(theta_l + 1))
 
-def N_case4_sc4_eta_m1_r1_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_B - 1)/(theta_B - 2)
+def N_case4_sc4_eta_m1_r1_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_b - 1)/(theta_b - 2)
 
-def N_case4_sc4_eta_m1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_B - 2)/(theta_B - 1)
+def N_case4_sc4_eta_m1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_b - 2)/(theta_b - 1)
 
-def N_case4_sc4_eta_m1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_L + bj*dx*nx**2*theta_L*theta_T + bj*dy*nx*ny*theta_B**2*theta_L - bj*dy*nx*ny*theta_B*theta_L - bj*dy*nx*ny*theta_B*theta_T + bm*dx*theta_B*theta_L + bm*dx*theta_L*theta_T)/(dx*theta_B*theta_L*theta_T)
+def N_case4_sc4_eta_m1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_l + eps_jump*dx*nx**2*theta_l*theta_t + eps_jump*dy*nx*ny*theta_b**2*theta_l - eps_jump*dy*nx*ny*theta_b*theta_l - eps_jump*dy*nx*ny*theta_b*theta_t + eps_m*dx*theta_b*theta_l + eps_m*dx*theta_l*theta_t)/(dx*theta_b*theta_l*theta_t)
 
-def N_case4_sc4_eta_m1_r1_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_B/dx
+def N_case4_sc4_eta_m1_r1_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case4_sc4_eta_m1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_B*theta_L + theta_B - theta_L)/(dx*(theta_L + 1))
+def N_case4_sc4_eta_m1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_b*theta_l + theta_b - theta_l)/(dx*(theta_l + 1))
 
-def N_case4_sc4_eta_m1_r2_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bp*(theta_L - 1)/(theta_L - 2)
+def N_case4_sc4_eta_m1_r2_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_p*(theta_l - 1)/(theta_l - 2)
 
-def N_case4_sc4_eta_m1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bp*(theta_L - 2)/(theta_L - 1)
+def N_case4_sc4_eta_m1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_p*(theta_l - 2)/(theta_l - 1)
 
-def N_case4_sc4_eta_m1_r2_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_L**2 + bj*dx*nx*ny*theta_B*theta_L - bj*dx*nx*ny*theta_L**2*theta_T - bj*dx*nx*ny*theta_L**2 - bj*dx*nx*ny*theta_L*theta_T + bj*dy*ny**2*theta_B*theta_L*theta_T + bj*dy*ny**2*theta_B*theta_T + bm*dy*theta_B*theta_L*theta_T + bm*dy*theta_B*theta_T)/(dy*theta_B*theta_L*theta_T)
+def N_case4_sc4_eta_m1_r2_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_l**2 + eps_jump*dx*nx*ny*theta_b*theta_l - eps_jump*dx*nx*ny*theta_l**2*theta_t - eps_jump*dx*nx*ny*theta_l**2 - eps_jump*dx*nx*ny*theta_l*theta_t + eps_jump*dy*ny**2*theta_b*theta_l*theta_t + eps_jump*dy*ny**2*theta_b*theta_t + eps_m*dy*theta_b*theta_l*theta_t + eps_m*dy*theta_b*theta_t)/(dy*theta_b*theta_l*theta_t)
 
-def N_case4_sc4_eta_m1_r2_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_L/dy
+def N_case4_sc4_eta_m1_r2_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case4_sc4_eta_m1_r2_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_L*(bj*dx*nx*ny*theta_L + bj*dx*nx*ny - bj*dy*ny**2 - bm*dy)/(dy*(theta_L + 1))
+def N_case4_sc4_eta_m1_r2_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_l*(eps_jump*dx*nx*ny*theta_l + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 - eps_m*dy)/(dy*(theta_l + 1))
 
-def M_case4_sc4_eta_p1_r0c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*nx*(dx*nx*theta_B + 2*dx*nx*theta_T + dy*ny*theta_B*theta_T - dy*ny*theta_T)/(dx*theta_T*(theta_B + theta_T)) - bm*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + bp*(theta_B + 2*theta_T)/(theta_T*(theta_B + theta_T))
+def M_case4_sc4_eta_p1_r0c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*nx*(dx*nx*theta_b + 2*dx*nx*theta_t + dy*ny*theta_b*theta_t - dy*ny*theta_t)/(dx*theta_t*(theta_b + theta_t)) - eps_m*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + eps_p*(theta_b + 2*theta_t)/(theta_t*(theta_b + theta_t))
 
-def M_case4_sc4_eta_p1_r0c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*nx*theta_T*(dx*nx - dy*ny*theta_T - dy*ny)/(dx*theta_B*(theta_B + theta_T)) + bp*theta_T/(theta_B*(theta_B + theta_T))
+def M_case4_sc4_eta_p1_r0c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*nx*theta_t*(dx*nx - dy*ny*theta_t - dy*ny)/(dx*theta_b*(theta_b + theta_t)) + eps_p*theta_t/(theta_b*(theta_b + theta_t))
 
-def M_case4_sc4_eta_p1_r0c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case4_sc4_eta_p1_r0c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case4_sc4_eta_p1_r1c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*nx*theta_B*(dx*nx + dy*ny*theta_B - dy*ny)/(dx*theta_T*(theta_B + theta_T)) - bp*theta_B/(theta_T*(theta_B + theta_T))
+def M_case4_sc4_eta_p1_r1c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*nx*theta_b*(dx*nx + dy*ny*theta_b - dy*ny)/(dx*theta_t*(theta_b + theta_t)) - eps_p*theta_b/(theta_t*(theta_b + theta_t))
 
-def M_case4_sc4_eta_p1_r1c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*nx*(2*dx*nx*theta_B + dx*nx*theta_T - dy*ny*theta_B*theta_T - dy*ny*theta_B)/(dx*theta_B*(theta_B + theta_T)) + bm*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) - bp*(2*theta_B + theta_T)/(theta_B*(theta_B + theta_T))
+def M_case4_sc4_eta_p1_r1c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*nx*(2*dx*nx*theta_b + dx*nx*theta_t - dy*ny*theta_b*theta_t - dy*ny*theta_b)/(dx*theta_b*(theta_b + theta_t)) + eps_m*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) - eps_p*(2*theta_b + theta_t)/(theta_b*(theta_b + theta_t))
 
-def M_case4_sc4_eta_p1_r1c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny/(dx*theta_L*(theta_L + 1))
+def M_case4_sc4_eta_p1_r1c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny/(dx*theta_l*(theta_l + 1))
 
-def M_case4_sc4_eta_p1_r2c0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dx*nx*ny*(theta_B*theta_L + theta_B - theta_L)/(dy*theta_T*(theta_B + theta_T))
+def M_case4_sc4_eta_p1_r2c0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dx*nx*ny*(theta_b*theta_l + theta_b - theta_l)/(dy*theta_t*(theta_b + theta_t))
 
-def M_case4_sc4_eta_p1_r2c1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dy*theta_B*(theta_B + theta_T))
+def M_case4_sc4_eta_p1_r2c1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dy*theta_b*(theta_b + theta_t))
 
-def M_case4_sc4_eta_p1_r2c2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + (2*theta_L + 1)*(bj*ny**2 - bp)/(theta_L*(theta_L + 1))
+def M_case4_sc4_eta_p1_r2c2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + (2*theta_l + 1)*(eps_jump*ny**2 - eps_p)/(theta_l*(theta_l + 1))
 
-def d_case4_sc4_eta_p1_r0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx - a_val*bm*(2*theta_T - 3)/((theta_T - 2)*(theta_T - 1)) + b_val*dy*ny
+def d_case4_sc4_eta_p1_r0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx - a_val*eps_m*(2*theta_t - 3)/((theta_t - 2)*(theta_t - 1)) + b_val*dy*ny
 
-def d_case4_sc4_eta_p1_r1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return a_tau_val*bm*dy*nx + a_val*bm*(2*theta_B - 3)/((theta_B - 2)*(theta_B - 1)) + b_val*dy*ny
+def d_case4_sc4_eta_p1_r1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return a_tau_val*eps_m*dy*nx + a_val*eps_m*(2*theta_b - 3)/((theta_b - 2)*(theta_b - 1)) + b_val*dy*ny
 
-def d_case4_sc4_eta_p1_r2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -a_tau_val*bm*dx*ny + a_val*bm*(2*theta_L - 3)/((theta_L - 2)*(theta_L - 1)) + b_val*dx*nx
+def d_case4_sc4_eta_p1_r2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -a_tau_val*eps_m*dx*ny + a_val*eps_m*(2*theta_l - 3)/((theta_l - 2)*(theta_l - 1)) + b_val*dx*nx
 
-def N_case4_sc4_eta_p1_r0_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -(bj*dx*nx**2*theta_B*theta_L + bj*dx*nx**2*theta_L*theta_T + bj*dy*nx*ny*theta_B*theta_T - bj*dy*nx*ny*theta_L*theta_T**2 - bj*dy*nx*ny*theta_L*theta_T - bp*dx*theta_B*theta_L - bp*dx*theta_L*theta_T)/(dx*theta_B*theta_L*theta_T)
+def N_case4_sc4_eta_p1_r0_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -(eps_jump*dx*nx**2*theta_b*theta_l + eps_jump*dx*nx**2*theta_l*theta_t + eps_jump*dy*nx*ny*theta_b*theta_t - eps_jump*dy*nx*ny*theta_l*theta_t**2 - eps_jump*dy*nx*ny*theta_l*theta_t - eps_p*dx*theta_b*theta_l - eps_p*dx*theta_l*theta_t)/(dx*theta_b*theta_l*theta_t)
 
-def N_case4_sc4_eta_p1_r0_op0_p1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_T - 2)/(theta_T - 1)
+def N_case4_sc4_eta_p1_r0_op0_p1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_t - 2)/(theta_t - 1)
 
-def N_case4_sc4_eta_p1_r0_op0_p2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_T - 1)/(theta_T - 2)
+def N_case4_sc4_eta_p1_r0_op0_p2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_t - 1)/(theta_t - 2)
 
-def N_case4_sc4_eta_p1_r0_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*theta_T/dx
+def N_case4_sc4_eta_p1_r0_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*theta_t/dx
 
-def N_case4_sc4_eta_p1_r0_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*(theta_L*theta_T + theta_L + theta_T)/(dx*(theta_L + 1))
+def N_case4_sc4_eta_p1_r0_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*(theta_l*theta_t + theta_l + theta_t)/(dx*(theta_l + 1))
 
-def N_case4_sc4_eta_p1_r1_op0_m2(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_B - 1)/(theta_B - 2)
+def N_case4_sc4_eta_p1_r1_op0_m2(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_b - 1)/(theta_b - 2)
 
-def N_case4_sc4_eta_p1_r1_op0_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_B - 2)/(theta_B - 1)
+def N_case4_sc4_eta_p1_r1_op0_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_b - 2)/(theta_b - 1)
 
-def N_case4_sc4_eta_p1_r1_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx**2*theta_B*theta_L + bj*dx*nx**2*theta_L*theta_T + bj*dy*nx*ny*theta_B**2*theta_L - bj*dy*nx*ny*theta_B*theta_L - bj*dy*nx*ny*theta_B*theta_T - bp*dx*theta_B*theta_L - bp*dx*theta_L*theta_T)/(dx*theta_B*theta_L*theta_T)
+def N_case4_sc4_eta_p1_r1_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx**2*theta_b*theta_l + eps_jump*dx*nx**2*theta_l*theta_t + eps_jump*dy*nx*ny*theta_b**2*theta_l - eps_jump*dy*nx*ny*theta_b*theta_l - eps_jump*dy*nx*ny*theta_b*theta_t - eps_p*dx*theta_b*theta_l - eps_p*dx*theta_l*theta_t)/(dx*theta_b*theta_l*theta_t)
 
-def N_case4_sc4_eta_p1_r1_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dy*nx*ny*theta_B/dx
+def N_case4_sc4_eta_p1_r1_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dy*nx*ny*theta_b/dx
 
-def N_case4_sc4_eta_p1_r1_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bj*dy*nx*ny*(theta_B*theta_L + theta_B - theta_L)/(dx*(theta_L + 1))
+def N_case4_sc4_eta_p1_r1_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_jump*dy*nx*ny*(theta_b*theta_l + theta_b - theta_l)/(dx*(theta_l + 1))
 
-def N_case4_sc4_eta_p1_r2_om2_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return bm*(theta_L - 1)/(theta_L - 2)
+def N_case4_sc4_eta_p1_r2_om2_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return eps_m*(theta_l - 1)/(theta_l - 2)
 
-def N_case4_sc4_eta_p1_r2_om1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bm*(theta_L - 2)/(theta_L - 1)
+def N_case4_sc4_eta_p1_r2_om1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_m*(theta_l - 2)/(theta_l - 1)
 
-def N_case4_sc4_eta_p1_r2_op0_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return (bj*dx*nx*ny*theta_B*theta_L**2 + bj*dx*nx*ny*theta_B*theta_L - bj*dx*nx*ny*theta_L**2*theta_T - bj*dx*nx*ny*theta_L**2 - bj*dx*nx*ny*theta_L*theta_T + bj*dy*ny**2*theta_B*theta_L*theta_T + bj*dy*ny**2*theta_B*theta_T - bp*dy*theta_B*theta_L*theta_T - bp*dy*theta_B*theta_T)/(dy*theta_B*theta_L*theta_T)
+def N_case4_sc4_eta_p1_r2_op0_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return (eps_jump*dx*nx*ny*theta_b*theta_l**2 + eps_jump*dx*nx*ny*theta_b*theta_l - eps_jump*dx*nx*ny*theta_l**2*theta_t - eps_jump*dx*nx*ny*theta_l**2 - eps_jump*dx*nx*ny*theta_l*theta_t + eps_jump*dy*ny**2*theta_b*theta_l*theta_t + eps_jump*dy*ny**2*theta_b*theta_t - eps_p*dy*theta_b*theta_l*theta_t - eps_p*dy*theta_b*theta_t)/(dy*theta_b*theta_l*theta_t)
 
-def N_case4_sc4_eta_p1_r2_op1_m1(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return -bj*dx*nx*ny*theta_L/dy
+def N_case4_sc4_eta_p1_r2_op1_m1(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return -eps_jump*dx*nx*ny*theta_l/dy
 
-def N_case4_sc4_eta_p1_r2_op1_p0(theta_R, theta_T, theta_L, theta_B, theta_r, theta_t, theta_l, theta_b, nx, ny, a_val, b_val, a_tau_val, bp, bm, bj, dx, dy):
-    return theta_L*(bj*dx*nx*ny*theta_L + bj*dx*nx*ny - bj*dy*ny**2 + bp*dy)/(dy*(theta_L + 1))
+def N_case4_sc4_eta_p1_r2_op1_p0(theta_r, theta_t, theta_l, theta_b, theta_rr, theta_tt, theta_ll, theta_bb, nx, ny, a_val, b_val, a_tau_val, eps_p, eps_m, eps_jump, dx, dy):
+    return theta_l*(eps_jump*dx*nx*ny*theta_l + eps_jump*dx*nx*ny - eps_jump*dy*ny**2 + eps_p*dy)/(dy*(theta_l + 1))
 
 
 # Evaluator dispatch tables

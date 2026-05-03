@@ -2,17 +2,12 @@
 Poisson solver prototype
 Handles complex shape and piecewise variable permittivity
 """
-import contextlib
 import enum
-import importlib.util
-import io
-import os
-import re
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
-import sympy as sp
+from _hardcoded_formulas import CASE3_EVAL, CASE4_EVAL
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import spsolve
 
@@ -20,115 +15,10 @@ np.set_printoptions(legacy="1.25")  # no type info when printing
 
 
 # ---------------------------------------------------------------------------
-# Symbolic case 3 / case 4 evaluators.
+# Case 3 / Case 4 evaluators — hardcoded formulas (no sympy runtime dependency).
+# Per-element functions and dispatch tables live in _hardcoded_formulas.py.
 # ---------------------------------------------------------------------------
-# We load the derivation files (`derivation_case3.ju.py`, `derivation_case4.ju.py`)
-# as Python modules, then lazily lambdify the symbolic M / N / d returned by
-# their `coeff_case3` / `coeff_case4` functions. At each case-3 or case-4
-# grid cell we plug in numeric thetas / normals / jumps / betas to build the
-# local 3x3 system, then assemble it into the global Shortley-Weller matrix
-# the same way `coeff_case2` does.
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def _load_derivation(filename, name):
-    spec = importlib.util.spec_from_file_location(
-        name, os.path.join(_HERE, filename)
-    )
-    mod = importlib.util.module_from_spec(spec)
-    with contextlib.redirect_stdout(io.StringIO()):
-        spec.loader.exec_module(mod)
-    return mod
-
-
-_d3 = _load_derivation("derivation_case3.ju.py", "_d3_deriv")
-_d4 = _load_derivation("derivation_case4.ju.py", "_d4_deriv")
-
-# All sub-case formulas use the same symbol set for thetas, per-row geometry
-# (n_x, n_y, a, b, a_tau), beta_+/-/jump, and dx/dy. Unused thetas get plugged
-# in as 1.0 — they don't appear in those sub-cases' formulas so the value is
-# inert.
-_LAMBDA_ARGS = (
-    _d3.theta_R, _d3.theta_T, _d3.theta_L, _d3.theta_B,
-    _d3.theta_r, _d3.theta_t, _d3.theta_l, _d3.theta_b,
-    _d3.nx, _d3.ny, _d3.a, _d3.b, _d3.a_tau,
-    _d3.beta_p, _d3.beta_m, _d3.beta_jump, _d3.dx, _d3.dy,
-)
-
-_U_RE = re.compile(r"^u_\{i([+-]\d+),j([+-]\d+)\}$")
-
-
-def _build_evaluator(M_sym, Nu_sym, d_sym):
-    """Lambdify (M[3,3], Nu[3], d[3]) symbolic outputs.
-
-    Returns (M_lams, d_lams, N_dicts), where:
-        M_lams[i][j]   : callable -> M[i, j]
-        d_lams[i]      : callable -> d[i]
-        N_dicts[i]     : dict mapping (di, dj) -> callable for the coefficient
-                         of u_{i+di, j+dj} in Nu[i].
-    """
-    M_lams = [[None] * 3 for _ in range(3)]
-    d_lams = [None] * 3
-    N_dicts = [{} for _ in range(3)]
-    for i in range(3):
-        for j in range(3):
-            M_lams[i][j] = sp.lambdify(_LAMBDA_ARGS, M_sym[i, j], modules="numpy")
-        d_lams[i] = sp.lambdify(_LAMBDA_ARGS, d_sym[i], modules="numpy")
-        for sym in Nu_sym[i].free_symbols:
-            m = _U_RE.match(str(sym))
-            if not m:
-                continue
-            di, dj = int(m.group(1)), int(m.group(2))
-            coef = Nu_sym[i].coeff(sym)
-            N_dicts[i][(di, dj)] = sp.lambdify(_LAMBDA_ARGS, coef, modules="numpy")
-    return M_lams, d_lams, N_dicts
-
-
-_CASE3_EVAL_CACHE = {}
-_CASE4_EVAL_CACHE = {}
-
-
-def _get_case3_eval(sub_case, eta_sign):
-    key = (sub_case, eta_sign)
-    if key not in _CASE3_EVAL_CACHE:
-        pts_neg = getattr(_d3, f"s{sub_case}_pts_neg")
-        pts = pts_neg if eta_sign < 0 else _d3.points_for_eta_pos(pts_neg)
-        with contextlib.redirect_stdout(io.StringIO()):
-            M, Nu, d = _d3.coeff_case3(eta_sign, pts)
-        _CASE3_EVAL_CACHE[key] = _build_evaluator(M, Nu, d)
-    return _CASE3_EVAL_CACHE[key]
-
-
-def _get_case4_eval(sub_case, eta_sign):
-    key = (sub_case, eta_sign)
-    if key not in _CASE4_EVAL_CACHE:
-        pts_neg = getattr(_d4, f"s{sub_case}_pts_neg")
-        pts = pts_neg if eta_sign < 0 else _d4.points_for_eta_pos(pts_neg)
-        with contextlib.redirect_stdout(io.StringIO()):
-            M, Nu, d = _d4.coeff_case4(eta_sign, pts)
-        _CASE4_EVAL_CACHE[key] = _build_evaluator(M, Nu, d)
-    return _CASE4_EVAL_CACHE[key]
-
-
-# Per-row interface label for each sub-case (matches the points-list order
-# used in the derivation files).
-_CASE3_ROW_IFACES = {
-    1: ("R", "extra", "T"),
-    2: ("R", "T", "extra"),
-    3: ("T", "L", "extra"),
-    4: ("T", "L", "extra"),
-    5: ("L", "B", "extra"),
-    6: ("L", "B", "extra"),
-    7: ("B", "R", "extra"),
-    8: ("B", "R", "extra"),
-}
-_CASE4_ROW_IFACES = {
-    1: ("R", "T", "L"),
-    2: ("R", "T", "B"),
-    3: ("R", "B", "L"),
-    4: ("T", "B", "L"),
-}
 
 # Map face name -> row index of the corresponding ghost in the local 3-vector.
 _CASE3_SW_INDEX = {
@@ -1666,24 +1556,26 @@ def _iface_axis(label, extra):
     return _AXIS_OF_FACE[label]
 
 
-def _build_local_system(eval_data, geom, row_ifaces, theta_inputs, betas_per_row):
-    """Evaluate symbolic M/d/N at numeric values; return (M_inv_d, M_inv_N, offsets).
+def _build_local_system(eval_data, geom, theta_inputs, betas_per_row):
+    """Evaluate hardcoded M/d/N formulas; return (M_inv_d, M_inv_N, offsets).
 
-    `eval_data`       : (M_lams, d_lams, N_dicts) from a `_get_caseN_eval` call.
+    `eval_data`       : dict from CASE3_EVAL or CASE4_EVAL with keys
+                        'M', 'd', 'N', 'offsets', 'row_ifaces'.
     `geom`            : dict from `_caseN_geometry`, supplying per-interface
                         n_x, n_y, a, b, a_tau.
-    `row_ifaces`      : 3-tuple of labels ('R', 'T', ..., 'extra') matching the
-                        derivation file's points-list order.
     `theta_inputs`    : dict with keys 'R','T','L','B','r','t','l','b' (1.0
                         if unused in this sub-case).
     `betas_per_row`   : list of 3 (beta_p, beta_m, beta_jump) tuples — one
                         per interface row, sampled AT that interface.
     """
-    M_lams, d_lams, N_dicts = eval_data
+    M_funcs = eval_data["M"]
+    d_funcs = eval_data["d"]
+    N_funcs = eval_data["N"]
+    all_offsets = eval_data["offsets"]
+    row_ifaces = eval_data["row_ifaces"]
+
     M = np.zeros((3, 3))
     d_vec = np.zeros(3)
-
-    all_offsets = sorted(set().union(*(nd.keys() for nd in N_dicts)))
     N = np.zeros((3, len(all_offsets)))
 
     for i_row in range(3):
@@ -1697,11 +1589,11 @@ def _build_local_system(eval_data, geom, row_ifaces, theta_inputs, betas_per_row
             dx, dy,
         )
         for j_col in range(3):
-            M[i_row, j_col] = M_lams[i_row][j_col](*args)
-        d_vec[i_row] = d_lams[i_row](*args)
+            M[i_row, j_col] = M_funcs[i_row][j_col](*args)
+        d_vec[i_row] = d_funcs[i_row](*args)
         for k, off in enumerate(all_offsets):
-            if off in N_dicts[i_row]:
-                N[i_row, k] = N_dicts[i_row][off](*args)
+            if off in N_funcs[i_row]:
+                N[i_row, k] = N_funcs[i_row][off](*args)
 
     M_inv_d = np.linalg.solve(M, d_vec)
     M_inv_N = np.linalg.solve(M, N)
@@ -1724,7 +1616,7 @@ def _row_betas(geom, row_ifaces, extra=None):
 
 def _solve_case3_local(sub_case, eta, direction, extra, geom):
     eta_sign = -1 if eta < 0 else +1
-    eval_data = _get_case3_eval(sub_case, eta_sign)
+    eval_data = CASE3_EVAL[(sub_case, eta_sign)]
 
     theta_inputs = {
         "R": geom["theta_R"], "T": geom["theta_T"],
@@ -1740,26 +1632,24 @@ def _solve_case3_local(sub_case, eta, direction, extra, geom):
     elif extra == Direction.B:
         theta_inputs["b"] = geom["theta_extra"]
 
-    row_ifaces = _CASE3_ROW_IFACES[sub_case]
-    betas_per_row = _row_betas(geom, row_ifaces, extra=extra)
+    betas_per_row = _row_betas(geom, eval_data["row_ifaces"], extra=extra)
     return _build_local_system(
-        eval_data, geom, row_ifaces, theta_inputs, betas_per_row,
+        eval_data, geom, theta_inputs, betas_per_row,
     )
 
 
 def _solve_case4_local(sub_case, eta, direction, geom):
     eta_sign = -1 if eta < 0 else +1
-    eval_data = _get_case4_eval(sub_case, eta_sign)
+    eval_data = CASE4_EVAL[(sub_case, eta_sign)]
 
     theta_inputs = {
         "R": geom["theta_R"], "T": geom["theta_T"],
         "L": geom["theta_L"], "B": geom["theta_B"],
         "r": 1.0, "t": 1.0, "l": 1.0, "b": 1.0,
     }
-    row_ifaces = _CASE4_ROW_IFACES[sub_case]
-    betas_per_row = _row_betas(geom, row_ifaces)
+    betas_per_row = _row_betas(geom, eval_data["row_ifaces"])
     return _build_local_system(
-        eval_data, geom, row_ifaces, theta_inputs, betas_per_row,
+        eval_data, geom, theta_inputs, betas_per_row,
     )
 
 
@@ -3350,8 +3240,8 @@ def convergence_test5():
 
 
 if __name__ == "__main__":
-    # convergence_test1()
-    # convergence_test2()
-    # convergence_test3()
-    # convergence_test4()
+    convergence_test1()
+    convergence_test2()
+    convergence_test3()
+    convergence_test4()
     convergence_test5()

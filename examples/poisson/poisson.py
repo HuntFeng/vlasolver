@@ -181,6 +181,8 @@ _CD = {
     Direction.B: CutDir(Direction.B, 1, -1),
 }
 
+_FACE_NAME = {Direction.R: "R", Direction.T: "T", Direction.L: "L", Direction.B: "B"}
+
 
 def surface(x: float, y: float) -> float:
     pass
@@ -413,484 +415,155 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
         vals.append(val)
 
 
-def coeff_case2(direction: int, i: int, j: int):
-    """coeff of u_ij and its neighbors for a case 2 cell"""
-    x, y = center(i, j)
-    eta = surface(x, y)
-    row_idx = index(i, j)  # laplacian matrix row index
+def _solve_case2_local(direction: int, i: int, j: int):
+    """Build and solve the 2x2 local M / d / N system for a case-2 corner.
 
+    Returns (M_inv_d, M_inv_N, all_offsets, sw_idx, geom) where geom holds
+    theta_*, eps_*, bot_* for Shortley-Weller assembly.
+    """
+    x_, y_ = center(i, j)
+    eta = surface(x_, y_)
+
+    cd_x = _CD[direction & (Direction.R | Direction.L)]
+    cd_y = _CD[direction & (Direction.T | Direction.B)]
+
+    theta_x = compute_theta(cd_x.face, i, j)
+    theta_y = compute_theta(cd_y.face, i, j)
+
+    theta_l = theta_x if cd_x.face == Direction.L else 1.0
+    theta_r = theta_x if cd_x.face == Direction.R else 1.0
+    theta_t = theta_y if cd_y.face == Direction.T else 1.0
+    theta_b = theta_y if cd_y.face == Direction.B else 1.0
+
+    def _interp(cd, theta):
+        return (
+            interp(cd.face, theta, i, j, n1),
+            interp(cd.face, theta, i, j, n2),
+            interp(cd.face, theta, i, j, a),
+            interp(cd.face, theta, i, j, b),
+            interp(cd.face, theta, i, j, a_tau),
+        )
+
+    n1_x, n2_x, a_x, b_x, a_tau_x = _interp(cd_x, theta_x)
+    n1_y, n2_y, a_y, b_y, a_tau_y = _interp(cd_y, theta_y)
+
+    # Beta sampling at each interface point.
+    px, py, _ = cd_x.probe_loc(x_, y_, theta_x)
+    bp_x, bm_x, bj_x = _eval_beta_at_iface(px, py, "x" if cd_x.is_x else "y")
+    px, py, _ = cd_y.probe_loc(x_, y_, theta_y)
+    bp_y, bm_y, bj_y = _eval_beta_at_iface(px, py, "x" if cd_y.is_x else "y")
+
+    def _d_row(cd, theta, n1_v, n2_v, a_v, b_v, a_tau_v, eps_p_d):
+        n_t = [n1_v, n2_v][cd.n_tang]
+        n_n = [n1_v, n2_v][cd.n_norm]
+        d_self = dx if cd.is_x else dy
+        phi = (3 - 2 * theta) / ((1 - theta) * (2 - theta))
+        return (
+            (-1 if cd.is_x else 1) * a_tau_v * eps_p_d * n_t * d_self
+            + b_v * n_n * d_self
+            + cd.sign * a_v * eps_p_d * phi
+        )
+
+    eps_p_d_x = bm_x if eta > 0 else bp_x
+    eps_p_d_y = bm_y if eta > 0 else bp_y
     d = np.zeros(2)
-    M = np.zeros((2, 2))
-    N = np.zeros((2, 25))
-
-    # used to traverse N matrix
-    offset = lambda offset_x, offset_y: (offset_x + 2) * 5 + (offset_y + 2)
-
-    if direction == Direction.R | Direction.T:
-        theta_r = compute_theta(Direction.R, i, j)
-        theta_t = compute_theta(Direction.T, i, j)
-        theta_l = 1.0
-        theta_b = 1.0
-
-        bot_x = (theta_r + theta_l) / 2 * dx**2
-        bot_y = (theta_t + theta_b) / 2 * dy**2
-
-        eps_r = permittivity(x + theta_r * dx / 2, y)
-        eps_l = permittivity(x - dx / 2, y)
-        eps_t = permittivity(x, y + theta_t * dy / 2)
-        eps_b = permittivity(x, y - dy / 2)
-
-        # normal evaluated at x_R and x_T
-        n1_x = interp(Direction.R, theta_r, i, j, n1)
-        n2_x = interp(Direction.R, theta_r, i, j, n2)
-        n1_y = interp(Direction.T, theta_t, i, j, n1)
-        n2_y = interp(Direction.T, theta_t, i, j, n2)
-
-        # a_tau at x_R and x_T
-        a_tau_x = interp(Direction.R, theta_r, i, j, a_tau)
-        a_tau_y = interp(Direction.T, theta_t, i, j, a_tau)
-
-        # jump conditions at x_R and x_T
-        a_x = interp(Direction.R, theta_r, i, j, a)
-        a_y = interp(Direction.T, theta_t, i, j, a)
-        b_x = interp(Direction.R, theta_r, i, j, b)
-        b_y = interp(Direction.T, theta_t, i, j, b)
-
-        # Per-interface beta sampling (axis-aligned probes near each cut).
-        _eps_p_x, _eps_m_x, eps_jump_x, eps_p_x, eps_m_x = _sample_beta_legacy(
-            x + theta_r * dx, y, "x", eta
-        )
-        _eps_p_y, _eps_m_y, eps_jump_y, eps_p_y, eps_m_y = _sample_beta_legacy(
-            x, y + theta_t * dy, "y", eta
-        )
-
-        d[0] = (
-            -a_tau_x * eps_p_x * n2_x * dx
-            + b_x * n1_x * dx
-            + a_x * eps_p_x * (3 - 2 * theta_r) / ((2 - theta_r) * (1 - theta_r))
-        )
-        d[1] = (
-            a_tau_y * eps_p_y * n1_y * dy
-            + b_y * n2_y * dy
-            + a_y * eps_p_y * (3 - 2 * theta_t) / ((2 - theta_t) * (1 - theta_t))
-        )
-
-        if eta > 0:
-            eps_p_x, eps_m_x = -_eps_m_x, -_eps_p_x
-            eps_p_y, eps_m_y = -_eps_m_y, -_eps_p_y
-
-        M[0, 0] = (
-            -eps_p_x * (3 - 2 * theta_r) / ((1 - theta_r) * (2 - theta_r))
-            - eps_m_x * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
-            - eps_jump_x * n2_x**2 * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
-        )
-        M[0, 1] = eps_jump_x * n1_x * n2_x * dx / (dy * theta_t * (theta_t + 1))
-        M[1, 0] = eps_jump_y * n1_y * n2_y * dy / (dx * theta_r * (theta_r + 1))
-        M[1, 1] = (
-            -eps_p_y * (3 - 2 * theta_t) / ((1 - theta_t) * (2 - theta_t))
-            - eps_m_y * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
-            - eps_jump_y * n1_y**2 * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
-        )
-
-        # fmt: off
-        # u[i,j]
-        N[0, offset(0, 0)] = -(eps_m_x + eps_jump_x * n2_x**2) * (theta_r + 1) / theta_r \
-            - (eps_jump_x * n1_x * n2_x) * (dx / dy) * ((theta_t * theta_r + theta_t - 1) / theta_t)
-        # u[i+1,j]
-        N[0, offset(1, 0)] = -eps_p_x * (theta_r - 2) / (theta_r - 1)
-        # u[i+2,j]
-        N[0, offset(2, 0)] = eps_p_x * (theta_r - 1) / (theta_r - 2)
-        # u[i-1,j]
-        N[0, offset(-1, 0)] = (eps_m_x + eps_jump_x * n2_x**2) * theta_r / (theta_r + 1) \
-            + eps_jump_x * n1_x * n2_x * theta_r * (dx / dy)
-        # u[i,j-1]
-        N[0, offset(0, -1)] = eps_jump_x * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1) + theta_r)
-        # u[i-1,j-1]
-        N[0, offset(-1, -1)] = -eps_jump_x * n1_x * n2_x * theta_r * (dx / dy)
-
-        # u[i,j]
-        N[1, offset(0, 0)] = -(eps_m_y + eps_jump_y * n1_y**2) * (theta_t + 1) / theta_t \
-            - (eps_jump_y * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_t + theta_r - 1) / theta_r)
-        # u[i,j+1]
-        N[1, offset(0, 1)] = -eps_p_y * (theta_t - 2) / (theta_t - 1)
-        # u[i,j+2]
-        N[1, offset(0, 2)] = eps_p_y * (theta_t - 1) / (theta_t - 2)
-        # u[i,j-1]
-        N[1, offset(0, -1)] = (eps_m_y + eps_jump_y * n1_y**2) * theta_t / (theta_t + 1) \
-            + eps_jump_y * n1_y * n2_y * theta_t * (dy / dx)
-        # u[i-1,j]
-        N[1, offset(-1, 0)] = eps_jump_y * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1) + theta_t)
-        # u[i-1,j-1]
-        N[1, offset(-1, -1)] = -eps_jump_y * n1_y * n2_y * theta_t * (dy / dx)
-        # fmt: on
-
-        M_inv_d = np.linalg.solve(M, d)
-        M_inv_N = np.linalg.solve(M, N)
-
-        f[i, j] -= (
-            M_inv_d[0] * eps_r / theta_r / bot_x + M_inv_d[1] * eps_t / theta_t / bot_y
-        )
-
-        for offset_x in range(-2, 3):
-            for offset_y in range(-2, 3):
-                value = (
-                    M_inv_N[0, offset(offset_x, offset_y)] * eps_r / theta_r / bot_x
-                    + M_inv_N[1, offset(offset_x, offset_y)] * eps_t / theta_t / bot_y
-                )
-                if (offset_x, offset_y) == (0, 0):
-                    value += (
-                        -(eps_r / theta_r + eps_l / theta_l) / bot_x
-                        - (eps_t / theta_t + eps_b / theta_b) / bot_y
-                    )
-                elif (offset_x, offset_y) == (-1, 0):
-                    value += eps_l / theta_l / bot_x
-                elif (offset_x, offset_y) == (0, -1):
-                    value += eps_b / theta_b / bot_y
-                rows.append(row_idx)
-                cols.append(index(i + offset_x, j + offset_y))
-                vals.append(value)
-
-    elif direction == Direction.L | Direction.T:
-        theta_l = compute_theta(Direction.L, i, j)
-        theta_t = compute_theta(Direction.T, i, j)
-        theta_r = 1.0
-        theta_b = 1.0
-
-        bot_x = (theta_r + theta_l) / 2 * dx**2
-        bot_y = (theta_t + theta_b) / 2 * dy**2
-
-        eps_r = permittivity(x + dx / 2, y)
-        eps_l = permittivity(x - theta_l * dx / 2, y)
-        eps_t = permittivity(x, y + theta_t * dy / 2)
-        eps_b = permittivity(x, y - dy / 2)
-
-        # normal evaluated at x_L and x_T
-        n1_x = interp(Direction.L, theta_l, i, j, n1)
-        n2_x = interp(Direction.L, theta_l, i, j, n2)
-        n1_y = interp(Direction.T, theta_t, i, j, n1)
-        n2_y = interp(Direction.T, theta_t, i, j, n2)
-
-        # jump conditions at x_L and x_T
-        a_x = interp(Direction.L, theta_l, i, j, a)
-        a_y = interp(Direction.T, theta_t, i, j, a)
-        b_x = interp(Direction.L, theta_l, i, j, b)
-        b_y = interp(Direction.T, theta_t, i, j, b)
-
-        # a_tau at x_L and x_T
-        a_tau_x = interp(Direction.L, theta_l, i, j, a_tau)
-        a_tau_y = interp(Direction.T, theta_t, i, j, a_tau)
-
-        # Per-interface beta sampling (axis-aligned probes near each cut).
-        _eps_p_x, _eps_m_x, eps_jump_x, eps_p_x, eps_m_x = _sample_beta_legacy(
-            x - theta_l * dx, y, "x", eta
-        )
-        _eps_p_y, _eps_m_y, eps_jump_y, eps_p_y, eps_m_y = _sample_beta_legacy(
-            x, y + theta_t * dy, "y", eta
-        )
-
-        d[0] = (
-            -a_tau_x * eps_p_x * n2_x * dx
-            + b_x * n1_x * dx
-            - a_x * eps_p_x * (3 - 2 * theta_l) / ((2 - theta_l) * (1 - theta_l))
-        )
-        d[1] = (
-            a_tau_y * eps_p_y * n1_y * dy
-            + b_y * n2_y * dy
-            + a_y * eps_p_y * (3 - 2 * theta_t) / ((2 - theta_t) * (1 - theta_t))
-        )
-
-        if eta > 0:
-            eps_p_x, eps_m_x = -_eps_m_x, -_eps_p_x
-            eps_p_y, eps_m_y = -_eps_m_y, -_eps_p_y
-
-        M[0, 0] = (
-            eps_p_x * (3 - 2 * theta_l) / ((1 - theta_l) * (2 - theta_l))
-            + eps_m_x * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
-            + eps_jump_x * n2_x**2 * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
-        )
-        M[0, 1] = eps_jump_x * n1_x * n2_x * dx / (dy * theta_t * (theta_t + 1))
-        M[1, 0] = -eps_jump_y * n1_y * n2_y * dy / (dx * theta_l * (theta_l + 1))
-        M[1, 1] = (
-            -eps_p_y * (3 - 2 * theta_t) / ((1 - theta_t) * (2 - theta_t))
-            - eps_m_y * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
-            - eps_jump_y * n1_y**2 * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
-        )
-
-        # fmt: off
-        N[0, offset(0, 0)] = (eps_m_x + eps_jump_x * n2_x**2) * (theta_l + 1) / theta_l \
-            - (eps_jump_x * n1_x * n2_x) * (dx / dy) * ((theta_t * theta_l + theta_t - 1) / theta_t)
-        N[0, offset(-1, 0)] = eps_p_x * (theta_l - 2) / (theta_l - 1)
-        N[0, offset(-2, 0)] = -eps_p_x * (theta_l - 1) / (theta_l - 2)
-        N[0, offset(1, 0)] = -(eps_m_x + eps_jump_x * n2_x**2) * theta_l / (theta_l + 1) \
-            + eps_jump_x * n1_x * n2_x * theta_l * (dx / dy)
-        N[0, offset(0, -1)] = eps_jump_x * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1) + theta_l)
-        N[0, offset(1, -1)] = -eps_jump_x * n1_x * n2_x * theta_l * (dx / dy)
-
-        N[1, offset(0, 0)] = -(eps_m_y + eps_jump_y * n1_y**2) * (theta_t + 1) / theta_t \
-            + (eps_jump_y * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_t + theta_l - 1) / theta_l)
-        N[1, offset(0, 1)] = -eps_p_y * (theta_t - 2) / (theta_t - 1)
-        N[1, offset(0, 2)] = eps_p_y * (theta_t - 1) / (theta_t - 2)
-        N[1, offset(0, -1)] = (eps_m_y + eps_jump_y * n1_y**2) * theta_t / (theta_t + 1) \
-            - eps_jump_y * n1_y * n2_y * theta_t * (dy / dx)
-        N[1, offset(1, 0)] = -eps_jump_y * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1) + theta_t)
-        N[1, offset(1, -1)] = eps_jump_y * n1_y * n2_y * theta_t * (dy / dx)
-        # fmt: on
-
-        M_inv_d = np.linalg.solve(M, d)
-        M_inv_N = np.linalg.solve(M, N)
-
-        f[i, j] -= (
-            M_inv_d[0] * eps_l / theta_l / bot_x + M_inv_d[1] * eps_t / theta_t / bot_y
-        )
-
-        for offset_x in range(-2, 3):
-            for offset_y in range(-2, 3):
-                value = (
-                    M_inv_N[0, offset(offset_x, offset_y)] * eps_l / theta_l / bot_x
-                    + M_inv_N[1, offset(offset_x, offset_y)] * eps_t / theta_t / bot_y
-                )
-                if (offset_x, offset_y) == (0, 0):
-                    value += (
-                        -(eps_r / theta_r + eps_l / theta_l) / bot_x
-                        - (eps_t / theta_t + eps_b / theta_b) / bot_y
-                    )
-                elif (offset_x, offset_y) == (1, 0):
-                    value += eps_r / theta_r / bot_x
-                elif (offset_x, offset_y) == (0, -1):
-                    value += eps_b / theta_b / bot_y
-
-                rows.append(row_idx)
-                cols.append(index(i + offset_x, j + offset_y))
-                vals.append(value)
-
-    elif direction == Direction.R | Direction.B:
-        theta_r = compute_theta(Direction.R, i, j)
-        theta_b = compute_theta(Direction.B, i, j)
-        theta_l = 1.0
-        theta_t = 1.0
-
-        bot_x = (theta_r + theta_l) / 2 * dx**2
-        bot_y = (theta_t + theta_b) / 2 * dy**2
-
-        eps_r = permittivity(x + theta_r * dx / 2, y)
-        eps_l = permittivity(x - dx / 2, y)
-        eps_t = permittivity(x, y + dy / 2)
-        eps_b = permittivity(x, y - theta_b * dy / 2)
-
-        # normal evaluated at x_R and x_B
-        n1_x = interp(Direction.R, theta_r, i, j, n1)
-        n2_x = interp(Direction.R, theta_r, i, j, n2)
-        n1_y = interp(Direction.B, theta_b, i, j, n1)
-        n2_y = interp(Direction.B, theta_b, i, j, n2)
-
-        # jump conditions at x_R and x_B
-        a_x = interp(Direction.R, theta_r, i, j, a)
-        a_y = interp(Direction.B, theta_b, i, j, a)
-        b_x = interp(Direction.R, theta_r, i, j, b)
-        b_y = interp(Direction.B, theta_b, i, j, b)
-
-        # a_tau at x_R and x_B
-        a_tau_x = interp(Direction.R, theta_r, i, j, a_tau)
-        a_tau_y = interp(Direction.B, theta_b, i, j, a_tau)
-
-        # Per-interface beta sampling.
-        _eps_p_x, _eps_m_x, eps_jump_x, eps_p_x, eps_m_x = _sample_beta_legacy(
-            x + theta_r * dx, y, "x", eta
-        )
-        _eps_p_y, _eps_m_y, eps_jump_y, eps_p_y, eps_m_y = _sample_beta_legacy(
-            x, y - theta_b * dy, "y", eta
-        )
-
-        d[0] = (
-            -a_tau_x * eps_p_x * n2_x * dx
-            + b_x * n1_x * dx
-            + a_x * eps_p_x * (3 - 2 * theta_r) / ((2 - theta_r) * (1 - theta_r))
-        )
-        d[1] = (
-            a_tau_y * eps_p_y * n1_y * dy
-            + b_y * n2_y * dy
-            - a_y * eps_p_y * (3 - 2 * theta_b) / ((2 - theta_b) * (1 - theta_b))
-        )
-
-        if eta > 0:
-            eps_p_x, eps_m_x = -_eps_m_x, -_eps_p_x
-            eps_p_y, eps_m_y = -_eps_m_y, -_eps_p_y
-
-        M[0, 0] = (
-            -eps_p_x * (3 - 2 * theta_r) / ((1 - theta_r) * (2 - theta_r))
-            - eps_m_x * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
-            - eps_jump_x * n2_x**2 * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
-        )
-        M[0, 1] = -eps_jump_x * n1_x * n2_x * dx / (dy * theta_b * (theta_b + 1))
-        M[1, 0] = eps_jump_y * n1_y * n2_y * dy / (dx * theta_r * (theta_r + 1))
-        M[1, 1] = (
-            eps_p_y * (3 - 2 * theta_b) / ((1 - theta_b) * (2 - theta_b))
-            + eps_m_y * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
-            + eps_jump_y * n1_y**2 * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
-        )
-
-        # fmt: off
-        N[0, offset(0, 0)] = -(eps_m_x + eps_jump_x * n2_x**2) * (theta_r + 1) / theta_r \
-            + (eps_jump_x * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_r + theta_b - 1) / theta_b)
-        N[0, offset(1, 0)] = -eps_p_x * (theta_r - 2) / (theta_r - 1)
-        N[0, offset(2, 0)] = eps_p_x * (theta_r - 1) / (theta_r - 2)
-        N[0, offset(-1, 0)] = (eps_m_x + eps_jump_x * n2_x**2) * theta_r / (theta_r + 1) \
-            - eps_jump_x * n1_x * n2_x * theta_r * (dx / dy)
-        N[0, offset(0, 1)] = -eps_jump_x * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1) + theta_r)
-        N[0, offset(-1, 1)] = eps_jump_x * n1_x * n2_x * theta_r * (dx / dy)
-
-        N[1, offset(0, 0)] = (eps_m_y + eps_jump_y * n1_y**2) * (theta_b + 1) / theta_b \
-            - (eps_jump_y * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_b + theta_r - 1) / theta_r)
-        N[1, offset(0, -1)] = eps_p_y * (theta_b - 2) / (theta_b - 1)
-        N[1, offset(0, -2)] = -eps_p_y * (theta_b - 1) / (theta_b - 2)
-        N[1, offset(0, 1)] = -(eps_m_y + eps_jump_y * n1_y**2) * theta_b / (theta_b + 1) \
-            + eps_jump_y * n1_y * n2_y * theta_b * (dy / dx)
-        N[1, offset(-1, 0)] = eps_jump_y * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1) + theta_b)
-        N[1, offset(-1, 1)] = -eps_jump_y * n1_y * n2_y * theta_b * (dy / dx)
-        # fmt: on
-
-        M_inv_d = np.linalg.solve(M, d)
-        M_inv_N = np.linalg.solve(M, N)
-
-        f[i, j] -= (
-            M_inv_d[0] * eps_r / theta_r / bot_x + M_inv_d[1] * eps_b / theta_b / bot_y
-        )
-
-        for offset_x in range(-2, 3):
-            for offset_y in range(-2, 3):
-                value = (
-                    M_inv_N[0, offset(offset_x, offset_y)] * eps_r / theta_r / bot_x
-                    + M_inv_N[1, offset(offset_x, offset_y)] * eps_b / theta_b / bot_y
-                )
-                if (offset_x, offset_y) == (0, 0):
-                    value += (
-                        -(eps_r / theta_r + eps_l / theta_l) / bot_x
-                        - (eps_t / theta_t + eps_b / theta_b) / bot_y
-                    )
-                elif (offset_x, offset_y) == (-1, 0):
-                    value += eps_l / theta_l / bot_x
-                elif (offset_x, offset_y) == (0, 1):
-                    value += eps_t / theta_t / bot_y
-
-                rows.append(row_idx)
-                cols.append(index(i + offset_x, j + offset_y))
-                vals.append(value)
-
-    elif direction == Direction.L | Direction.B:
-        theta_l = compute_theta(Direction.L, i, j)
-        theta_b = compute_theta(Direction.B, i, j)
-        theta_r = 1.0
-        theta_t = 1.0
-
-        bot_x = (theta_r + theta_l) / 2 * dx**2
-        bot_y = (theta_t + theta_b) / 2 * dy**2
-
-        eps_r = permittivity(x + dx / 2, y)
-        eps_l = permittivity(x - theta_l * dx / 2, y)
-        eps_t = permittivity(x, y + dy / 2)
-        eps_b = permittivity(x, y - theta_b * dy / 2)
-
-        # normal evaluated at x_L and x_B
-        n1_x = interp(Direction.L, theta_l, i, j, n1)
-        n2_x = interp(Direction.L, theta_l, i, j, n2)
-        n1_y = interp(Direction.B, theta_b, i, j, n1)
-        n2_y = interp(Direction.B, theta_b, i, j, n2)
-
-        # jump conditions at x_L and x_B
-        a_x = interp(Direction.L, theta_l, i, j, a)
-        a_y = interp(Direction.B, theta_b, i, j, a)
-        b_x = interp(Direction.L, theta_l, i, j, b)
-        b_y = interp(Direction.B, theta_b, i, j, b)
-
-        # a_tau at x_L and x_B
-        a_tau_x = interp(Direction.L, theta_l, i, j, a_tau)
-        a_tau_y = interp(Direction.B, theta_b, i, j, a_tau)
-
-        # Per-interface beta sampling.
-        _eps_p_x, _eps_m_x, eps_jump_x, eps_p_x, eps_m_x = _sample_beta_legacy(
-            x - theta_l * dx, y, "x", eta
-        )
-        _eps_p_y, _eps_m_y, eps_jump_y, eps_p_y, eps_m_y = _sample_beta_legacy(
-            x, y - theta_b * dy, "y", eta
-        )
-
-        d[0] = (
-            -a_tau_x * eps_p_x * n2_x * dx
-            + b_x * n1_x * dx
-            - a_x * eps_p_x * (3 - 2 * theta_l) / ((2 - theta_l) * (1 - theta_l))
-        )
-        d[1] = (
-            a_tau_y * eps_p_y * n1_y * dy
-            + b_y * n2_y * dy
-            - a_y * eps_p_y * (3 - 2 * theta_b) / ((2 - theta_b) * (1 - theta_b))
-        )
-
-        if eta > 0:
-            eps_p_x, eps_m_x = -_eps_m_x, -_eps_p_x
-            eps_p_y, eps_m_y = -_eps_m_y, -_eps_p_y
-
-        M[0, 0] = (
-            eps_p_x * (3 - 2 * theta_l) / ((1 - theta_l) * (2 - theta_l))
-            + eps_m_x * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
-            + eps_jump_x * n2_x**2 * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
-        )
-        M[0, 1] = -eps_jump_x * n1_x * n2_x * dx / (dy * theta_b * (theta_b + 1))
-        M[1, 0] = -eps_jump_y * n1_y * n2_y * dy / (dx * theta_l * (theta_l + 1))
-        M[1, 1] = (
-            eps_p_y * (3 - 2 * theta_b) / ((1 - theta_b) * (2 - theta_b))
-            + eps_m_y * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
-            + eps_jump_y * n1_y**2 * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
-        )
-
-        # fmt: off
-        N[0, offset(0, 0)] = (eps_m_x + eps_jump_x * n2_x**2) * (theta_l + 1) / theta_l \
-            + (eps_jump_x * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_l + theta_b - 1) / theta_b)
-        N[0, offset(-1, 0)] = eps_p_x * (theta_l - 2) / (theta_l - 1)
-        N[0, offset(-2, 0)] = -eps_p_x * (theta_l - 1) / (theta_l - 2)
-        N[0, offset(1, 0)] = -(eps_m_x + eps_jump_x * n2_x**2) * theta_l / (theta_l + 1) \
-            - eps_jump_x * n1_x * n2_x * theta_l * (dx / dy)
-        N[0, offset(0, 1)] = -eps_jump_x * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1) + theta_l)
-        N[0, offset(1, 1)] = eps_jump_x * n1_x * n2_x * theta_l * (dx / dy)
-
-        N[1, offset(0, 0)] = (eps_m_y + eps_jump_y * n1_y**2) * (theta_b + 1) / theta_b \
-            + (eps_jump_y * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_b + theta_l - 1) / theta_l)
-        N[1, offset(0, -1)] = eps_p_y * (theta_b - 2) / (theta_b - 1)
-        N[1, offset(0, -2)] = -eps_p_y * (theta_b - 1) / (theta_b - 2)
-        N[1, offset(0, 1)] = -(eps_m_y + eps_jump_y * n1_y**2) * theta_b / (theta_b + 1) \
-            - eps_jump_y * n1_y * n2_y * theta_b * (dy / dx)
-        N[1, offset(1, 0)] = -eps_jump_y * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1) + theta_b)
-        N[1, offset(1, 1)] = eps_jump_y * n1_y * n2_y * theta_b * (dy / dx)
-        # fmt: on
-
-        M_inv_d = np.linalg.solve(M, d)
-        M_inv_N = np.linalg.solve(M, N)
-
-        f[i, j] -= (
-            M_inv_d[0] * eps_l / theta_l / bot_x + M_inv_d[1] * eps_b / theta_b / bot_y
-        )
-
-        for offset_x in range(-2, 3):
-            for offset_y in range(-2, 3):
-                value = (
-                    M_inv_N[0, offset(offset_x, offset_y)] * eps_l / theta_l / bot_x
-                    + M_inv_N[1, offset(offset_x, offset_y)] * eps_b / theta_b / bot_y
-                )
-                if (offset_x, offset_y) == (0, 0):
-                    value += (
-                        -(eps_r / theta_r + eps_l / theta_l) / bot_x
-                        - (eps_t / theta_t + eps_b / theta_b) / bot_y
-                    )
-                elif (offset_x, offset_y) == (1, 0):
-                    value += eps_r / theta_r / bot_x
-                elif (offset_x, offset_y) == (0, 1):
-                    value += eps_t / theta_t / bot_y
-
-                rows.append(row_idx)
-                cols.append(index(i + offset_x, j + offset_y))
-                vals.append(value)
-
+    d[0] = _d_row(cd_x, theta_x, n1_x, n2_x, a_x, b_x, a_tau_x, eps_p_d_x)
+    d[1] = _d_row(cd_y, theta_y, n1_y, n2_y, a_y, b_y, a_tau_y, eps_p_d_y)
+
+    if eta > 0:
+        eps_p_x, eps_m_x = -bm_x, -bp_x
+        eps_p_y, eps_m_y = -bm_y, -bp_y
     else:
-        raise ValueError("Invalid direction for case 2", direction)
+        eps_p_x, eps_m_x = bp_x, bm_x
+        eps_p_y, eps_m_y = bp_y, bm_y
+
+    eps_jump_x = bj_x
+    eps_jump_y = bj_y
+
+    def _M_diag(cd, theta, n1_v, n2_v, eps_p, eps_m, eps_jump):
+        n_t = [n1_v, n2_v][cd.n_tang]
+        phi = (3 - 2 * theta) / ((1 - theta) * (2 - theta))
+        psi = (2 * theta + 1) / (theta * (theta + 1))
+        return -cd.sign * (eps_p * phi + eps_m * psi + eps_jump * n_t**2 * psi)
+
+    M = np.zeros((2, 2))
+    M[0, 0] = _M_diag(cd_x, theta_x, n1_x, n2_x, eps_p_x, eps_m_x, eps_jump_x)
+    M[1, 1] = _M_diag(cd_y, theta_y, n1_y, n2_y, eps_p_y, eps_m_y, eps_jump_y)
+    M[0, 1] = cd_y.sign * eps_jump_x * n1_x * n2_x * dx / (dy * theta_y * (theta_y + 1))
+    M[1, 0] = cd_x.sign * eps_jump_y * n1_y * n2_y * dy / (dx * theta_x * (theta_x + 1))
+
+    # N (2 x 25) — full 5x5 stencil.
+    N = np.zeros((2, 25))
+    all_offsets = [(ox, oy) for ox in range(-2, 3) for oy in range(-2, 3)]
+
+    def _col(ox, oy):
+        return (ox + 2) * 5 + (oy + 2)
+
+    def _fill_N_row(r, cd_p, cd_o, theta_p, theta_o, n1_v, n2_v, eps_p, eps_m, eps_jump):
+        n_t = [n1_v, n2_v][cd_p.n_tang]
+        d_self = dx if cd_p.is_x else dy
+        d_other = dy if cd_p.is_x else dx
+        off = cd_p.offsets
+
+        # k=0 : self
+        N[r, _col(*off[0])] = (
+            -cd_p.sign * (eps_jump * n_t**2 + eps_m) * (1 + theta_p) / theta_p
+            - cd_o.sign * eps_jump * n1_v * n2_v * d_self / d_other
+            * (theta_o * theta_p + theta_o - 1) / theta_o
+        )
+        # k=1 : forward 1
+        N[r, _col(*off[1])] = -cd_p.sign * eps_p * (theta_p - 2) / (theta_p - 1)
+        # k=2 : forward 2
+        N[r, _col(*off[2])] = cd_p.sign * eps_p * (theta_p - 1) / (theta_p - 2)
+        # k=3 : backward
+        N[r, _col(*off[3])] = (
+            cd_p.sign * (eps_jump * n_t**2 + eps_m) * theta_p / (1 + theta_p)
+            + cd_o.sign * eps_jump * n1_v * n2_v * theta_p * d_self / d_other
+        )
+        # k=4/5 : combined cross-term — k=4 when cd_o.sign > 0, else k=5.
+        k_comb = 4 if cd_o.sign > 0 else 5
+        N[r, _col(*off[k_comb])] = (
+            cd_o.sign * eps_jump * n1_v * n2_v * d_self / d_other
+            * (theta_o / (theta_o + 1) + theta_p)
+        )
+        # k=6 : corner — offset component along cd_o's axis scaled by cd_o.sign.
+        di, dj = off[6]
+        if cd_o.is_x:
+            di *= cd_o.sign
+        else:
+            dj *= cd_o.sign
+        N[r, _col(di, dj)] = (
+            -cd_o.sign * eps_jump * n1_v * n2_v * theta_p * d_self / d_other
+        )
+
+    _fill_N_row(0, cd_x, cd_y, theta_x, theta_y, n1_x, n2_x, eps_p_x, eps_m_x, eps_jump_x)
+    _fill_N_row(1, cd_y, cd_x, theta_y, theta_x, n1_y, n2_y, eps_p_y, eps_m_y, eps_jump_y)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+
+    sw_idx = {_FACE_NAME[cd_x.face]: 0, _FACE_NAME[cd_y.face]: 1}
+    geom = {
+        "theta_R": theta_r, "theta_T": theta_t, "theta_L": theta_l, "theta_B": theta_b,
+        "eps_r": permittivity(x_ + theta_r * dx / 2, y_),
+        "eps_l": permittivity(x_ - theta_l * dx / 2, y_),
+        "eps_t": permittivity(x_, y_ + theta_t * dy / 2),
+        "eps_b": permittivity(x_, y_ - theta_b * dy / 2),
+        "bot_x": (theta_r + theta_l) / 2 * dx**2,
+        "bot_y": (theta_t + theta_b) / 2 * dy**2,
+    }
+    return M_inv_d, M_inv_N, all_offsets, sw_idx, geom
+
+
+def coeff_case2(direction: int, i: int, j: int) -> None:
+    """coeff of u_ij and its neighbors for a case 2 cell"""
+    M_inv_d, M_inv_N, all_offsets, sw_idx, geom = _solve_case2_local(direction, i, j)
+    _assemble_case_n(
+        i, j, sw_idx, M_inv_d, M_inv_N, all_offsets,
+        geom["eps_r"], geom["eps_l"], geom["eps_t"], geom["eps_b"],
+        geom["theta_R"], geom["theta_T"], geom["theta_L"], geom["theta_B"],
+        geom["bot_x"], geom["bot_y"],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1865,415 +1538,10 @@ def interface_value_case2(
     direction: int, i: int, j: int, u: np.ndarray
 ) -> tuple[float, float, float, float, float, float, float, float]:
     """Compute the interface value of u at the cut."""
-    x, y = center(i, j)
-    eta = surface(x, y)
-
-    d = np.zeros(2)
-    M = np.zeros((2, 2))
-    N = np.zeros((2, 25))
-
-    # used to traverse N matrix
-    offset = lambda offset_x, offset_y: (offset_x + 2) * 5 + (offset_y + 2)
-
-    if direction == Direction.R | Direction.T:
-        theta_r = compute_theta(Direction.R, i, j)
-        theta_t = compute_theta(Direction.T, i, j)
-        theta_l = 1.0
-        theta_b = 1.0
-
-        # normal evaluated at x_R and x_T
-        n1_x = interp(Direction.R, theta_r, i, j, n1)
-        n2_x = interp(Direction.R, theta_r, i, j, n2)
-        n1_y = interp(Direction.T, theta_t, i, j, n1)
-        n2_y = interp(Direction.T, theta_t, i, j, n2)
-
-        # a_tau at x_R and x_T
-        a_tau_x = interp(Direction.R, theta_r, i, j, a_tau)
-        a_tau_y = interp(Direction.T, theta_t, i, j, a_tau)
-
-        # jump conditions at x_R and x_T
-        a_x = interp(Direction.R, theta_r, i, j, a)
-        a_y = interp(Direction.T, theta_t, i, j, a)
-        b_x = interp(Direction.R, theta_r, i, j, b)
-        b_y = interp(Direction.T, theta_t, i, j, b)
-
-        # Per-interface beta sampling.
-        _eps_p_x, _eps_m_x, eps_jump_x, eps_p_x, eps_m_x = _sample_beta_legacy(
-            x + theta_r * dx, y, "x", eta
-        )
-        _eps_p_y, _eps_m_y, eps_jump_y, eps_p_y, eps_m_y = _sample_beta_legacy(
-            x, y + theta_t * dy, "y", eta
-        )
-
-        d[0] = (
-            -a_tau_x * eps_p_x * n2_x * dx
-            + b_x * n1_x * dx
-            + a_x * eps_p_x * (3 - 2 * theta_r) / ((2 - theta_r) * (1 - theta_r))
-        )
-        d[1] = (
-            a_tau_y * eps_p_y * n1_y * dy
-            + b_y * n2_y * dy
-            + a_y * eps_p_y * (3 - 2 * theta_t) / ((2 - theta_t) * (1 - theta_t))
-        )
-
-        if eta > 0:
-            eps_p_x, eps_m_x = -_eps_m_x, -_eps_p_x
-            eps_p_y, eps_m_y = -_eps_m_y, -_eps_p_y
-
-        M[0, 0] = (
-            -eps_p_x * (3 - 2 * theta_r) / ((1 - theta_r) * (2 - theta_r))
-            - eps_m_x * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
-            - eps_jump_x * n2_x**2 * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
-        )
-        M[0, 1] = eps_jump_x * n1_x * n2_x * dx / (dy * theta_t * (theta_t + 1))
-        M[1, 0] = eps_jump_y * n1_y * n2_y * dy / (dx * theta_r * (theta_r + 1))
-        M[1, 1] = (
-            -eps_p_y * (3 - 2 * theta_t) / ((1 - theta_t) * (2 - theta_t))
-            - eps_m_y * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
-            - eps_jump_y * n1_y**2 * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
-        )
-
-        # fmt: off
-        # u[i,j]
-        N[0, offset(0, 0)] = -(eps_m_x + eps_jump_x * n2_x**2) * (theta_r + 1) / theta_r \
-            - (eps_jump_x * n1_x * n2_x) * (dx / dy) * ((theta_t * theta_r + theta_t - 1) / theta_t)
-        # u[i+1,j]
-        N[0, offset(1, 0)] = -eps_p_x * (theta_r - 2) / (theta_r - 1)
-        # u[i+2,j]
-        N[0, offset(2, 0)] = eps_p_x * (theta_r - 1) / (theta_r - 2)
-        # u[i-1,j]
-        N[0, offset(-1, 0)] = (eps_m_x + eps_jump_x * n2_x**2) * theta_r / (theta_r + 1) \
-            + eps_jump_x * n1_x * n2_x * theta_r * (dx / dy)
-        # u[i,j-1]
-        N[0, offset(0, -1)] = eps_jump_x * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1) + theta_r)
-        # u[i-1,j-1]
-        N[0, offset(-1, -1)] = -eps_jump_x * n1_x * n2_x * theta_r * (dx / dy)
-
-        # u[i,j]
-        N[1, offset(0, 0)] = -(eps_m_y + eps_jump_y * n1_y**2) * (theta_t + 1) / theta_t \
-            - (eps_jump_y * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_t + theta_r - 1) / theta_r)
-        # u[i,j+1]
-        N[1, offset(0, 1)] = -eps_p_y * (theta_t - 2) / (theta_t - 1)
-        # u[i,j+2]
-        N[1, offset(0, 2)] = eps_p_y * (theta_t - 1) / (theta_t - 2)
-        # u[i,j-1]
-        N[1, offset(0, -1)] = (eps_m_y + eps_jump_y * n1_y**2) * theta_t / (theta_t + 1) \
-            + eps_jump_y * n1_y * n2_y * theta_t * (dy / dx)
-        # u[i-1,j]
-        N[1, offset(-1, 0)] = eps_jump_y * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1) + theta_t)
-        # u[i-1,j-1]
-        N[1, offset(-1, -1)] = -eps_jump_y * n1_y * n2_y * theta_t * (dy / dx)
-        # fmt: on
-
-        u_arr = np.array(
-            [
-                u[i + offset_x, j + offset_y]
-                for offset_x in range(-2, 3)
-                for offset_y in range(-2, 3)
-            ]
-        )
-        u_I = np.linalg.solve(M, N @ u_arr + d)
-        return (
-            u[i - 1, j],
-            u_I[0],
-            u[i, j - 1],
-            u_I[1],
-            theta_l,
-            theta_r,
-            theta_b,
-            theta_t,
-        )
-
-    elif direction == Direction.L | Direction.T:
-        theta_l = compute_theta(Direction.L, i, j)
-        theta_t = compute_theta(Direction.T, i, j)
-        theta_r = 1.0
-        theta_b = 1.0
-
-        # normal evaluated at x_L and x_T
-        n1_x = interp(Direction.L, theta_l, i, j, n1)
-        n2_x = interp(Direction.L, theta_l, i, j, n2)
-        n1_y = interp(Direction.T, theta_t, i, j, n1)
-        n2_y = interp(Direction.T, theta_t, i, j, n2)
-
-        # jump conditions at x_L and x_T
-        a_x = interp(Direction.L, theta_l, i, j, a)
-        a_y = interp(Direction.T, theta_t, i, j, a)
-        b_x = interp(Direction.L, theta_l, i, j, b)
-        b_y = interp(Direction.T, theta_t, i, j, b)
-
-        # a_tau at x_L and x_T
-        a_tau_x = interp(Direction.L, theta_l, i, j, a_tau)
-        a_tau_y = interp(Direction.T, theta_t, i, j, a_tau)
-
-        # Per-interface beta sampling.
-        _eps_p_x, _eps_m_x, eps_jump_x, eps_p_x, eps_m_x = _sample_beta_legacy(
-            x - theta_l * dx, y, "x", eta
-        )
-        _eps_p_y, _eps_m_y, eps_jump_y, eps_p_y, eps_m_y = _sample_beta_legacy(
-            x, y + theta_t * dy, "y", eta
-        )
-
-        d[0] = (
-            -a_tau_x * eps_p_x * n2_x * dx
-            + b_x * n1_x * dx
-            - a_x * eps_p_x * (3 - 2 * theta_l) / ((2 - theta_l) * (1 - theta_l))
-        )
-        d[1] = (
-            a_tau_y * eps_p_y * n1_y * dy
-            + b_y * n2_y * dy
-            + a_y * eps_p_y * (3 - 2 * theta_t) / ((2 - theta_t) * (1 - theta_t))
-        )
-
-        if eta > 0:
-            eps_p_x, eps_m_x = -_eps_m_x, -_eps_p_x
-            eps_p_y, eps_m_y = -_eps_m_y, -_eps_p_y
-
-        M[0, 0] = (
-            eps_p_x * (3 - 2 * theta_l) / ((1 - theta_l) * (2 - theta_l))
-            + eps_m_x * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
-            + eps_jump_x * n2_x**2 * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
-        )
-        M[0, 1] = eps_jump_x * n1_x * n2_x * dx / (dy * theta_t * (theta_t + 1))
-        M[1, 0] = -eps_jump_y * n1_y * n2_y * dy / (dx * theta_l * (theta_l + 1))
-        M[1, 1] = (
-            -eps_p_y * (3 - 2 * theta_t) / ((1 - theta_t) * (2 - theta_t))
-            - eps_m_y * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
-            - eps_jump_y * n1_y**2 * (2 * theta_t + 1) / (theta_t * (theta_t + 1))
-        )
-
-        # fmt: off
-        N[0, offset(0, 0)] = (eps_m_x + eps_jump_x * n2_x**2) * (theta_l + 1) / theta_l \
-            - (eps_jump_x * n1_x * n2_x) * (dx / dy) * ((theta_t * theta_l + theta_t - 1) / theta_t)
-        N[0, offset(-1, 0)] = eps_p_x * (theta_l - 2) / (theta_l - 1)
-        N[0, offset(-2, 0)] = -eps_p_x * (theta_l - 1) / (theta_l - 2)
-        N[0, offset(1, 0)] = -(eps_m_x + eps_jump_x * n2_x**2) * theta_l / (theta_l + 1) \
-            + eps_jump_x * n1_x * n2_x * theta_l * (dx / dy)
-        N[0, offset(0, -1)] = eps_jump_x * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1) + theta_l)
-        N[0, offset(1, -1)] = -eps_jump_x * n1_x * n2_x * theta_l * (dx / dy)
-
-        N[1, offset(0, 0)] = -(eps_m_y + eps_jump_y * n1_y**2) * (theta_t + 1) / theta_t \
-            + (eps_jump_y * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_t + theta_l - 1) / theta_l)
-        N[1, offset(0, 1)] = -eps_p_y * (theta_t - 2) / (theta_t - 1)
-        N[1, offset(0, 2)] = eps_p_y * (theta_t - 1) / (theta_t - 2)
-        N[1, offset(0, -1)] = (eps_m_y + eps_jump_y * n1_y**2) * theta_t / (theta_t + 1) \
-            - eps_jump_y * n1_y * n2_y * theta_t * (dy / dx)
-        N[1, offset(1, 0)] = -eps_jump_y * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1) + theta_t)
-        N[1, offset(1, -1)] = eps_jump_y * n1_y * n2_y * theta_t * (dy / dx)
-        # fmt: on
-
-        u_arr = np.array(
-            [
-                u[i + offset_x, j + offset_y]
-                for offset_x in range(-2, 3)
-                for offset_y in range(-2, 3)
-            ]
-        )
-        u_I = np.linalg.solve(M, N @ u_arr + d)
-        return (
-            u_I[0],
-            u[i + 1, j],
-            u[i, j - 1],
-            u_I[1],
-            theta_l,
-            theta_r,
-            theta_b,
-            theta_t,
-        )
-    elif direction == Direction.R | Direction.B:
-        theta_r = compute_theta(Direction.R, i, j)
-        theta_b = compute_theta(Direction.B, i, j)
-        theta_l = 1.0
-        theta_t = 1.0
-
-        # normal evaluated at x_R and x_B
-        n1_x = interp(Direction.R, theta_r, i, j, n1)
-        n2_x = interp(Direction.R, theta_r, i, j, n2)
-        n1_y = interp(Direction.B, theta_b, i, j, n1)
-        n2_y = interp(Direction.B, theta_b, i, j, n2)
-
-        # jump conditions at x_R and x_B
-        a_x = interp(Direction.R, theta_r, i, j, a)
-        a_y = interp(Direction.B, theta_b, i, j, a)
-        b_x = interp(Direction.R, theta_r, i, j, b)
-        b_y = interp(Direction.B, theta_b, i, j, b)
-
-        # a_tau at x_R and x_B
-        a_tau_x = interp(Direction.R, theta_r, i, j, a_tau)
-        a_tau_y = interp(Direction.B, theta_b, i, j, a_tau)
-
-        # Per-interface beta sampling.
-        _eps_p_x, _eps_m_x, eps_jump_x, eps_p_x, eps_m_x = _sample_beta_legacy(
-            x + theta_r * dx, y, "x", eta
-        )
-        _eps_p_y, _eps_m_y, eps_jump_y, eps_p_y, eps_m_y = _sample_beta_legacy(
-            x, y - theta_b * dy, "y", eta
-        )
-
-        d[0] = (
-            -a_tau_x * eps_p_x * n2_x * dx
-            + b_x * n1_x * dx
-            + a_x * eps_p_x * (3 - 2 * theta_r) / ((2 - theta_r) * (1 - theta_r))
-        )
-        d[1] = (
-            a_tau_y * eps_p_y * n1_y * dy
-            + b_y * n2_y * dy
-            - a_y * eps_p_y * (3 - 2 * theta_b) / ((2 - theta_b) * (1 - theta_b))
-        )
-
-        if eta > 0:
-            eps_p_x, eps_m_x = -_eps_m_x, -_eps_p_x
-            eps_p_y, eps_m_y = -_eps_m_y, -_eps_p_y
-
-        M[0, 0] = (
-            -eps_p_x * (3 - 2 * theta_r) / ((1 - theta_r) * (2 - theta_r))
-            - eps_m_x * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
-            - eps_jump_x * n2_x**2 * (2 * theta_r + 1) / (theta_r * (theta_r + 1))
-        )
-        M[0, 1] = -eps_jump_x * n1_x * n2_x * dx / (dy * theta_b * (theta_b + 1))
-        M[1, 0] = eps_jump_y * n1_y * n2_y * dy / (dx * theta_r * (theta_r + 1))
-        M[1, 1] = (
-            eps_p_y * (3 - 2 * theta_b) / ((1 - theta_b) * (2 - theta_b))
-            + eps_m_y * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
-            + eps_jump_y * n1_y**2 * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
-        )
-
-        # fmt: off
-        N[0, offset(0, 0)] = -(eps_m_x + eps_jump_x * n2_x**2) * (theta_r + 1) / theta_r \
-            + (eps_jump_x * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_r + theta_b - 1) / theta_b)
-        N[0, offset(1, 0)] = -eps_p_x * (theta_r - 2) / (theta_r - 1)
-        N[0, offset(2, 0)] = eps_p_x * (theta_r - 1) / (theta_r - 2)
-        N[0, offset(-1, 0)] = (eps_m_x + eps_jump_x * n2_x**2) * theta_r / (theta_r + 1) \
-            - eps_jump_x * n1_x * n2_x * theta_r * (dx / dy)
-        N[0, offset(0, 1)] = -eps_jump_x * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1) + theta_r)
-        N[0, offset(-1, 1)] = eps_jump_x * n1_x * n2_x * theta_r * (dx / dy)
-
-        N[1, offset(0, 0)] = (eps_m_y + eps_jump_y * n1_y**2) * (theta_b + 1) / theta_b \
-            - (eps_jump_y * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_b + theta_r - 1) / theta_r)
-        N[1, offset(0, -1)] = eps_p_y * (theta_b - 2) / (theta_b - 1)
-        N[1, offset(0, -2)] = -eps_p_y * (theta_b - 1) / (theta_b - 2)
-        N[1, offset(0, 1)] = -(eps_m_y + eps_jump_y * n1_y**2) * theta_b / (theta_b + 1) \
-            + eps_jump_y * n1_y * n2_y * theta_b * (dy / dx)
-        N[1, offset(-1, 0)] = eps_jump_y * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1) + theta_b)
-        N[1, offset(-1, 1)] = -eps_jump_y * n1_y * n2_y * theta_b * (dy / dx)
-        # fmt: on
-
-        u_arr = np.array(
-            [
-                u[i + offset_x, j + offset_y]
-                for offset_x in range(-2, 3)
-                for offset_y in range(-2, 3)
-            ]
-        )
-        u_I = np.linalg.solve(M, N @ u_arr + d)
-        return (
-            u[i - 1, j],
-            u_I[0],
-            u_I[1],
-            u[i, j + 1],
-            theta_l,
-            theta_r,
-            theta_b,
-            theta_t,
-        )
-    elif direction == Direction.L | Direction.B:
-        theta_l = compute_theta(Direction.L, i, j)
-        theta_b = compute_theta(Direction.B, i, j)
-        theta_r = 1.0
-        theta_t = 1.0
-
-        # normal evaluated at x_L and x_B
-        n1_x = interp(Direction.L, theta_l, i, j, n1)
-        n2_x = interp(Direction.L, theta_l, i, j, n2)
-        n1_y = interp(Direction.B, theta_b, i, j, n1)
-        n2_y = interp(Direction.B, theta_b, i, j, n2)
-
-        # jump conditions at x_L and x_B
-        a_x = interp(Direction.L, theta_l, i, j, a)
-        a_y = interp(Direction.B, theta_b, i, j, a)
-        b_x = interp(Direction.L, theta_l, i, j, b)
-        b_y = interp(Direction.B, theta_b, i, j, b)
-
-        # a_tau at x_L and x_B
-        a_tau_x = interp(Direction.L, theta_l, i, j, a_tau)
-        a_tau_y = interp(Direction.B, theta_b, i, j, a_tau)
-
-        # Per-interface beta sampling.
-        _eps_p_x, _eps_m_x, eps_jump_x, eps_p_x, eps_m_x = _sample_beta_legacy(
-            x - theta_l * dx, y, "x", eta
-        )
-        _eps_p_y, _eps_m_y, eps_jump_y, eps_p_y, eps_m_y = _sample_beta_legacy(
-            x, y - theta_b * dy, "y", eta
-        )
-
-        d[0] = (
-            -a_tau_x * eps_p_x * n2_x * dx
-            + b_x * n1_x * dx
-            - a_x * eps_p_x * (3 - 2 * theta_l) / ((2 - theta_l) * (1 - theta_l))
-        )
-        d[1] = (
-            a_tau_y * eps_p_y * n1_y * dy
-            + b_y * n2_y * dy
-            - a_y * eps_p_y * (3 - 2 * theta_b) / ((2 - theta_b) * (1 - theta_b))
-        )
-
-        if eta > 0:
-            eps_p_x, eps_m_x = -_eps_m_x, -_eps_p_x
-            eps_p_y, eps_m_y = -_eps_m_y, -_eps_p_y
-
-        M[0, 0] = (
-            eps_p_x * (3 - 2 * theta_l) / ((1 - theta_l) * (2 - theta_l))
-            + eps_m_x * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
-            + eps_jump_x * n2_x**2 * (2 * theta_l + 1) / (theta_l * (theta_l + 1))
-        )
-        M[0, 1] = -eps_jump_x * n1_x * n2_x * dx / (dy * theta_b * (theta_b + 1))
-        M[1, 0] = -eps_jump_y * n1_y * n2_y * dy / (dx * theta_l * (theta_l + 1))
-        M[1, 1] = (
-            eps_p_y * (3 - 2 * theta_b) / ((1 - theta_b) * (2 - theta_b))
-            + eps_m_y * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
-            + eps_jump_y * n1_y**2 * (2 * theta_b + 1) / (theta_b * (theta_b + 1))
-        )
-
-        # fmt: off
-        N[0, offset(0, 0)] = (eps_m_x + eps_jump_x * n2_x**2) * (theta_l + 1) / theta_l \
-            + (eps_jump_x * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_l + theta_b - 1) / theta_b)
-        N[0, offset(-1, 0)] = eps_p_x * (theta_l - 2) / (theta_l - 1)
-        N[0, offset(-2, 0)] = -eps_p_x * (theta_l - 1) / (theta_l - 2)
-        N[0, offset(1, 0)] = -(eps_m_x + eps_jump_x * n2_x**2) * theta_l / (theta_l + 1) \
-            - eps_jump_x * n1_x * n2_x * theta_l * (dx / dy)
-        N[0, offset(0, 1)] = -eps_jump_x * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1) + theta_l)
-        N[0, offset(1, 1)] = eps_jump_x * n1_x * n2_x * theta_l * (dx / dy)
-
-        N[1, offset(0, 0)] = (eps_m_y + eps_jump_y * n1_y**2) * (theta_b + 1) / theta_b \
-            + (eps_jump_y * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_b + theta_l - 1) / theta_l)
-        N[1, offset(0, -1)] = eps_p_y * (theta_b - 2) / (theta_b - 1)
-        N[1, offset(0, -2)] = -eps_p_y * (theta_b - 1) / (theta_b - 2)
-        N[1, offset(0, 1)] = -(eps_m_y + eps_jump_y * n1_y**2) * theta_b / (theta_b + 1) \
-            - eps_jump_y * n1_y * n2_y * theta_b * (dy / dx)
-        N[1, offset(1, 0)] = -eps_jump_y * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1) + theta_b)
-        N[1, offset(1, 1)] = eps_jump_y * n1_y * n2_y * theta_b * (dy / dx)
-        # fmt: on
-
-        u_arr = np.array(
-            [
-                u[i + offset_x, j + offset_y]
-                for offset_x in range(-2, 3)
-                for offset_y in range(-2, 3)
-            ]
-        )
-        u_I = np.linalg.solve(M, N @ u_arr + d)
-        return (
-            u_I[0],
-            u[i + 1, j],
-            u_I[1],
-            u[i, j + 1],
-            theta_l,
-            theta_r,
-            theta_b,
-            theta_t,
-        )
-    else:
-        raise ValueError("Invalid direction for case 2", direction)
+    M_inv_d, M_inv_N, all_offsets, sw_idx, geom = _solve_case2_local(direction, i, j)
+    u_arr = np.array([u[i + di, j + dj] for (di, dj) in all_offsets])
+    ghosts = M_inv_N @ u_arr + M_inv_d
+    return _pack_iface_values(sw_idx, ghosts, geom, i, j, u)
 
 
 def interface_value_case3(

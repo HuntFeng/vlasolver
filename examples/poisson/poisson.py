@@ -45,508 +45,7 @@ def _couple_avg(th1, th2):
     return (th1 + th2 - 2) / ((th1 - 1) * (th2 - 1))
 
 
-class EvalCtx(NamedTuple):
-    """Evaluation context for dispatch-table entry functions.
-
-    Bundles the 18 scalar inputs that were previously passed as positional
-    arguments to every lambda in CASE3_EVAL / CASE4_EVAL.
-    """
-    R: float; T: float; L: float; B: float
-    r: float; t: float; l: float; b: float
-    n1: float; n2: float
-    av: float; bv: float; at: float
-    ep: float; em: float; ej: float
-    dx: float; dy: float
-
-
 # Evaluator dispatch tables
-# Each entry maps to a dict with:
-#   'M': [[func]] 3x3, 'd': [func], 'N': [[{offset: func}]] 3-list,
-#   'offsets': [(di,dj)], 'row_ifaces': (str, str, str)
-
-CASE3_EVAL = {}
-CASE4_EVAL = {}
-
-# case3 sub-case 1, eta sign -1
-_case3_sc1_eta_m1_M = [
-    [lambda ctx: ctx.ep*(2*ctx.R + ctx.r - 3)/((ctx.R - 1)*(ctx.R + ctx.r - 2)) - (2*ctx.R + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.R*(ctx.R + 1)), lambda ctx: ctx.ep*(ctx.R - 1)/((ctx.r - 1)*(ctx.R + ctx.r - 2)), lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1))],
-    [lambda ctx: -ctx.ep*(ctx.r - 1)/((ctx.R - 1)*(ctx.R + ctx.r - 2)), lambda ctx: -ctx.ep*(ctx.R + 2*ctx.r - 3)/((ctx.r - 1)*(ctx.R + ctx.r - 2)) + (2*ctx.r + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.r*(ctx.r + 1)), _Z],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), _Z, lambda ctx: ctx.ep*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) - (2*ctx.T + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.T*(ctx.T + 1))],
-]
-_case3_sc1_eta_m1_d = [lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 - ctx.av*ctx.ep*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 + ctx.av*ctx.ep*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 - ctx.av*ctx.ep*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case3_sc1_eta_m1_N = [
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (-1, +0): lambda ctx: ctx.R*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 + ctx.em*ctx.dy)/(ctx.dy*(ctx.R + 1)), (+0, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R**2*ctx.T + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dy*ctx.n2**2*ctx.R*ctx.T + ctx.ej*ctx.dy*ctx.n2**2*ctx.T + ctx.em*ctx.dy*ctx.R*ctx.T + ctx.em*ctx.dy*ctx.T)/(ctx.dy*ctx.R*ctx.T), (+1, +0): lambda ctx: ctx.ep*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1))},
-    {(+1, +0): lambda ctx: -ctx.ep*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)), (+2, -1): lambda ctx: (1/2)*ctx.ej*ctx.dx*ctx.n1*ctx.n2*(2*ctx.r + 1)/ctx.dy, (+2, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r**2 - ctx.ej*ctx.dy*ctx.n2**2*ctx.r - ctx.ej*ctx.dy*ctx.n2**2 - ctx.em*ctx.dy*ctx.r - ctx.em*ctx.dy)/(ctx.dy*ctx.r), (+2, +1): lambda ctx: -1/2*ctx.ej*ctx.dx*ctx.n1*ctx.n2/ctx.dy, (+3, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r/ctx.dy, (+3, +0): lambda ctx: ctx.r*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 - ctx.em*ctx.dy)/(ctx.dy*(ctx.r + 1))},
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (-1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dx*(ctx.R + 1)), (+0, -1): lambda ctx: ctx.T*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.R*ctx.T + ctx.ej*ctx.dx*ctx.n1**2*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T + ctx.em*ctx.dx*ctx.R*ctx.T + ctx.em*ctx.dx*ctx.R)/(ctx.dx*ctx.R*ctx.T), (+0, +1): lambda ctx: -ctx.ep*(ctx.T - 2)/(ctx.T - 1), (+0, +2): lambda ctx: ctx.ep*(ctx.T - 1)/(ctx.T - 2)},
-]
-_case3_sc1_eta_m1_offsets = [(-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
-_case3_sc1_eta_m1_row_ifaces = ("R", "extra", "T")
-_case3_sc1_eta_m1 = {
-    'M': _case3_sc1_eta_m1_M, 'd': _case3_sc1_eta_m1_d, 'N': _case3_sc1_eta_m1_N,
-    'offsets': _case3_sc1_eta_m1_offsets, 'row_ifaces': _case3_sc1_eta_m1_row_ifaces,
-}
-CASE3_EVAL[(1, -1)] = _case3_sc1_eta_m1
-
-# case3 sub-case 1, eta sign +1
-_case3_sc1_eta_p1_M = [
-    [lambda ctx: -ctx.em*(2*ctx.R + ctx.r - 3)/((ctx.R - 1)*(ctx.R + ctx.r - 2)) - (2*ctx.R + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.R*(ctx.R + 1)), lambda ctx: -ctx.em*(ctx.R - 1)/((ctx.r - 1)*(ctx.R + ctx.r - 2)), lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1))],
-    [lambda ctx: ctx.em*(ctx.r - 1)/((ctx.R - 1)*(ctx.R + ctx.r - 2)), lambda ctx: ctx.em*(ctx.R + 2*ctx.r - 3)/((ctx.r - 1)*(ctx.R + ctx.r - 2)) + (2*ctx.r + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.r*(ctx.r + 1)), _Z],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), _Z, lambda ctx: -ctx.em*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) - (2*ctx.T + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.T*(ctx.T + 1))],
-]
-_case3_sc1_eta_p1_d = [lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 - ctx.av*ctx.em*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 + ctx.av*ctx.em*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 - ctx.av*ctx.em*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case3_sc1_eta_p1_N = [
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (-1, +0): lambda ctx: ctx.R*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 - ctx.ep*ctx.dy)/(ctx.dy*(ctx.R + 1)), (+0, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R**2*ctx.T + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dy*ctx.n2**2*ctx.R*ctx.T + ctx.ej*ctx.dy*ctx.n2**2*ctx.T - ctx.ep*ctx.dy*ctx.R*ctx.T - ctx.ep*ctx.dy*ctx.T)/(ctx.dy*ctx.R*ctx.T), (+1, +0): lambda ctx: -ctx.em*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1))},
-    {(+1, +0): lambda ctx: ctx.em*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)), (+2, -1): lambda ctx: (1/2)*ctx.ej*ctx.dx*ctx.n1*ctx.n2*(2*ctx.r + 1)/ctx.dy, (+2, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r**2 - ctx.ej*ctx.dy*ctx.n2**2*ctx.r - ctx.ej*ctx.dy*ctx.n2**2 + ctx.ep*ctx.dy*ctx.r + ctx.ep*ctx.dy)/(ctx.dy*ctx.r), (+2, +1): lambda ctx: -1/2*ctx.ej*ctx.dx*ctx.n1*ctx.n2/ctx.dy, (+3, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r/ctx.dy, (+3, +0): lambda ctx: ctx.r*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 + ctx.ep*ctx.dy)/(ctx.dy*(ctx.r + 1))},
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (-1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dx*(ctx.R + 1)), (+0, -1): lambda ctx: ctx.T*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.R*ctx.T + ctx.ej*ctx.dx*ctx.n1**2*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T - ctx.ep*ctx.dx*ctx.R*ctx.T - ctx.ep*ctx.dx*ctx.R)/(ctx.dx*ctx.R*ctx.T), (+0, +1): lambda ctx: ctx.em*(ctx.T - 2)/(ctx.T - 1), (+0, +2): lambda ctx: -ctx.em*(ctx.T - 1)/(ctx.T - 2)},
-]
-_case3_sc1_eta_p1_offsets = [(-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
-_case3_sc1_eta_p1_row_ifaces = ("R", "extra", "T")
-_case3_sc1_eta_p1 = {
-    'M': _case3_sc1_eta_p1_M, 'd': _case3_sc1_eta_p1_d, 'N': _case3_sc1_eta_p1_N,
-    'offsets': _case3_sc1_eta_p1_offsets, 'row_ifaces': _case3_sc1_eta_p1_row_ifaces,
-}
-CASE3_EVAL[(1, 1)] = _case3_sc1_eta_p1
-
-# case3 sub-case 2, eta sign -1
-_case3_sc2_eta_m1_M = [
-    [lambda ctx: ctx.ep*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) - (2*ctx.R + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.R*(ctx.R + 1)), lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1)), _Z],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), lambda ctx: ctx.ep*(2*ctx.T + ctx.t - 3)/((ctx.T - 1)*(ctx.T + ctx.t - 2)) - (2*ctx.T + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.T*(ctx.T + 1)), lambda ctx: ctx.ep*(ctx.T - 1)/((ctx.t - 1)*(ctx.T + ctx.t - 2))],
-    [_Z, lambda ctx: -ctx.ep*(ctx.t - 1)/((ctx.T - 1)*(ctx.T + ctx.t - 2)), lambda ctx: -ctx.ep*(ctx.T + 2*ctx.t - 3)/((ctx.t - 1)*(ctx.T + ctx.t - 2)) + (2*ctx.t + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.t*(ctx.t + 1))],
-]
-_case3_sc2_eta_m1_d = [lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 - ctx.av*ctx.ep*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 - ctx.av*ctx.ep*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 + ctx.av*ctx.ep*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case3_sc2_eta_m1_N = [
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (-1, +0): lambda ctx: ctx.R*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 + ctx.em*ctx.dy)/(ctx.dy*(ctx.R + 1)), (+0, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R**2*ctx.T + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dy*ctx.n2**2*ctx.R*ctx.T + ctx.ej*ctx.dy*ctx.n2**2*ctx.T + ctx.em*ctx.dy*ctx.R*ctx.T + ctx.em*ctx.dy*ctx.T)/(ctx.dy*ctx.R*ctx.T), (+1, +0): lambda ctx: -ctx.ep*(ctx.R - 2)/(ctx.R - 1), (+2, +0): lambda ctx: ctx.ep*(ctx.R - 1)/(ctx.R - 2)},
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (-1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dx*(ctx.R + 1)), (+0, -1): lambda ctx: ctx.T*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.R*ctx.T + ctx.ej*ctx.dx*ctx.n1**2*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T + ctx.em*ctx.dx*ctx.R*ctx.T + ctx.em*ctx.dx*ctx.R)/(ctx.dx*ctx.R*ctx.T), (+0, +1): lambda ctx: ctx.ep*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1))},
-    {(-1, +2): lambda ctx: (1/2)*ctx.ej*ctx.dy*ctx.n1*ctx.n2*(2*ctx.t + 1)/ctx.dx, (-1, +3): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t/ctx.dx, (+0, +1): lambda ctx: -ctx.ep*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)), (+0, +2): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.t + ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t**2 + ctx.em*ctx.dx*ctx.t + ctx.em*ctx.dx)/(ctx.dx*ctx.t), (+0, +3): lambda ctx: -ctx.t*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t - ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.t + 1)), (+1, +2): lambda ctx: -1/2*ctx.ej*ctx.dy*ctx.n1*ctx.n2/ctx.dx},
-]
-_case3_sc2_eta_m1_offsets = [(-1, -1), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, +0), (+1, +2), (+2, +0)]
-_case3_sc2_eta_m1_row_ifaces = ("R", "T", "extra")
-_case3_sc2_eta_m1 = {
-    'M': _case3_sc2_eta_m1_M, 'd': _case3_sc2_eta_m1_d, 'N': _case3_sc2_eta_m1_N,
-    'offsets': _case3_sc2_eta_m1_offsets, 'row_ifaces': _case3_sc2_eta_m1_row_ifaces,
-}
-CASE3_EVAL[(2, -1)] = _case3_sc2_eta_m1
-
-# case3 sub-case 2, eta sign +1
-_case3_sc2_eta_p1_M = [
-    [lambda ctx: -ctx.em*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) - (2*ctx.R + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.R*(ctx.R + 1)), lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1)), _Z],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), lambda ctx: -ctx.em*(2*ctx.T + ctx.t - 3)/((ctx.T - 1)*(ctx.T + ctx.t - 2)) - (2*ctx.T + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.T*(ctx.T + 1)), lambda ctx: -ctx.em*(ctx.T - 1)/((ctx.t - 1)*(ctx.T + ctx.t - 2))],
-    [_Z, lambda ctx: ctx.em*(ctx.t - 1)/((ctx.T - 1)*(ctx.T + ctx.t - 2)), lambda ctx: ctx.em*(ctx.T + 2*ctx.t - 3)/((ctx.t - 1)*(ctx.T + ctx.t - 2)) + (2*ctx.t + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.t*(ctx.t + 1))],
-]
-_case3_sc2_eta_p1_d = [lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 - ctx.av*ctx.em*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 - ctx.av*ctx.em*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 + ctx.av*ctx.em*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case3_sc2_eta_p1_N = [
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (-1, +0): lambda ctx: ctx.R*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 - ctx.ep*ctx.dy)/(ctx.dy*(ctx.R + 1)), (+0, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R**2*ctx.T + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dy*ctx.n2**2*ctx.R*ctx.T + ctx.ej*ctx.dy*ctx.n2**2*ctx.T - ctx.ep*ctx.dy*ctx.R*ctx.T - ctx.ep*ctx.dy*ctx.T)/(ctx.dy*ctx.R*ctx.T), (+1, +0): lambda ctx: ctx.em*(ctx.R - 2)/(ctx.R - 1), (+2, +0): lambda ctx: -ctx.em*(ctx.R - 1)/(ctx.R - 2)},
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (-1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dx*(ctx.R + 1)), (+0, -1): lambda ctx: ctx.T*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.R*ctx.T + ctx.ej*ctx.dx*ctx.n1**2*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T - ctx.ep*ctx.dx*ctx.R*ctx.T - ctx.ep*ctx.dx*ctx.R)/(ctx.dx*ctx.R*ctx.T), (+0, +1): lambda ctx: -ctx.em*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1))},
-    {(-1, +2): lambda ctx: (1/2)*ctx.ej*ctx.dy*ctx.n1*ctx.n2*(2*ctx.t + 1)/ctx.dx, (-1, +3): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t/ctx.dx, (+0, +1): lambda ctx: ctx.em*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)), (+0, +2): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.t + ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t**2 - ctx.ep*ctx.dx*ctx.t - ctx.ep*ctx.dx)/(ctx.dx*ctx.t), (+0, +3): lambda ctx: -ctx.t*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t - ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.t + 1)), (+1, +2): lambda ctx: -1/2*ctx.ej*ctx.dy*ctx.n1*ctx.n2/ctx.dx},
-]
-_case3_sc2_eta_p1_offsets = [(-1, -1), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, +0), (+1, +2), (+2, +0)]
-_case3_sc2_eta_p1_row_ifaces = ("R", "T", "extra")
-_case3_sc2_eta_p1 = {
-    'M': _case3_sc2_eta_p1_M, 'd': _case3_sc2_eta_p1_d, 'N': _case3_sc2_eta_p1_N,
-    'offsets': _case3_sc2_eta_p1_offsets, 'row_ifaces': _case3_sc2_eta_p1_row_ifaces,
-}
-CASE3_EVAL[(2, 1)] = _case3_sc2_eta_p1
-
-# case3 sub-case 3, eta sign -1
-_case3_sc3_eta_m1_M = [
-    [lambda ctx: ctx.ep*(2*ctx.T + ctx.t - 3)/((ctx.T - 1)*(ctx.T + ctx.t - 2)) - (2*ctx.T + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.T*(ctx.T + 1)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1)), lambda ctx: ctx.ep*(ctx.T - 1)/((ctx.t - 1)*(ctx.T + ctx.t - 2))],
-    [lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1)), lambda ctx: -ctx.ep*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + (2*ctx.L + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.L*(ctx.L + 1)), _Z],
-    [lambda ctx: -ctx.ep*(ctx.t - 1)/((ctx.T - 1)*(ctx.T + ctx.t - 2)), _Z, lambda ctx: -ctx.ep*(ctx.T + 2*ctx.t - 3)/((ctx.t - 1)*(ctx.T + ctx.t - 2)) + (2*ctx.t + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.t*(ctx.t + 1))],
-]
-_case3_sc3_eta_m1_d = [lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 - ctx.av*ctx.ep*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 + ctx.av*ctx.ep*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 + ctx.av*ctx.ep*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case3_sc3_eta_m1_N = [
-    {(+0, -1): lambda ctx: ctx.T*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.T + ctx.ej*ctx.dx*ctx.n1**2*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T + ctx.em*ctx.dx*ctx.L*ctx.T + ctx.em*ctx.dx*ctx.L)/(ctx.dx*ctx.L*ctx.T), (+0, +1): lambda ctx: ctx.ep*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)), (+1, -1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (+1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dx*(ctx.L + 1))},
-    {(-2, +0): lambda ctx: -ctx.ep*(ctx.L - 1)/(ctx.L - 2), (-1, +0): lambda ctx: ctx.ep*(ctx.L - 2)/(ctx.L - 1), (+0, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L**2*ctx.T + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L - ctx.ej*ctx.dy*ctx.n2**2*ctx.L*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.T - ctx.em*ctx.dy*ctx.L*ctx.T - ctx.em*ctx.dy*ctx.T)/(ctx.dy*ctx.L*ctx.T), (+1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy, (+1, +0): lambda ctx: ctx.L*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 - ctx.em*ctx.dy)/(ctx.dy*(ctx.L + 1))},
-    {(-1, +2): lambda ctx: (1/2)*ctx.ej*ctx.dy*ctx.n1*ctx.n2*(2*ctx.t + 1)/ctx.dx, (-1, +3): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t/ctx.dx, (+0, +1): lambda ctx: -ctx.ep*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)), (+0, +2): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.t + ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t**2 + ctx.em*ctx.dx*ctx.t + ctx.em*ctx.dx)/(ctx.dx*ctx.t), (+0, +3): lambda ctx: -ctx.t*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t - ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.t + 1)), (+1, +2): lambda ctx: -1/2*ctx.ej*ctx.dy*ctx.n1*ctx.n2/ctx.dx},
-]
-_case3_sc3_eta_m1_offsets = [(-2, +0), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, -1), (+1, +0), (+1, +2)]
-_case3_sc3_eta_m1_row_ifaces = ("T", "L", "extra")
-_case3_sc3_eta_m1 = {
-    'M': _case3_sc3_eta_m1_M, 'd': _case3_sc3_eta_m1_d, 'N': _case3_sc3_eta_m1_N,
-    'offsets': _case3_sc3_eta_m1_offsets, 'row_ifaces': _case3_sc3_eta_m1_row_ifaces,
-}
-CASE3_EVAL[(3, -1)] = _case3_sc3_eta_m1
-
-# case3 sub-case 3, eta sign +1
-_case3_sc3_eta_p1_M = [
-    [lambda ctx: -ctx.em*(2*ctx.T + ctx.t - 3)/((ctx.T - 1)*(ctx.T + ctx.t - 2)) - (2*ctx.T + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.T*(ctx.T + 1)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1)), lambda ctx: -ctx.em*(ctx.T - 1)/((ctx.t - 1)*(ctx.T + ctx.t - 2))],
-    [lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1)), lambda ctx: ctx.em*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + (2*ctx.L + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.L*(ctx.L + 1)), _Z],
-    [lambda ctx: ctx.em*(ctx.t - 1)/((ctx.T - 1)*(ctx.T + ctx.t - 2)), _Z, lambda ctx: ctx.em*(ctx.T + 2*ctx.t - 3)/((ctx.t - 1)*(ctx.T + ctx.t - 2)) + (2*ctx.t + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.t*(ctx.t + 1))],
-]
-_case3_sc3_eta_p1_d = [lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 - ctx.av*ctx.em*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 + ctx.av*ctx.em*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 + ctx.av*ctx.em*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case3_sc3_eta_p1_N = [
-    {(+0, -1): lambda ctx: ctx.T*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.T + ctx.ej*ctx.dx*ctx.n1**2*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T - ctx.ep*ctx.dx*ctx.L*ctx.T - ctx.ep*ctx.dx*ctx.L)/(ctx.dx*ctx.L*ctx.T), (+0, +1): lambda ctx: -ctx.em*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)), (+1, -1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (+1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dx*(ctx.L + 1))},
-    {(-2, +0): lambda ctx: ctx.em*(ctx.L - 1)/(ctx.L - 2), (-1, +0): lambda ctx: -ctx.em*(ctx.L - 2)/(ctx.L - 1), (+0, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L**2*ctx.T + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L - ctx.ej*ctx.dy*ctx.n2**2*ctx.L*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.T + ctx.ep*ctx.dy*ctx.L*ctx.T + ctx.ep*ctx.dy*ctx.T)/(ctx.dy*ctx.L*ctx.T), (+1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy, (+1, +0): lambda ctx: ctx.L*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 + ctx.ep*ctx.dy)/(ctx.dy*(ctx.L + 1))},
-    {(-1, +2): lambda ctx: (1/2)*ctx.ej*ctx.dy*ctx.n1*ctx.n2*(2*ctx.t + 1)/ctx.dx, (-1, +3): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t/ctx.dx, (+0, +1): lambda ctx: ctx.em*(ctx.T + ctx.t - 2)/((ctx.T - 1)*(ctx.t - 1)), (+0, +2): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.t + ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t**2 - ctx.ep*ctx.dx*ctx.t - ctx.ep*ctx.dx)/(ctx.dx*ctx.t), (+0, +3): lambda ctx: -ctx.t*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.t - ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.t + 1)), (+1, +2): lambda ctx: -1/2*ctx.ej*ctx.dy*ctx.n1*ctx.n2/ctx.dx},
-]
-_case3_sc3_eta_p1_offsets = [(-2, +0), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, -1), (+1, +0), (+1, +2)]
-_case3_sc3_eta_p1_row_ifaces = ("T", "L", "extra")
-_case3_sc3_eta_p1 = {
-    'M': _case3_sc3_eta_p1_M, 'd': _case3_sc3_eta_p1_d, 'N': _case3_sc3_eta_p1_N,
-    'offsets': _case3_sc3_eta_p1_offsets, 'row_ifaces': _case3_sc3_eta_p1_row_ifaces,
-}
-CASE3_EVAL[(3, 1)] = _case3_sc3_eta_p1
-
-# case3 sub-case 4, eta sign -1
-_case3_sc4_eta_m1_M = [
-    [lambda ctx: ctx.ep*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) - (2*ctx.T + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.T*(ctx.T + 1)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1)), _Z],
-    [lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1)), lambda ctx: -ctx.ep*(2*ctx.L + ctx.l - 3)/((ctx.L - 1)*(ctx.L + ctx.l - 2)) + (2*ctx.L + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.L*(ctx.L + 1)), lambda ctx: -ctx.ep*(ctx.L - 1)/((ctx.l - 1)*(ctx.L + ctx.l - 2))],
-    [_Z, lambda ctx: ctx.ep*(ctx.l - 1)/((ctx.L - 1)*(ctx.L + ctx.l - 2)), lambda ctx: ctx.ep*(ctx.L + 2*ctx.l - 3)/((ctx.l - 1)*(ctx.L + ctx.l - 2)) - (2*ctx.l + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.l*(ctx.l + 1))],
-]
-_case3_sc4_eta_m1_d = [lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 - ctx.av*ctx.ep*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 + ctx.av*ctx.ep*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 - ctx.av*ctx.ep*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case3_sc4_eta_m1_N = [
-    {(+0, -1): lambda ctx: ctx.T*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.T + ctx.ej*ctx.dx*ctx.n1**2*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T + ctx.em*ctx.dx*ctx.L*ctx.T + ctx.em*ctx.dx*ctx.L)/(ctx.dx*ctx.L*ctx.T), (+0, +1): lambda ctx: -ctx.ep*(ctx.T - 2)/(ctx.T - 1), (+0, +2): lambda ctx: ctx.ep*(ctx.T - 1)/(ctx.T - 2), (+1, -1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (+1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dx*(ctx.L + 1))},
-    {(-1, +0): lambda ctx: -ctx.ep*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)), (+0, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L**2*ctx.T + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L - ctx.ej*ctx.dy*ctx.n2**2*ctx.L*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.T - ctx.em*ctx.dy*ctx.L*ctx.T - ctx.em*ctx.dy*ctx.T)/(ctx.dy*ctx.L*ctx.T), (+1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy, (+1, +0): lambda ctx: ctx.L*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 - ctx.em*ctx.dy)/(ctx.dy*(ctx.L + 1))},
-    {(-3, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l/ctx.dy, (-3, +0): lambda ctx: ctx.l*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 + ctx.em*ctx.dy)/(ctx.dy*(ctx.l + 1)), (-2, -1): lambda ctx: (1/2)*ctx.ej*ctx.dx*ctx.n1*ctx.n2*(2*ctx.l + 1)/ctx.dy, (-2, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l**2 + ctx.ej*ctx.dy*ctx.n2**2*ctx.l + ctx.ej*ctx.dy*ctx.n2**2 + ctx.em*ctx.dy*ctx.l + ctx.em*ctx.dy)/(ctx.dy*ctx.l), (-2, +1): lambda ctx: -1/2*ctx.ej*ctx.dx*ctx.n1*ctx.n2/ctx.dy, (-1, +0): lambda ctx: ctx.ep*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1))},
-]
-_case3_sc4_eta_m1_offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
-_case3_sc4_eta_m1_row_ifaces = ("T", "L", "extra")
-_case3_sc4_eta_m1 = {
-    'M': _case3_sc4_eta_m1_M, 'd': _case3_sc4_eta_m1_d, 'N': _case3_sc4_eta_m1_N,
-    'offsets': _case3_sc4_eta_m1_offsets, 'row_ifaces': _case3_sc4_eta_m1_row_ifaces,
-}
-CASE3_EVAL[(4, -1)] = _case3_sc4_eta_m1
-
-# case3 sub-case 4, eta sign +1
-_case3_sc4_eta_p1_M = [
-    [lambda ctx: -ctx.em*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) - (2*ctx.T + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.T*(ctx.T + 1)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1)), _Z],
-    [lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1)), lambda ctx: ctx.em*(2*ctx.L + ctx.l - 3)/((ctx.L - 1)*(ctx.L + ctx.l - 2)) + (2*ctx.L + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.L*(ctx.L + 1)), lambda ctx: ctx.em*(ctx.L - 1)/((ctx.l - 1)*(ctx.L + ctx.l - 2))],
-    [_Z, lambda ctx: -ctx.em*(ctx.l - 1)/((ctx.L - 1)*(ctx.L + ctx.l - 2)), lambda ctx: -ctx.em*(ctx.L + 2*ctx.l - 3)/((ctx.l - 1)*(ctx.L + ctx.l - 2)) - (2*ctx.l + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.l*(ctx.l + 1))],
-]
-_case3_sc4_eta_p1_d = [lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 - ctx.av*ctx.em*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 + ctx.av*ctx.em*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 - ctx.av*ctx.em*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case3_sc4_eta_p1_N = [
-    {(+0, -1): lambda ctx: ctx.T*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.T + ctx.ej*ctx.dx*ctx.n1**2*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T - ctx.ep*ctx.dx*ctx.L*ctx.T - ctx.ep*ctx.dx*ctx.L)/(ctx.dx*ctx.L*ctx.T), (+0, +1): lambda ctx: ctx.em*(ctx.T - 2)/(ctx.T - 1), (+0, +2): lambda ctx: -ctx.em*(ctx.T - 1)/(ctx.T - 2), (+1, -1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (+1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dx*(ctx.L + 1))},
-    {(-1, +0): lambda ctx: ctx.em*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)), (+0, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L**2*ctx.T + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L - ctx.ej*ctx.dy*ctx.n2**2*ctx.L*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.T + ctx.ep*ctx.dy*ctx.L*ctx.T + ctx.ep*ctx.dy*ctx.T)/(ctx.dy*ctx.L*ctx.T), (+1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy, (+1, +0): lambda ctx: ctx.L*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 + ctx.ep*ctx.dy)/(ctx.dy*(ctx.L + 1))},
-    {(-3, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l/ctx.dy, (-3, +0): lambda ctx: ctx.l*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 - ctx.ep*ctx.dy)/(ctx.dy*(ctx.l + 1)), (-2, -1): lambda ctx: (1/2)*ctx.ej*ctx.dx*ctx.n1*ctx.n2*(2*ctx.l + 1)/ctx.dy, (-2, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l**2 + ctx.ej*ctx.dy*ctx.n2**2*ctx.l + ctx.ej*ctx.dy*ctx.n2**2 - ctx.ep*ctx.dy*ctx.l - ctx.ep*ctx.dy)/(ctx.dy*ctx.l), (-2, +1): lambda ctx: -1/2*ctx.ej*ctx.dx*ctx.n1*ctx.n2/ctx.dy, (-1, +0): lambda ctx: -ctx.em*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1))},
-]
-_case3_sc4_eta_p1_offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
-_case3_sc4_eta_p1_row_ifaces = ("T", "L", "extra")
-_case3_sc4_eta_p1 = {
-    'M': _case3_sc4_eta_p1_M, 'd': _case3_sc4_eta_p1_d, 'N': _case3_sc4_eta_p1_N,
-    'offsets': _case3_sc4_eta_p1_offsets, 'row_ifaces': _case3_sc4_eta_p1_row_ifaces,
-}
-CASE3_EVAL[(4, 1)] = _case3_sc4_eta_p1
-
-# case3 sub-case 5, eta sign -1
-_case3_sc5_eta_m1_M = [
-    [lambda ctx: -ctx.ep*(2*ctx.L + ctx.l - 3)/((ctx.L - 1)*(ctx.L + ctx.l - 2)) + (2*ctx.L + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.L*(ctx.L + 1)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), lambda ctx: -ctx.ep*(ctx.L - 1)/((ctx.l - 1)*(ctx.L + ctx.l - 2))],
-    [lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1)), lambda ctx: -ctx.ep*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + (2*ctx.B + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.B*(ctx.B + 1)), _Z],
-    [lambda ctx: ctx.ep*(ctx.l - 1)/((ctx.L - 1)*(ctx.L + ctx.l - 2)), _Z, lambda ctx: ctx.ep*(ctx.L + 2*ctx.l - 3)/((ctx.l - 1)*(ctx.L + ctx.l - 2)) - (2*ctx.l + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.l*(ctx.l + 1))],
-]
-_case3_sc5_eta_m1_d = [lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 + ctx.av*ctx.ep*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 + ctx.av*ctx.ep*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 - ctx.av*ctx.ep*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case3_sc5_eta_m1_N = [
-    {(-1, +0): lambda ctx: -ctx.ep*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.L + ctx.ej*ctx.dy*ctx.n2**2*ctx.B + ctx.em*ctx.dy*ctx.B*ctx.L + ctx.em*ctx.dy*ctx.B)/(ctx.dy*ctx.B*ctx.L), (+0, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B + ctx.L)/(ctx.dy*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.L*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 + ctx.em*ctx.dy)/(ctx.dy*(ctx.L + 1)), (+1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy},
-    {(+0, -2): lambda ctx: -ctx.ep*(ctx.B - 1)/(ctx.B - 2), (+0, -1): lambda ctx: ctx.ep*(ctx.B - 2)/(ctx.B - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.L + ctx.ej*ctx.dx*ctx.n1**2*ctx.L + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.L + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B + ctx.em*ctx.dx*ctx.B*ctx.L + ctx.em*ctx.dx*ctx.L)/(ctx.dx*ctx.B*ctx.L), (+0, +1): lambda ctx: -ctx.B*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B + ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B + ctx.L)/(ctx.dx*(ctx.L + 1)), (+1, +1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx},
-    {(-3, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l/ctx.dy, (-3, +0): lambda ctx: ctx.l*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 + ctx.em*ctx.dy)/(ctx.dy*(ctx.l + 1)), (-2, -1): lambda ctx: (1/2)*ctx.ej*ctx.dx*ctx.n1*ctx.n2*(2*ctx.l + 1)/ctx.dy, (-2, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l**2 + ctx.ej*ctx.dy*ctx.n2**2*ctx.l + ctx.ej*ctx.dy*ctx.n2**2 + ctx.em*ctx.dy*ctx.l + ctx.em*ctx.dy)/(ctx.dy*ctx.l), (-2, +1): lambda ctx: -1/2*ctx.ej*ctx.dx*ctx.n1*ctx.n2/ctx.dy, (-1, +0): lambda ctx: ctx.ep*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1))},
-]
-_case3_sc5_eta_m1_offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+1, +1)]
-_case3_sc5_eta_m1_row_ifaces = ("L", "B", "extra")
-_case3_sc5_eta_m1 = {
-    'M': _case3_sc5_eta_m1_M, 'd': _case3_sc5_eta_m1_d, 'N': _case3_sc5_eta_m1_N,
-    'offsets': _case3_sc5_eta_m1_offsets, 'row_ifaces': _case3_sc5_eta_m1_row_ifaces,
-}
-CASE3_EVAL[(5, -1)] = _case3_sc5_eta_m1
-
-# case3 sub-case 5, eta sign +1
-_case3_sc5_eta_p1_M = [
-    [lambda ctx: ctx.em*(2*ctx.L + ctx.l - 3)/((ctx.L - 1)*(ctx.L + ctx.l - 2)) + (2*ctx.L + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.L*(ctx.L + 1)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), lambda ctx: ctx.em*(ctx.L - 1)/((ctx.l - 1)*(ctx.L + ctx.l - 2))],
-    [lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1)), lambda ctx: ctx.em*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + (2*ctx.B + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.B*(ctx.B + 1)), _Z],
-    [lambda ctx: -ctx.em*(ctx.l - 1)/((ctx.L - 1)*(ctx.L + ctx.l - 2)), _Z, lambda ctx: -ctx.em*(ctx.L + 2*ctx.l - 3)/((ctx.l - 1)*(ctx.L + ctx.l - 2)) - (2*ctx.l + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.l*(ctx.l + 1))],
-]
-_case3_sc5_eta_p1_d = [lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 + ctx.av*ctx.em*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 + ctx.av*ctx.em*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 - ctx.av*ctx.em*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case3_sc5_eta_p1_N = [
-    {(-1, +0): lambda ctx: ctx.em*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1)), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.L + ctx.ej*ctx.dy*ctx.n2**2*ctx.B - ctx.ep*ctx.dy*ctx.B*ctx.L - ctx.ep*ctx.dy*ctx.B)/(ctx.dy*ctx.B*ctx.L), (+0, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B + ctx.L)/(ctx.dy*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.L*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 - ctx.ep*ctx.dy)/(ctx.dy*(ctx.L + 1)), (+1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy},
-    {(+0, -2): lambda ctx: ctx.em*(ctx.B - 1)/(ctx.B - 2), (+0, -1): lambda ctx: -ctx.em*(ctx.B - 2)/(ctx.B - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.L + ctx.ej*ctx.dx*ctx.n1**2*ctx.L + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.L + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B - ctx.ep*ctx.dx*ctx.B*ctx.L - ctx.ep*ctx.dx*ctx.L)/(ctx.dx*ctx.B*ctx.L), (+0, +1): lambda ctx: -ctx.B*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B + ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B + ctx.L)/(ctx.dx*(ctx.L + 1)), (+1, +1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx},
-    {(-3, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l/ctx.dy, (-3, +0): lambda ctx: ctx.l*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 - ctx.ep*ctx.dy)/(ctx.dy*(ctx.l + 1)), (-2, -1): lambda ctx: (1/2)*ctx.ej*ctx.dx*ctx.n1*ctx.n2*(2*ctx.l + 1)/ctx.dy, (-2, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.l**2 + ctx.ej*ctx.dy*ctx.n2**2*ctx.l + ctx.ej*ctx.dy*ctx.n2**2 - ctx.ep*ctx.dy*ctx.l - ctx.ep*ctx.dy)/(ctx.dy*ctx.l), (-2, +1): lambda ctx: -1/2*ctx.ej*ctx.dx*ctx.n1*ctx.n2/ctx.dy, (-1, +0): lambda ctx: -ctx.em*(ctx.L + ctx.l - 2)/((ctx.L - 1)*(ctx.l - 1))},
-]
-_case3_sc5_eta_p1_offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+1, +1)]
-_case3_sc5_eta_p1_row_ifaces = ("L", "B", "extra")
-_case3_sc5_eta_p1 = {
-    'M': _case3_sc5_eta_p1_M, 'd': _case3_sc5_eta_p1_d, 'N': _case3_sc5_eta_p1_N,
-    'offsets': _case3_sc5_eta_p1_offsets, 'row_ifaces': _case3_sc5_eta_p1_row_ifaces,
-}
-CASE3_EVAL[(5, 1)] = _case3_sc5_eta_p1
-
-# case3 sub-case 6, eta sign -1
-_case3_sc6_eta_m1_M = [
-    [lambda ctx: -ctx.ep*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + (2*ctx.L + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.L*(ctx.L + 1)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), _Z],
-    [lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1)), lambda ctx: -ctx.ep*(2*ctx.B + ctx.b - 3)/((ctx.B - 1)*(ctx.B + ctx.b - 2)) + (2*ctx.B + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.B*(ctx.B + 1)), lambda ctx: -ctx.ep*(ctx.B - 1)/((ctx.b - 1)*(ctx.B + ctx.b - 2))],
-    [_Z, lambda ctx: ctx.ep*(ctx.b - 1)/((ctx.B - 1)*(ctx.B + ctx.b - 2)), lambda ctx: ctx.ep*(ctx.B + 2*ctx.b - 3)/((ctx.b - 1)*(ctx.B + ctx.b - 2)) - (2*ctx.b + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.b*(ctx.b + 1))],
-]
-_case3_sc6_eta_m1_d = [lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 + ctx.av*ctx.ep*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 + ctx.av*ctx.ep*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 - ctx.av*ctx.ep*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case3_sc6_eta_m1_N = [
-    {(-2, +0): lambda ctx: -ctx.ep*(ctx.L - 1)/(ctx.L - 2), (-1, +0): lambda ctx: ctx.ep*(ctx.L - 2)/(ctx.L - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.L + ctx.ej*ctx.dy*ctx.n2**2*ctx.B + ctx.em*ctx.dy*ctx.B*ctx.L + ctx.em*ctx.dy*ctx.B)/(ctx.dy*ctx.B*ctx.L), (+0, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B + ctx.L)/(ctx.dy*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.L*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 + ctx.em*ctx.dy)/(ctx.dy*(ctx.L + 1)), (+1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy},
-    {(+0, -1): lambda ctx: -ctx.ep*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.L + ctx.ej*ctx.dx*ctx.n1**2*ctx.L + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.L + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B + ctx.em*ctx.dx*ctx.B*ctx.L + ctx.em*ctx.dx*ctx.L)/(ctx.dx*ctx.B*ctx.L), (+0, +1): lambda ctx: -ctx.B*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B + ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B + ctx.L)/(ctx.dx*(ctx.L + 1)), (+1, +1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx},
-    {(-1, -3): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b/ctx.dx, (-1, -2): lambda ctx: (1/2)*ctx.ej*ctx.dy*ctx.n1*ctx.n2*(2*ctx.b + 1)/ctx.dx, (+0, -3): lambda ctx: ctx.b*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b + ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.b + 1)), (+0, -2): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.b + ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b**2 + ctx.em*ctx.dx*ctx.b + ctx.em*ctx.dx)/(ctx.dx*ctx.b), (+0, -1): lambda ctx: ctx.ep*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)), (+1, -2): lambda ctx: -1/2*ctx.ej*ctx.dy*ctx.n1*ctx.n2/ctx.dx},
-]
-_case3_sc6_eta_m1_offsets = [(-2, +0), (-1, -3), (-1, -2), (-1, +0), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+1, +1)]
-_case3_sc6_eta_m1_row_ifaces = ("L", "B", "extra")
-_case3_sc6_eta_m1 = {
-    'M': _case3_sc6_eta_m1_M, 'd': _case3_sc6_eta_m1_d, 'N': _case3_sc6_eta_m1_N,
-    'offsets': _case3_sc6_eta_m1_offsets, 'row_ifaces': _case3_sc6_eta_m1_row_ifaces,
-}
-CASE3_EVAL[(6, -1)] = _case3_sc6_eta_m1
-
-# case3 sub-case 6, eta sign +1
-_case3_sc6_eta_p1_M = [
-    [lambda ctx: ctx.em*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + (2*ctx.L + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.L*(ctx.L + 1)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), _Z],
-    [lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1)), lambda ctx: ctx.em*(2*ctx.B + ctx.b - 3)/((ctx.B - 1)*(ctx.B + ctx.b - 2)) + (2*ctx.B + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.B*(ctx.B + 1)), lambda ctx: ctx.em*(ctx.B - 1)/((ctx.b - 1)*(ctx.B + ctx.b - 2))],
-    [_Z, lambda ctx: -ctx.em*(ctx.b - 1)/((ctx.B - 1)*(ctx.B + ctx.b - 2)), lambda ctx: -ctx.em*(ctx.B + 2*ctx.b - 3)/((ctx.b - 1)*(ctx.B + ctx.b - 2)) - (2*ctx.b + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.b*(ctx.b + 1))],
-]
-_case3_sc6_eta_p1_d = [lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 + ctx.av*ctx.em*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 + ctx.av*ctx.em*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 - ctx.av*ctx.em*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case3_sc6_eta_p1_N = [
-    {(-2, +0): lambda ctx: ctx.em*(ctx.L - 1)/(ctx.L - 2), (-1, +0): lambda ctx: -ctx.em*(ctx.L - 2)/(ctx.L - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.L + ctx.ej*ctx.dy*ctx.n2**2*ctx.B - ctx.ep*ctx.dy*ctx.B*ctx.L - ctx.ep*ctx.dy*ctx.B)/(ctx.dy*ctx.B*ctx.L), (+0, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B + ctx.L)/(ctx.dy*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.L*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dx*ctx.n1*ctx.n2 + ctx.ej*ctx.dy*ctx.n2**2 - ctx.ep*ctx.dy)/(ctx.dy*(ctx.L + 1)), (+1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy},
-    {(+0, -1): lambda ctx: ctx.em*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.L + ctx.ej*ctx.dx*ctx.n1**2*ctx.L + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.L + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B - ctx.ep*ctx.dx*ctx.B*ctx.L - ctx.ep*ctx.dx*ctx.L)/(ctx.dx*ctx.B*ctx.L), (+0, +1): lambda ctx: -ctx.B*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B + ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B + ctx.L)/(ctx.dx*(ctx.L + 1)), (+1, +1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx},
-    {(-1, -3): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b/ctx.dx, (-1, -2): lambda ctx: (1/2)*ctx.ej*ctx.dy*ctx.n1*ctx.n2*(2*ctx.b + 1)/ctx.dx, (+0, -3): lambda ctx: ctx.b*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b + ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.b + 1)), (+0, -2): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.b + ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b**2 - ctx.ep*ctx.dx*ctx.b - ctx.ep*ctx.dx)/(ctx.dx*ctx.b), (+0, -1): lambda ctx: -ctx.em*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)), (+1, -2): lambda ctx: -1/2*ctx.ej*ctx.dy*ctx.n1*ctx.n2/ctx.dx},
-]
-_case3_sc6_eta_p1_offsets = [(-2, +0), (-1, -3), (-1, -2), (-1, +0), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+1, +1)]
-_case3_sc6_eta_p1_row_ifaces = ("L", "B", "extra")
-_case3_sc6_eta_p1 = {
-    'M': _case3_sc6_eta_p1_M, 'd': _case3_sc6_eta_p1_d, 'N': _case3_sc6_eta_p1_N,
-    'offsets': _case3_sc6_eta_p1_offsets, 'row_ifaces': _case3_sc6_eta_p1_row_ifaces,
-}
-CASE3_EVAL[(6, 1)] = _case3_sc6_eta_p1
-
-# case3 sub-case 7, eta sign -1
-_case3_sc7_eta_m1_M = [
-    [lambda ctx: -ctx.ep*(2*ctx.B + ctx.b - 3)/((ctx.B - 1)*(ctx.B + ctx.b - 2)) + (2*ctx.B + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.B*(ctx.B + 1)), lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), lambda ctx: -ctx.ep*(ctx.B - 1)/((ctx.b - 1)*(ctx.B + ctx.b - 2))],
-    [lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), lambda ctx: ctx.ep*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) - (2*ctx.R + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.R*(ctx.R + 1)), _Z],
-    [lambda ctx: ctx.ep*(ctx.b - 1)/((ctx.B - 1)*(ctx.B + ctx.b - 2)), _Z, lambda ctx: ctx.ep*(ctx.B + 2*ctx.b - 3)/((ctx.b - 1)*(ctx.B + ctx.b - 2)) - (2*ctx.b + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.b*(ctx.b + 1))],
-]
-_case3_sc7_eta_m1_d = [lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 + ctx.av*ctx.ep*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 - ctx.av*ctx.ep*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 - ctx.av*ctx.ep*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case3_sc7_eta_m1_N = [
-    {(-1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dx*(ctx.R + 1)), (-1, +1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx, (+0, -1): lambda ctx: -ctx.ep*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.R + ctx.ej*ctx.dx*ctx.n1**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B + ctx.em*ctx.dx*ctx.B*ctx.R + ctx.em*ctx.dx*ctx.R)/(ctx.dx*ctx.B*ctx.R), (+0, +1): lambda ctx: -ctx.B*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B - ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.B + 1))},
-    {(-1, +0): lambda ctx: -ctx.R*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 - ctx.em*ctx.dy)/(ctx.dy*(ctx.R + 1)), (-1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.R - ctx.ej*ctx.dy*ctx.n2**2*ctx.B - ctx.em*ctx.dy*ctx.B*ctx.R - ctx.em*ctx.dy*ctx.B)/(ctx.dy*ctx.B*ctx.R), (+0, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dy*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.ep*(ctx.R - 2)/(ctx.R - 1), (+2, +0): lambda ctx: ctx.ep*(ctx.R - 1)/(ctx.R - 2)},
-    {(-1, -3): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b/ctx.dx, (-1, -2): lambda ctx: (1/2)*ctx.ej*ctx.dy*ctx.n1*ctx.n2*(2*ctx.b + 1)/ctx.dx, (+0, -3): lambda ctx: ctx.b*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b + ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.b + 1)), (+0, -2): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.b + ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b**2 + ctx.em*ctx.dx*ctx.b + ctx.em*ctx.dx)/(ctx.dx*ctx.b), (+0, -1): lambda ctx: ctx.ep*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)), (+1, -2): lambda ctx: -1/2*ctx.ej*ctx.dy*ctx.n1*ctx.n2/ctx.dx},
-]
-_case3_sc7_eta_m1_offsets = [(-1, -3), (-1, -2), (-1, +0), (-1, +1), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+2, +0)]
-_case3_sc7_eta_m1_row_ifaces = ("B", "R", "extra")
-_case3_sc7_eta_m1 = {
-    'M': _case3_sc7_eta_m1_M, 'd': _case3_sc7_eta_m1_d, 'N': _case3_sc7_eta_m1_N,
-    'offsets': _case3_sc7_eta_m1_offsets, 'row_ifaces': _case3_sc7_eta_m1_row_ifaces,
-}
-CASE3_EVAL[(7, -1)] = _case3_sc7_eta_m1
-
-# case3 sub-case 7, eta sign +1
-_case3_sc7_eta_p1_M = [
-    [lambda ctx: ctx.em*(2*ctx.B + ctx.b - 3)/((ctx.B - 1)*(ctx.B + ctx.b - 2)) + (2*ctx.B + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.B*(ctx.B + 1)), lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), lambda ctx: ctx.em*(ctx.B - 1)/((ctx.b - 1)*(ctx.B + ctx.b - 2))],
-    [lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), lambda ctx: -ctx.em*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) - (2*ctx.R + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.R*(ctx.R + 1)), _Z],
-    [lambda ctx: -ctx.em*(ctx.b - 1)/((ctx.B - 1)*(ctx.B + ctx.b - 2)), _Z, lambda ctx: -ctx.em*(ctx.B + 2*ctx.b - 3)/((ctx.b - 1)*(ctx.B + ctx.b - 2)) - (2*ctx.b + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.b*(ctx.b + 1))],
-]
-_case3_sc7_eta_p1_d = [lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 + ctx.av*ctx.em*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 - ctx.av*ctx.em*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 - ctx.av*ctx.em*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case3_sc7_eta_p1_N = [
-    {(-1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dx*(ctx.R + 1)), (-1, +1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx, (+0, -1): lambda ctx: ctx.em*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.R + ctx.ej*ctx.dx*ctx.n1**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B - ctx.ep*ctx.dx*ctx.B*ctx.R - ctx.ep*ctx.dx*ctx.R)/(ctx.dx*ctx.B*ctx.R), (+0, +1): lambda ctx: -ctx.B*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B - ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.B + 1))},
-    {(-1, +0): lambda ctx: -ctx.R*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 + ctx.ep*ctx.dy)/(ctx.dy*(ctx.R + 1)), (-1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.R - ctx.ej*ctx.dy*ctx.n2**2*ctx.B + ctx.ep*ctx.dy*ctx.B*ctx.R + ctx.ep*ctx.dy*ctx.B)/(ctx.dy*ctx.B*ctx.R), (+0, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dy*(ctx.B + 1)), (+1, +0): lambda ctx: ctx.em*(ctx.R - 2)/(ctx.R - 1), (+2, +0): lambda ctx: -ctx.em*(ctx.R - 1)/(ctx.R - 2)},
-    {(-1, -3): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b/ctx.dx, (-1, -2): lambda ctx: (1/2)*ctx.ej*ctx.dy*ctx.n1*ctx.n2*(2*ctx.b + 1)/ctx.dx, (+0, -3): lambda ctx: ctx.b*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b + ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.b + 1)), (+0, -2): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.b + ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.b**2 - ctx.ep*ctx.dx*ctx.b - ctx.ep*ctx.dx)/(ctx.dx*ctx.b), (+0, -1): lambda ctx: -ctx.em*(ctx.B + ctx.b - 2)/((ctx.B - 1)*(ctx.b - 1)), (+1, -2): lambda ctx: -1/2*ctx.ej*ctx.dy*ctx.n1*ctx.n2/ctx.dx},
-]
-_case3_sc7_eta_p1_offsets = [(-1, -3), (-1, -2), (-1, +0), (-1, +1), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+2, +0)]
-_case3_sc7_eta_p1_row_ifaces = ("B", "R", "extra")
-_case3_sc7_eta_p1 = {
-    'M': _case3_sc7_eta_p1_M, 'd': _case3_sc7_eta_p1_d, 'N': _case3_sc7_eta_p1_N,
-    'offsets': _case3_sc7_eta_p1_offsets, 'row_ifaces': _case3_sc7_eta_p1_row_ifaces,
-}
-CASE3_EVAL[(7, 1)] = _case3_sc7_eta_p1
-
-# case3 sub-case 8, eta sign -1
-_case3_sc8_eta_m1_M = [
-    [lambda ctx: -ctx.ep*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + (2*ctx.B + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.B*(ctx.B + 1)), lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), _Z],
-    [lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), lambda ctx: ctx.ep*(2*ctx.R + ctx.r - 3)/((ctx.R - 1)*(ctx.R + ctx.r - 2)) - (2*ctx.R + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.R*(ctx.R + 1)), lambda ctx: ctx.ep*(ctx.R - 1)/((ctx.r - 1)*(ctx.R + ctx.r - 2))],
-    [_Z, lambda ctx: -ctx.ep*(ctx.r - 1)/((ctx.R - 1)*(ctx.R + ctx.r - 2)), lambda ctx: -ctx.ep*(ctx.R + 2*ctx.r - 3)/((ctx.r - 1)*(ctx.R + ctx.r - 2)) + (2*ctx.r + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.r*(ctx.r + 1))],
-]
-_case3_sc8_eta_m1_d = [lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 + ctx.av*ctx.ep*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 - ctx.av*ctx.ep*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 + ctx.av*ctx.ep*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case3_sc8_eta_m1_N = [
-    {(-1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dx*(ctx.R + 1)), (-1, +1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx, (+0, -2): lambda ctx: -ctx.ep*(ctx.B - 1)/(ctx.B - 2), (+0, -1): lambda ctx: ctx.ep*(ctx.B - 2)/(ctx.B - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.R + ctx.ej*ctx.dx*ctx.n1**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B + ctx.em*ctx.dx*ctx.B*ctx.R + ctx.em*ctx.dx*ctx.R)/(ctx.dx*ctx.B*ctx.R), (+0, +1): lambda ctx: -ctx.B*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B - ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.B + 1))},
-    {(-1, +0): lambda ctx: -ctx.R*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 - ctx.em*ctx.dy)/(ctx.dy*(ctx.R + 1)), (-1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.R - ctx.ej*ctx.dy*ctx.n2**2*ctx.B - ctx.em*ctx.dy*ctx.B*ctx.R - ctx.em*ctx.dy*ctx.B)/(ctx.dy*ctx.B*ctx.R), (+0, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dy*(ctx.B + 1)), (+1, +0): lambda ctx: ctx.ep*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1))},
-    {(+1, +0): lambda ctx: -ctx.ep*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)), (+2, -1): lambda ctx: (1/2)*ctx.ej*ctx.dx*ctx.n1*ctx.n2*(2*ctx.r + 1)/ctx.dy, (+2, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r**2 - ctx.ej*ctx.dy*ctx.n2**2*ctx.r - ctx.ej*ctx.dy*ctx.n2**2 - ctx.em*ctx.dy*ctx.r - ctx.em*ctx.dy)/(ctx.dy*ctx.r), (+2, +1): lambda ctx: -1/2*ctx.ej*ctx.dx*ctx.n1*ctx.n2/ctx.dy, (+3, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r/ctx.dy, (+3, +0): lambda ctx: ctx.r*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 - ctx.em*ctx.dy)/(ctx.dy*(ctx.r + 1))},
-]
-_case3_sc8_eta_m1_offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
-_case3_sc8_eta_m1_row_ifaces = ("B", "R", "extra")
-_case3_sc8_eta_m1 = {
-    'M': _case3_sc8_eta_m1_M, 'd': _case3_sc8_eta_m1_d, 'N': _case3_sc8_eta_m1_N,
-    'offsets': _case3_sc8_eta_m1_offsets, 'row_ifaces': _case3_sc8_eta_m1_row_ifaces,
-}
-CASE3_EVAL[(8, -1)] = _case3_sc8_eta_m1
-
-# case3 sub-case 8, eta sign +1
-_case3_sc8_eta_p1_M = [
-    [lambda ctx: ctx.em*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + (2*ctx.B + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.B*(ctx.B + 1)), lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), _Z],
-    [lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), lambda ctx: -ctx.em*(2*ctx.R + ctx.r - 3)/((ctx.R - 1)*(ctx.R + ctx.r - 2)) - (2*ctx.R + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.R*(ctx.R + 1)), lambda ctx: -ctx.em*(ctx.R - 1)/((ctx.r - 1)*(ctx.R + ctx.r - 2))],
-    [_Z, lambda ctx: ctx.em*(ctx.r - 1)/((ctx.R - 1)*(ctx.R + ctx.r - 2)), lambda ctx: ctx.em*(ctx.R + 2*ctx.r - 3)/((ctx.r - 1)*(ctx.R + ctx.r - 2)) + (2*ctx.r + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.r*(ctx.r + 1))],
-]
-_case3_sc8_eta_p1_d = [lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 + ctx.av*ctx.em*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 - ctx.av*ctx.em*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 + ctx.av*ctx.em*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case3_sc8_eta_p1_N = [
-    {(-1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dx*(ctx.R + 1)), (-1, +1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx, (+0, -2): lambda ctx: ctx.em*(ctx.B - 1)/(ctx.B - 2), (+0, -1): lambda ctx: -ctx.em*(ctx.B - 2)/(ctx.B - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.R + ctx.ej*ctx.dx*ctx.n1**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B - ctx.ep*ctx.dx*ctx.B*ctx.R - ctx.ep*ctx.dx*ctx.R)/(ctx.dx*ctx.B*ctx.R), (+0, +1): lambda ctx: -ctx.B*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B - ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.B + 1))},
-    {(-1, +0): lambda ctx: -ctx.R*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 + ctx.ep*ctx.dy)/(ctx.dy*(ctx.R + 1)), (-1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.R - ctx.ej*ctx.dy*ctx.n2**2*ctx.B + ctx.ep*ctx.dy*ctx.B*ctx.R + ctx.ep*ctx.dy*ctx.B)/(ctx.dy*ctx.B*ctx.R), (+0, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dy*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.em*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1))},
-    {(+1, +0): lambda ctx: ctx.em*(ctx.R + ctx.r - 2)/((ctx.R - 1)*(ctx.r - 1)), (+2, -1): lambda ctx: (1/2)*ctx.ej*ctx.dx*ctx.n1*ctx.n2*(2*ctx.r + 1)/ctx.dy, (+2, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r**2 - ctx.ej*ctx.dy*ctx.n2**2*ctx.r - ctx.ej*ctx.dy*ctx.n2**2 + ctx.ep*ctx.dy*ctx.r + ctx.ep*ctx.dy)/(ctx.dy*ctx.r), (+2, +1): lambda ctx: -1/2*ctx.ej*ctx.dx*ctx.n1*ctx.n2/ctx.dy, (+3, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r/ctx.dy, (+3, +0): lambda ctx: ctx.r*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.r + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 + ctx.ep*ctx.dy)/(ctx.dy*(ctx.r + 1))},
-]
-_case3_sc8_eta_p1_offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
-_case3_sc8_eta_p1_row_ifaces = ("B", "R", "extra")
-_case3_sc8_eta_p1 = {
-    'M': _case3_sc8_eta_p1_M, 'd': _case3_sc8_eta_p1_d, 'N': _case3_sc8_eta_p1_N,
-    'offsets': _case3_sc8_eta_p1_offsets, 'row_ifaces': _case3_sc8_eta_p1_row_ifaces,
-}
-CASE3_EVAL[(8, 1)] = _case3_sc8_eta_p1
-
-# case4 sub-case 1, eta sign -1
-_case4_sc1_eta_m1_M = [
-    [lambda ctx: ctx.ej*ctx.n2*(ctx.dx*ctx.n1*ctx.L*ctx.R - ctx.dx*ctx.n1*ctx.R - ctx.dy*ctx.n2*ctx.L - 2*ctx.dy*ctx.n2*ctx.R)/(ctx.dy*ctx.R*(ctx.L + ctx.R)) - ctx.em*(ctx.L + 2*ctx.R)/(ctx.R*(ctx.L + ctx.R)) + ctx.ep*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)), lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1)), lambda ctx: -ctx.ej*ctx.n2*ctx.R*(ctx.dx*ctx.n1*ctx.R + ctx.dx*ctx.n1 + ctx.dy*ctx.n2)/(ctx.dy*ctx.L*(ctx.L + ctx.R)) - ctx.em*ctx.R/(ctx.L*(ctx.L + ctx.R))],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L - ctx.T)/(ctx.dx*ctx.R*(ctx.L + ctx.R)), lambda ctx: ctx.ep*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) - (2*ctx.T + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.T*(ctx.T + 1)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dx*ctx.L*(ctx.L + ctx.R))],
-    [lambda ctx: -ctx.ej*ctx.n2*ctx.L*(ctx.dx*ctx.n1*ctx.L - ctx.dx*ctx.n1 - ctx.dy*ctx.n2)/(ctx.dy*ctx.R*(ctx.L + ctx.R)) + ctx.em*ctx.L/(ctx.R*(ctx.L + ctx.R)), lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1)), lambda ctx: ctx.ej*ctx.n2*(ctx.dx*ctx.n1*ctx.L*ctx.R + ctx.dx*ctx.n1*ctx.L + 2*ctx.dy*ctx.n2*ctx.L + ctx.dy*ctx.n2*ctx.R)/(ctx.dy*ctx.L*(ctx.L + ctx.R)) + ctx.em*(2*ctx.L + ctx.R)/(ctx.L*(ctx.L + ctx.R)) - ctx.ep*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1))],
-]
-_case4_sc1_eta_m1_d = [lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 - ctx.av*ctx.ep*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 - ctx.av*ctx.ep*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 + ctx.av*ctx.ep*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case4_sc1_eta_m1_N = [
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (+0, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R**2*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.L*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.R*ctx.T - ctx.em*ctx.dy*ctx.L*ctx.T - ctx.em*ctx.dy*ctx.R*ctx.T)/(ctx.dy*ctx.L*ctx.R*ctx.T), (+1, +0): lambda ctx: -ctx.ep*(ctx.R - 2)/(ctx.R - 1), (+2, +0): lambda ctx: ctx.ep*(ctx.R - 1)/(ctx.R - 2)},
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (+0, -1): lambda ctx: ctx.T*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.R*ctx.T + ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T**2 + ctx.em*ctx.dx*ctx.L*ctx.R*ctx.T + ctx.em*ctx.dx*ctx.L*ctx.R)/(ctx.dx*ctx.L*ctx.R*ctx.T), (+0, +1): lambda ctx: -ctx.ep*(ctx.T - 2)/(ctx.T - 1), (+0, +2): lambda ctx: ctx.ep*(ctx.T - 1)/(ctx.T - 2)},
-    {(-2, +0): lambda ctx: -ctx.ep*(ctx.L - 1)/(ctx.L - 2), (-1, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy, (-1, +0): lambda ctx: ctx.ep*(ctx.L - 2)/(ctx.L - 1), (+0, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L - ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L**2*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.L*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.R*ctx.T - ctx.em*ctx.dy*ctx.L*ctx.T - ctx.em*ctx.dy*ctx.R*ctx.T)/(ctx.dy*ctx.L*ctx.R*ctx.T)},
-]
-_case4_sc1_eta_m1_offsets = [(-2, +0), (-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
-_case4_sc1_eta_m1_row_ifaces = ("R", "T", "L")
-_case4_sc1_eta_m1 = {
-    'M': _case4_sc1_eta_m1_M, 'd': _case4_sc1_eta_m1_d, 'N': _case4_sc1_eta_m1_N,
-    'offsets': _case4_sc1_eta_m1_offsets, 'row_ifaces': _case4_sc1_eta_m1_row_ifaces,
-}
-CASE4_EVAL[(1, -1)] = _case4_sc1_eta_m1
-
-# case4 sub-case 1, eta sign +1
-_case4_sc1_eta_p1_M = [
-    [lambda ctx: ctx.ej*ctx.n2*(ctx.dx*ctx.n1*ctx.L*ctx.R - ctx.dx*ctx.n1*ctx.R - ctx.dy*ctx.n2*ctx.L - 2*ctx.dy*ctx.n2*ctx.R)/(ctx.dy*ctx.R*(ctx.L + ctx.R)) - ctx.em*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.ep*(ctx.L + 2*ctx.R)/(ctx.R*(ctx.L + ctx.R)), lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1)), lambda ctx: -ctx.ej*ctx.n2*ctx.R*(ctx.dx*ctx.n1*ctx.R + ctx.dx*ctx.n1 + ctx.dy*ctx.n2)/(ctx.dy*ctx.L*(ctx.L + ctx.R)) + ctx.ep*ctx.R/(ctx.L*(ctx.L + ctx.R))],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L - ctx.T)/(ctx.dx*ctx.R*(ctx.L + ctx.R)), lambda ctx: -ctx.em*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) - (2*ctx.T + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.T*(ctx.T + 1)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dx*ctx.L*(ctx.L + ctx.R))],
-    [lambda ctx: -ctx.ej*ctx.n2*ctx.L*(ctx.dx*ctx.n1*ctx.L - ctx.dx*ctx.n1 - ctx.dy*ctx.n2)/(ctx.dy*ctx.R*(ctx.L + ctx.R)) - ctx.ep*ctx.L/(ctx.R*(ctx.L + ctx.R)), lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.T*(ctx.T + 1)), lambda ctx: ctx.ej*ctx.n2*(ctx.dx*ctx.n1*ctx.L*ctx.R + ctx.dx*ctx.n1*ctx.L + 2*ctx.dy*ctx.n2*ctx.L + ctx.dy*ctx.n2*ctx.R)/(ctx.dy*ctx.L*(ctx.L + ctx.R)) + ctx.em*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) - ctx.ep*(2*ctx.L + ctx.R)/(ctx.L*(ctx.L + ctx.R))],
-]
-_case4_sc1_eta_p1_d = [lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 - ctx.av*ctx.em*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 - ctx.av*ctx.em*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 + ctx.av*ctx.em*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case4_sc1_eta_p1_N = [
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (+0, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.R*ctx.T + ctx.R + ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R**2*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.L*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.R*ctx.T + ctx.ep*ctx.dy*ctx.L*ctx.T + ctx.ep*ctx.dy*ctx.R*ctx.T)/(ctx.dy*ctx.L*ctx.R*ctx.T), (+1, +0): lambda ctx: ctx.em*(ctx.R - 2)/(ctx.R - 1), (+2, +0): lambda ctx: -ctx.em*(ctx.R - 1)/(ctx.R - 2)},
-    {(-1, -1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (+0, -1): lambda ctx: ctx.T*(ctx.ej*ctx.dx*ctx.n1**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.R*ctx.T + ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T**2 - ctx.ep*ctx.dx*ctx.L*ctx.R*ctx.T - ctx.ep*ctx.dx*ctx.L*ctx.R)/(ctx.dx*ctx.L*ctx.R*ctx.T), (+0, +1): lambda ctx: ctx.em*(ctx.T - 2)/(ctx.T - 1), (+0, +2): lambda ctx: -ctx.em*(ctx.T - 1)/(ctx.T - 2)},
-    {(-2, +0): lambda ctx: ctx.em*(ctx.L - 1)/(ctx.L - 2), (-1, -1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy, (-1, +0): lambda ctx: -ctx.em*(ctx.L - 2)/(ctx.L - 1), (+0, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L - ctx.T)/(ctx.dy*(ctx.T + 1)), (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L**2*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.L*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.R*ctx.T + ctx.ep*ctx.dy*ctx.L*ctx.T + ctx.ep*ctx.dy*ctx.R*ctx.T)/(ctx.dy*ctx.L*ctx.R*ctx.T)},
-]
-_case4_sc1_eta_p1_offsets = [(-2, +0), (-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
-_case4_sc1_eta_p1_row_ifaces = ("R", "T", "L")
-_case4_sc1_eta_p1 = {
-    'M': _case4_sc1_eta_p1_M, 'd': _case4_sc1_eta_p1_d, 'N': _case4_sc1_eta_p1_N,
-    'offsets': _case4_sc1_eta_p1_offsets, 'row_ifaces': _case4_sc1_eta_p1_row_ifaces,
-}
-CASE4_EVAL[(1, 1)] = _case4_sc1_eta_p1
-
-# case4 sub-case 2, eta sign -1
-_case4_sc2_eta_m1_M = [
-    [lambda ctx: ctx.ep*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) - (2*ctx.R + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.R*(ctx.R + 1)), lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dy*ctx.T*(ctx.B + ctx.T)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.R*ctx.T - ctx.R + ctx.T)/(ctx.dy*ctx.B*(ctx.B + ctx.T))],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), lambda ctx: -ctx.ej*ctx.n1*(ctx.dx*ctx.n1*ctx.B + 2*ctx.dx*ctx.n1*ctx.T - ctx.dy*ctx.n2*ctx.B*ctx.T - ctx.dy*ctx.n2*ctx.T)/(ctx.dx*ctx.T*(ctx.B + ctx.T)) - ctx.em*(ctx.B + 2*ctx.T)/(ctx.T*(ctx.B + ctx.T)) + ctx.ep*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)), lambda ctx: -ctx.ej*ctx.n1*ctx.T*(ctx.dx*ctx.n1 + ctx.dy*ctx.n2*ctx.T - ctx.dy*ctx.n2)/(ctx.dx*ctx.B*(ctx.B + ctx.T)) - ctx.em*ctx.T/(ctx.B*(ctx.B + ctx.T))],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), lambda ctx: ctx.ej*ctx.n1*ctx.B*(ctx.dx*ctx.n1 - ctx.dy*ctx.n2*ctx.B - ctx.dy*ctx.n2)/(ctx.dx*ctx.T*(ctx.B + ctx.T)) + ctx.em*ctx.B/(ctx.T*(ctx.B + ctx.T)), lambda ctx: ctx.ej*ctx.n1*(2*ctx.dx*ctx.n1*ctx.B + ctx.dx*ctx.n1*ctx.T + ctx.dy*ctx.n2*ctx.B*ctx.T - ctx.dy*ctx.n2*ctx.B)/(ctx.dx*ctx.B*(ctx.B + ctx.T)) + ctx.em*(2*ctx.B + ctx.T)/(ctx.B*(ctx.B + ctx.T)) - ctx.ep*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1))],
-]
-_case4_sc2_eta_m1_d = [lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 - ctx.av*ctx.ep*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 - ctx.av*ctx.ep*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 + ctx.av*ctx.ep*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case4_sc2_eta_m1_N = [
-    {(-1, +0): lambda ctx: -ctx.R*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 - ctx.em*ctx.dy)/(ctx.dy*(ctx.R + 1)), (-1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R**2*ctx.T + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R**2 - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.T - ctx.em*ctx.dy*ctx.B*ctx.R*ctx.T - ctx.em*ctx.dy*ctx.B*ctx.T)/(ctx.dy*ctx.B*ctx.R*ctx.T), (+1, +0): lambda ctx: -ctx.ep*(ctx.R - 2)/(ctx.R - 1), (+2, +0): lambda ctx: ctx.ep*(ctx.R - 1)/(ctx.R - 2)},
-    {(-1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.R*ctx.T - ctx.R + ctx.T)/(ctx.dx*(ctx.R + 1)), (-1, +1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.R + ctx.ej*ctx.dx*ctx.n1**2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T + ctx.em*ctx.dx*ctx.B*ctx.R + ctx.em*ctx.dx*ctx.R*ctx.T)/(ctx.dx*ctx.B*ctx.R*ctx.T), (+0, +1): lambda ctx: -ctx.ep*(ctx.T - 2)/(ctx.T - 1), (+0, +2): lambda ctx: ctx.ep*(ctx.T - 1)/(ctx.T - 2)},
-    {(-1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dx*(ctx.R + 1)), (-1, +1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx, (+0, -2): lambda ctx: -ctx.ep*(ctx.B - 1)/(ctx.B - 2), (+0, -1): lambda ctx: ctx.ep*(ctx.B - 2)/(ctx.B - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.R + ctx.ej*ctx.dx*ctx.n1**2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.T + ctx.em*ctx.dx*ctx.B*ctx.R + ctx.em*ctx.dx*ctx.R*ctx.T)/(ctx.dx*ctx.B*ctx.R*ctx.T)},
-]
-_case4_sc2_eta_m1_offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
-_case4_sc2_eta_m1_row_ifaces = ("R", "T", "B")
-_case4_sc2_eta_m1 = {
-    'M': _case4_sc2_eta_m1_M, 'd': _case4_sc2_eta_m1_d, 'N': _case4_sc2_eta_m1_N,
-    'offsets': _case4_sc2_eta_m1_offsets, 'row_ifaces': _case4_sc2_eta_m1_row_ifaces,
-}
-CASE4_EVAL[(2, -1)] = _case4_sc2_eta_m1
-
-# case4 sub-case 2, eta sign +1
-_case4_sc2_eta_p1_M = [
-    [lambda ctx: -ctx.em*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) - (2*ctx.R + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.R*(ctx.R + 1)), lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dy*ctx.T*(ctx.B + ctx.T)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.R*ctx.T - ctx.R + ctx.T)/(ctx.dy*ctx.B*(ctx.B + ctx.T))],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), lambda ctx: -ctx.ej*ctx.n1*(ctx.dx*ctx.n1*ctx.B + 2*ctx.dx*ctx.n1*ctx.T - ctx.dy*ctx.n2*ctx.B*ctx.T - ctx.dy*ctx.n2*ctx.T)/(ctx.dx*ctx.T*(ctx.B + ctx.T)) - ctx.em*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.ep*(ctx.B + 2*ctx.T)/(ctx.T*(ctx.B + ctx.T)), lambda ctx: -ctx.ej*ctx.n1*ctx.T*(ctx.dx*ctx.n1 + ctx.dy*ctx.n2*ctx.T - ctx.dy*ctx.n2)/(ctx.dx*ctx.B*(ctx.B + ctx.T)) + ctx.ep*ctx.T/(ctx.B*(ctx.B + ctx.T))],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.R*(ctx.R + 1)), lambda ctx: ctx.ej*ctx.n1*ctx.B*(ctx.dx*ctx.n1 - ctx.dy*ctx.n2*ctx.B - ctx.dy*ctx.n2)/(ctx.dx*ctx.T*(ctx.B + ctx.T)) - ctx.ep*ctx.B/(ctx.T*(ctx.B + ctx.T)), lambda ctx: ctx.ej*ctx.n1*(2*ctx.dx*ctx.n1*ctx.B + ctx.dx*ctx.n1*ctx.T + ctx.dy*ctx.n2*ctx.B*ctx.T - ctx.dy*ctx.n2*ctx.B)/(ctx.dx*ctx.B*(ctx.B + ctx.T)) + ctx.em*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) - ctx.ep*(2*ctx.B + ctx.T)/(ctx.B*(ctx.B + ctx.T))],
-]
-_case4_sc2_eta_p1_d = [lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 - ctx.av*ctx.em*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 - ctx.av*ctx.em*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 + ctx.av*ctx.em*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + ctx.bv*ctx.dy*ctx.n2]
-_case4_sc2_eta_p1_N = [
-    {(-1, +0): lambda ctx: -ctx.R*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 + ctx.ep*ctx.dy)/(ctx.dy*(ctx.R + 1)), (-1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R**2*ctx.T + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R**2 - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.T + ctx.ep*ctx.dy*ctx.B*ctx.R*ctx.T + ctx.ep*ctx.dy*ctx.B*ctx.T)/(ctx.dy*ctx.B*ctx.R*ctx.T), (+1, +0): lambda ctx: ctx.em*(ctx.R - 2)/(ctx.R - 1), (+2, +0): lambda ctx: -ctx.em*(ctx.R - 1)/(ctx.R - 2)},
-    {(-1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.R*ctx.T - ctx.R + ctx.T)/(ctx.dx*(ctx.R + 1)), (-1, +1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.R + ctx.ej*ctx.dx*ctx.n1**2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.R*ctx.T - ctx.ep*ctx.dx*ctx.B*ctx.R - ctx.ep*ctx.dx*ctx.R*ctx.T)/(ctx.dx*ctx.B*ctx.R*ctx.T), (+0, +1): lambda ctx: ctx.em*(ctx.T - 2)/(ctx.T - 1), (+0, +2): lambda ctx: -ctx.em*(ctx.T - 1)/(ctx.T - 2)},
-    {(-1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dx*(ctx.R + 1)), (-1, +1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx, (+0, -2): lambda ctx: ctx.em*(ctx.B - 1)/(ctx.B - 2), (+0, -1): lambda ctx: -ctx.em*(ctx.B - 2)/(ctx.B - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.R + ctx.ej*ctx.dx*ctx.n1**2*ctx.R*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.T - ctx.ep*ctx.dx*ctx.B*ctx.R - ctx.ep*ctx.dx*ctx.R*ctx.T)/(ctx.dx*ctx.B*ctx.R*ctx.T)},
-]
-_case4_sc2_eta_p1_offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
-_case4_sc2_eta_p1_row_ifaces = ("R", "T", "B")
-_case4_sc2_eta_p1 = {
-    'M': _case4_sc2_eta_p1_M, 'd': _case4_sc2_eta_p1_d, 'N': _case4_sc2_eta_p1_N,
-    'offsets': _case4_sc2_eta_p1_offsets, 'row_ifaces': _case4_sc2_eta_p1_row_ifaces,
-}
-CASE4_EVAL[(2, 1)] = _case4_sc2_eta_p1
-
-# case4 sub-case 3, eta sign -1
-_case4_sc3_eta_m1_M = [
-    [lambda ctx: -ctx.ej*ctx.n2*(ctx.dx*ctx.n1*ctx.L*ctx.R - ctx.dx*ctx.n1*ctx.R + ctx.dy*ctx.n2*ctx.L + 2*ctx.dy*ctx.n2*ctx.R)/(ctx.dy*ctx.R*(ctx.L + ctx.R)) - ctx.em*(ctx.L + 2*ctx.R)/(ctx.R*(ctx.L + ctx.R)) + ctx.ep*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), lambda ctx: ctx.ej*ctx.n2*ctx.R*(ctx.dx*ctx.n1*ctx.R + ctx.dx*ctx.n1 - ctx.dy*ctx.n2)/(ctx.dy*ctx.L*(ctx.L + ctx.R)) - ctx.em*ctx.R/(ctx.L*(ctx.L + ctx.R))],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.L - ctx.B + ctx.L)/(ctx.dx*ctx.R*(ctx.L + ctx.R)), lambda ctx: -ctx.ep*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + (2*ctx.B + 1)*(ctx.ej*ctx.n1**2 + ctx.em)/(ctx.B*(ctx.B + 1)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dx*ctx.L*(ctx.L + ctx.R))],
-    [lambda ctx: ctx.ej*ctx.n2*ctx.L*(ctx.dx*ctx.n1*ctx.L - ctx.dx*ctx.n1 + ctx.dy*ctx.n2)/(ctx.dy*ctx.R*(ctx.L + ctx.R)) + ctx.em*ctx.L/(ctx.R*(ctx.L + ctx.R)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), lambda ctx: -ctx.ej*ctx.n2*(ctx.dx*ctx.n1*ctx.L*ctx.R + ctx.dx*ctx.n1*ctx.L - 2*ctx.dy*ctx.n2*ctx.L - ctx.dy*ctx.n2*ctx.R)/(ctx.dy*ctx.L*(ctx.L + ctx.R)) + ctx.em*(2*ctx.L + ctx.R)/(ctx.L*(ctx.L + ctx.R)) - ctx.ep*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1))],
-]
-_case4_sc3_eta_m1_d = [lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 - ctx.av*ctx.ep*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 + ctx.av*ctx.ep*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 + ctx.av*ctx.ep*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case4_sc3_eta_m1_N = [
-    {(-1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.R - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.L - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.R - ctx.em*ctx.dy*ctx.B*ctx.L - ctx.em*ctx.dy*ctx.B*ctx.R)/(ctx.dy*ctx.B*ctx.L*ctx.R), (+0, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dy*(ctx.B + 1)), (+1, +0): lambda ctx: -ctx.ep*(ctx.R - 2)/(ctx.R - 1), (+2, +0): lambda ctx: ctx.ep*(ctx.R - 1)/(ctx.R - 2)},
-    {(-1, +1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx, (+0, -2): lambda ctx: -ctx.ep*(ctx.B - 1)/(ctx.B - 2), (+0, -1): lambda ctx: ctx.ep*(ctx.B - 2)/(ctx.B - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.L*ctx.R + ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.R + ctx.em*ctx.dx*ctx.B*ctx.L*ctx.R + ctx.em*ctx.dx*ctx.L*ctx.R)/(ctx.dx*ctx.B*ctx.L*ctx.R), (+0, +1): lambda ctx: -ctx.B*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B - ctx.ej*ctx.dy*ctx.n1*ctx.n2 + ctx.em*ctx.dx)/(ctx.dx*(ctx.B + 1))},
-    {(-2, +0): lambda ctx: -ctx.ep*(ctx.L - 1)/(ctx.L - 2), (-1, +0): lambda ctx: ctx.ep*(ctx.L - 2)/(ctx.L - 1), (-1, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy, (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L**2 - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.R + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.L + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.R + ctx.em*ctx.dy*ctx.B*ctx.L + ctx.em*ctx.dy*ctx.B*ctx.R)/(ctx.dy*ctx.B*ctx.L*ctx.R), (+0, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.L - ctx.B + ctx.L)/(ctx.dy*(ctx.B + 1))},
-]
-_case4_sc3_eta_m1_offsets = [(-2, +0), (-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, +0)]
-_case4_sc3_eta_m1_row_ifaces = ("R", "B", "L")
-_case4_sc3_eta_m1 = {
-    'M': _case4_sc3_eta_m1_M, 'd': _case4_sc3_eta_m1_d, 'N': _case4_sc3_eta_m1_N,
-    'offsets': _case4_sc3_eta_m1_offsets, 'row_ifaces': _case4_sc3_eta_m1_row_ifaces,
-}
-CASE4_EVAL[(3, -1)] = _case4_sc3_eta_m1
-
-# case4 sub-case 3, eta sign +1
-_case4_sc3_eta_p1_M = [
-    [lambda ctx: -ctx.ej*ctx.n2*(ctx.dx*ctx.n1*ctx.L*ctx.R - ctx.dx*ctx.n1*ctx.R + ctx.dy*ctx.n2*ctx.L + 2*ctx.dy*ctx.n2*ctx.R)/(ctx.dy*ctx.R*(ctx.L + ctx.R)) - ctx.em*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.ep*(ctx.L + 2*ctx.R)/(ctx.R*(ctx.L + ctx.R)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), lambda ctx: ctx.ej*ctx.n2*ctx.R*(ctx.dx*ctx.n1*ctx.R + ctx.dx*ctx.n1 - ctx.dy*ctx.n2)/(ctx.dy*ctx.L*(ctx.L + ctx.R)) + ctx.ep*ctx.R/(ctx.L*(ctx.L + ctx.R))],
-    [lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.L - ctx.B + ctx.L)/(ctx.dx*ctx.R*(ctx.L + ctx.R)), lambda ctx: ctx.em*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + (2*ctx.B + 1)*(ctx.ej*ctx.n1**2 - ctx.ep)/(ctx.B*(ctx.B + 1)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dx*ctx.L*(ctx.L + ctx.R))],
-    [lambda ctx: ctx.ej*ctx.n2*ctx.L*(ctx.dx*ctx.n1*ctx.L - ctx.dx*ctx.n1 + ctx.dy*ctx.n2)/(ctx.dy*ctx.R*(ctx.L + ctx.R)) - ctx.ep*ctx.L/(ctx.R*(ctx.L + ctx.R)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2/(ctx.dy*ctx.B*(ctx.B + 1)), lambda ctx: -ctx.ej*ctx.n2*(ctx.dx*ctx.n1*ctx.L*ctx.R + ctx.dx*ctx.n1*ctx.L - 2*ctx.dy*ctx.n2*ctx.L - ctx.dy*ctx.n2*ctx.R)/(ctx.dy*ctx.L*(ctx.L + ctx.R)) + ctx.em*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) - ctx.ep*(2*ctx.L + ctx.R)/(ctx.L*(ctx.L + ctx.R))],
-]
-_case4_sc3_eta_p1_d = [lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 - ctx.av*ctx.em*(2*ctx.R - 3)/((ctx.R - 2)*(ctx.R - 1)) + ctx.bv*ctx.dx*ctx.n1, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 + ctx.av*ctx.em*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 + ctx.av*ctx.em*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case4_sc3_eta_p1_N = [
-    {(-1, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.R/ctx.dy, (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.R - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.R - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.L - ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.R + ctx.ep*ctx.dy*ctx.B*ctx.L + ctx.ep*ctx.dy*ctx.B*ctx.R)/(ctx.dy*ctx.B*ctx.L*ctx.R), (+0, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.R + ctx.B + ctx.R)/(ctx.dy*(ctx.B + 1)), (+1, +0): lambda ctx: ctx.em*(ctx.R - 2)/(ctx.R - 1), (+2, +0): lambda ctx: -ctx.em*(ctx.R - 1)/(ctx.R - 2)},
-    {(-1, +1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx, (+0, -2): lambda ctx: ctx.em*(ctx.B - 1)/(ctx.B - 2), (+0, -1): lambda ctx: -ctx.em*(ctx.B - 2)/(ctx.B - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.L*ctx.R + ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.R + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.R - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2 + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.R - ctx.ep*ctx.dx*ctx.B*ctx.L*ctx.R - ctx.ep*ctx.dx*ctx.L*ctx.R)/(ctx.dx*ctx.B*ctx.L*ctx.R), (+0, +1): lambda ctx: -ctx.B*(ctx.ej*ctx.dx*ctx.n1**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B - ctx.ej*ctx.dy*ctx.n1*ctx.n2 - ctx.ep*ctx.dx)/(ctx.dx*(ctx.B + 1))},
-    {(-2, +0): lambda ctx: ctx.em*(ctx.L - 1)/(ctx.L - 2), (-1, +0): lambda ctx: -ctx.em*(ctx.L - 2)/(ctx.L - 1), (-1, +1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy, (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L**2 - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.R + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.L + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.R - ctx.ep*ctx.dy*ctx.B*ctx.L - ctx.ep*ctx.dy*ctx.B*ctx.R)/(ctx.dy*ctx.B*ctx.L*ctx.R), (+0, +1): lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.L - ctx.B + ctx.L)/(ctx.dy*(ctx.B + 1))},
-]
-_case4_sc3_eta_p1_offsets = [(-2, +0), (-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, +0)]
-_case4_sc3_eta_p1_row_ifaces = ("R", "B", "L")
-_case4_sc3_eta_p1 = {
-    'M': _case4_sc3_eta_p1_M, 'd': _case4_sc3_eta_p1_d, 'N': _case4_sc3_eta_p1_N,
-    'offsets': _case4_sc3_eta_p1_offsets, 'row_ifaces': _case4_sc3_eta_p1_row_ifaces,
-}
-CASE4_EVAL[(3, 1)] = _case4_sc3_eta_p1
-
-# case4 sub-case 4, eta sign -1
-_case4_sc4_eta_m1_M = [
-    [lambda ctx: -ctx.ej*ctx.n1*(ctx.dx*ctx.n1*ctx.B + 2*ctx.dx*ctx.n1*ctx.T + ctx.dy*ctx.n2*ctx.B*ctx.T - ctx.dy*ctx.n2*ctx.T)/(ctx.dx*ctx.T*(ctx.B + ctx.T)) - ctx.em*(ctx.B + 2*ctx.T)/(ctx.T*(ctx.B + ctx.T)) + ctx.ep*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)), lambda ctx: -ctx.ej*ctx.n1*ctx.T*(ctx.dx*ctx.n1 - ctx.dy*ctx.n2*ctx.T - ctx.dy*ctx.n2)/(ctx.dx*ctx.B*(ctx.B + ctx.T)) - ctx.em*ctx.T/(ctx.B*(ctx.B + ctx.T)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1))],
-    [lambda ctx: ctx.ej*ctx.n1*ctx.B*(ctx.dx*ctx.n1 + ctx.dy*ctx.n2*ctx.B - ctx.dy*ctx.n2)/(ctx.dx*ctx.T*(ctx.B + ctx.T)) + ctx.em*ctx.B/(ctx.T*(ctx.B + ctx.T)), lambda ctx: ctx.ej*ctx.n1*(2*ctx.dx*ctx.n1*ctx.B + ctx.dx*ctx.n1*ctx.T - ctx.dy*ctx.n2*ctx.B*ctx.T - ctx.dy*ctx.n2*ctx.B)/(ctx.dx*ctx.B*(ctx.B + ctx.T)) + ctx.em*(2*ctx.B + ctx.T)/(ctx.B*(ctx.B + ctx.T)) - ctx.ep*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1))],
-    [lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B - ctx.L)/(ctx.dy*ctx.T*(ctx.B + ctx.T)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dy*ctx.B*(ctx.B + ctx.T)), lambda ctx: -ctx.ep*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + (2*ctx.L + 1)*(ctx.ej*ctx.n2**2 + ctx.em)/(ctx.L*(ctx.L + 1))],
-]
-_case4_sc4_eta_m1_d = [lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 - ctx.av*ctx.ep*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: ctx.at*ctx.ep*ctx.dy*ctx.n1 + ctx.av*ctx.ep*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.ep*ctx.dx*ctx.n2 + ctx.av*ctx.ep*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case4_sc4_eta_m1_N = [
-    {(+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.L + ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T + ctx.em*ctx.dx*ctx.B*ctx.L + ctx.em*ctx.dx*ctx.L*ctx.T)/(ctx.dx*ctx.B*ctx.L*ctx.T), (+0, +1): lambda ctx: -ctx.ep*(ctx.T - 2)/(ctx.T - 1), (+0, +2): lambda ctx: ctx.ep*(ctx.T - 1)/(ctx.T - 2), (+1, -1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (+1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dx*(ctx.L + 1))},
-    {(+0, -2): lambda ctx: -ctx.ep*(ctx.B - 1)/(ctx.B - 2), (+0, -1): lambda ctx: ctx.ep*(ctx.B - 2)/(ctx.B - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.L + ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.T + ctx.em*ctx.dx*ctx.B*ctx.L + ctx.em*ctx.dx*ctx.L*ctx.T)/(ctx.dx*ctx.B*ctx.L*ctx.T), (+1, -1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx, (+1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B - ctx.L)/(ctx.dx*(ctx.L + 1))},
-    {(-2, +0): lambda ctx: -ctx.ep*(ctx.L - 1)/(ctx.L - 2), (-1, +0): lambda ctx: ctx.ep*(ctx.L - 2)/(ctx.L - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L**2*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L**2 - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.T + ctx.em*ctx.dy*ctx.B*ctx.L*ctx.T + ctx.em*ctx.dy*ctx.B*ctx.T)/(ctx.dy*ctx.B*ctx.L*ctx.T), (+1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy, (+1, +0): lambda ctx: ctx.L*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 - ctx.em*ctx.dy)/(ctx.dy*(ctx.L + 1))},
-]
-_case4_sc4_eta_m1_offsets = [(-2, +0), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
-_case4_sc4_eta_m1_row_ifaces = ("T", "B", "L")
-_case4_sc4_eta_m1 = {
-    'M': _case4_sc4_eta_m1_M, 'd': _case4_sc4_eta_m1_d, 'N': _case4_sc4_eta_m1_N,
-    'offsets': _case4_sc4_eta_m1_offsets, 'row_ifaces': _case4_sc4_eta_m1_row_ifaces,
-}
-CASE4_EVAL[(4, -1)] = _case4_sc4_eta_m1
-
-# case4 sub-case 4, eta sign +1
-_case4_sc4_eta_p1_M = [
-    [lambda ctx: -ctx.ej*ctx.n1*(ctx.dx*ctx.n1*ctx.B + 2*ctx.dx*ctx.n1*ctx.T + ctx.dy*ctx.n2*ctx.B*ctx.T - ctx.dy*ctx.n2*ctx.T)/(ctx.dx*ctx.T*(ctx.B + ctx.T)) - ctx.em*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.ep*(ctx.B + 2*ctx.T)/(ctx.T*(ctx.B + ctx.T)), lambda ctx: -ctx.ej*ctx.n1*ctx.T*(ctx.dx*ctx.n1 - ctx.dy*ctx.n2*ctx.T - ctx.dy*ctx.n2)/(ctx.dx*ctx.B*(ctx.B + ctx.T)) + ctx.ep*ctx.T/(ctx.B*(ctx.B + ctx.T)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1))],
-    [lambda ctx: ctx.ej*ctx.n1*ctx.B*(ctx.dx*ctx.n1 + ctx.dy*ctx.n2*ctx.B - ctx.dy*ctx.n2)/(ctx.dx*ctx.T*(ctx.B + ctx.T)) - ctx.ep*ctx.B/(ctx.T*(ctx.B + ctx.T)), lambda ctx: ctx.ej*ctx.n1*(2*ctx.dx*ctx.n1*ctx.B + ctx.dx*ctx.n1*ctx.T - ctx.dy*ctx.n2*ctx.B*ctx.T - ctx.dy*ctx.n2*ctx.B)/(ctx.dx*ctx.B*(ctx.B + ctx.T)) + ctx.em*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) - ctx.ep*(2*ctx.B + ctx.T)/(ctx.B*(ctx.B + ctx.T)), lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2/(ctx.dx*ctx.L*(ctx.L + 1))],
-    [lambda ctx: ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B - ctx.L)/(ctx.dy*ctx.T*(ctx.B + ctx.T)), lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dy*ctx.B*(ctx.B + ctx.T)), lambda ctx: ctx.em*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + (2*ctx.L + 1)*(ctx.ej*ctx.n2**2 - ctx.ep)/(ctx.L*(ctx.L + 1))],
-]
-_case4_sc4_eta_p1_d = [lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 - ctx.av*ctx.em*(2*ctx.T - 3)/((ctx.T - 2)*(ctx.T - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: ctx.at*ctx.em*ctx.dy*ctx.n1 + ctx.av*ctx.em*(2*ctx.B - 3)/((ctx.B - 2)*(ctx.B - 1)) + ctx.bv*ctx.dy*ctx.n2, lambda ctx: -ctx.at*ctx.em*ctx.dx*ctx.n2 + ctx.av*ctx.em*(2*ctx.L - 3)/((ctx.L - 2)*(ctx.L - 1)) + ctx.bv*ctx.dx*ctx.n1]
-_case4_sc4_eta_p1_N = [
-    {(+0, +0): lambda ctx: -(ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.L + ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.T - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T**2 - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.L*ctx.T - ctx.ep*ctx.dx*ctx.B*ctx.L - ctx.ep*ctx.dx*ctx.L*ctx.T)/(ctx.dx*ctx.B*ctx.L*ctx.T), (+0, +1): lambda ctx: ctx.em*(ctx.T - 2)/(ctx.T - 1), (+0, +2): lambda ctx: -ctx.em*(ctx.T - 1)/(ctx.T - 2), (+1, -1): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.T/ctx.dx, (+1, +0): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.L*ctx.T + ctx.L + ctx.T)/(ctx.dx*(ctx.L + 1))},
-    {(+0, -2): lambda ctx: ctx.em*(ctx.B - 1)/(ctx.B - 2), (+0, -1): lambda ctx: -ctx.em*(ctx.B - 2)/(ctx.B - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1**2*ctx.B*ctx.L + ctx.ej*ctx.dx*ctx.n1**2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B**2*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B*ctx.T - ctx.ep*ctx.dx*ctx.B*ctx.L - ctx.ep*ctx.dx*ctx.L*ctx.T)/(ctx.dx*ctx.B*ctx.L*ctx.T), (+1, -1): lambda ctx: -ctx.ej*ctx.dy*ctx.n1*ctx.n2*ctx.B/ctx.dx, (+1, +0): lambda ctx: ctx.ej*ctx.dy*ctx.n1*ctx.n2*(ctx.B*ctx.L + ctx.B - ctx.L)/(ctx.dx*(ctx.L + 1))},
-    {(-2, +0): lambda ctx: ctx.em*(ctx.L - 1)/(ctx.L - 2), (-1, +0): lambda ctx: -ctx.em*(ctx.L - 2)/(ctx.L - 1), (+0, +0): lambda ctx: (ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L**2 + ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.B*ctx.L - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L**2*ctx.T - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L**2 - ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.L*ctx.T + ctx.ej*ctx.dy*ctx.n2**2*ctx.B*ctx.T - ctx.ep*ctx.dy*ctx.B*ctx.L*ctx.T - ctx.ep*ctx.dy*ctx.B*ctx.T)/(ctx.dy*ctx.B*ctx.L*ctx.T), (+1, -1): lambda ctx: -ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L/ctx.dy, (+1, +0): lambda ctx: ctx.L*(ctx.ej*ctx.dx*ctx.n1*ctx.n2*ctx.L + ctx.ej*ctx.dx*ctx.n1*ctx.n2 - ctx.ej*ctx.dy*ctx.n2**2 + ctx.ep*ctx.dy)/(ctx.dy*(ctx.L + 1))},
-]
-_case4_sc4_eta_p1_offsets = [(-2, +0), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
-_case4_sc4_eta_p1_row_ifaces = ("T", "B", "L")
-_case4_sc4_eta_p1 = {
-    'M': _case4_sc4_eta_p1_M, 'd': _case4_sc4_eta_p1_d, 'N': _case4_sc4_eta_p1_N,
-    'offsets': _case4_sc4_eta_p1_offsets, 'rof_ifaces': _case4_sc4_eta_p1_row_ifaces,
-}
-CASE4_EVAL[(4, 1)] = _case4_sc4_eta_p1
-
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import spsolve
 
@@ -1590,52 +1089,6 @@ def _iface_axis(label, extra):
     return _AXIS_OF_FACE[label]
 
 
-def _build_local_system(eval_data, geom, theta_inputs, betas_per_row):
-    """Evaluate hardcoded M/d/N formulas; return (M_inv_d, M_inv_N, offsets).
-
-    `eval_data`       : dict from CASE3_EVAL or CASE4_EVAL with keys
-                        'M', 'd', 'N', 'offsets', 'row_ifaces'.
-    `geom`            : dict from `_caseN_geometry`, supplying per-interface
-                        n_x, n_y, a, b, a_tau.
-    `theta_inputs`    : dict with keys 'R','T','L','B','r','t','l','b' (1.0
-                        if unused in this sub-case).
-    `betas_per_row`   : list of 3 (beta_p, beta_m, beta_jump) tuples — one
-                        per interface row, sampled AT that interface.
-    """
-    M_funcs = eval_data["M"]
-    d_funcs = eval_data["d"]
-    N_funcs = eval_data["N"]
-    all_offsets = eval_data["offsets"]
-    row_ifaces = eval_data["row_ifaces"]
-
-    M = np.zeros((3, 3))
-    d_vec = np.zeros(3)
-    N = np.zeros((3, len(all_offsets)))
-
-    for i_row in range(3):
-        n1_v, n2_v, a_v, b_v, atau_v = _row_geom_data(geom, row_ifaces[i_row])
-        bp, bm, bj = betas_per_row[i_row]
-        ctx = EvalCtx(
-            R=theta_inputs["R"], T=theta_inputs["T"],
-            L=theta_inputs["L"], B=theta_inputs["B"],
-            r=theta_inputs["r"], t=theta_inputs["t"],
-            l=theta_inputs["l"], b=theta_inputs["b"],
-            n1=n1_v, n2=n2_v,
-            av=a_v, bv=b_v, at=atau_v,
-            ep=bp, em=bm, ej=bj,
-            dx=dx, dy=dy,
-        )
-        for j_col in range(3):
-            M[i_row, j_col] = M_funcs[i_row][j_col](ctx)
-        d_vec[i_row] = d_funcs[i_row](ctx)
-        for k, off in enumerate(all_offsets):
-            if off in N_funcs[i_row]:
-                N[i_row, k] = N_funcs[i_row][off](ctx)
-
-    M_inv_d = np.linalg.solve(M, d_vec)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, all_offsets
-
 
 def _row_betas(geom, row_ifaces, extra=None):
     """Build a list of per-row (bp, bm, bj) by sampling beta at each
@@ -1653,7 +1106,7 @@ def _row_betas(geom, row_ifaces, extra=None):
 
 def _solve_case3_local(sub_case, eta, direction, extra, geom):
     eta_sign = -1 if eta < 0 else +1
-    eval_data = CASE3_EVAL[(sub_case, eta_sign)]
+    func = CASE3_FUNCS[(sub_case, eta_sign)]
 
     theta_inputs = {
         "R": geom["theta_R"], "T": geom["theta_T"],
@@ -1669,25 +1122,1323 @@ def _solve_case3_local(sub_case, eta, direction, extra, geom):
     elif extra == Direction.B:
         theta_inputs["b"] = geom["theta_extra"]
 
-    betas_per_row = _row_betas(geom, eval_data["row_ifaces"], extra=extra)
-    return _build_local_system(
-        eval_data, geom, theta_inputs, betas_per_row,
-    )
+    betas_per_row = _row_betas(geom, CASE3_ROW_IFACES[(sub_case, eta_sign)], extra=extra)
+    return func(geom, theta_inputs, betas_per_row)
 
 
 def _solve_case4_local(sub_case, eta, direction, geom):
     eta_sign = -1 if eta < 0 else +1
-    eval_data = CASE4_EVAL[(sub_case, eta_sign)]
+    func = CASE4_FUNCS[(sub_case, eta_sign)]
 
     theta_inputs = {
         "R": geom["theta_R"], "T": geom["theta_T"],
         "L": geom["theta_L"], "B": geom["theta_B"],
         "r": 1.0, "t": 1.0, "l": 1.0, "b": 1.0,
     }
-    betas_per_row = _row_betas(geom, eval_data["row_ifaces"])
-    return _build_local_system(
-        eval_data, geom, theta_inputs, betas_per_row,
-    )
+    betas_per_row = _row_betas(geom, CASE4_ROW_IFACES[(sub_case, eta_sign)])
+    return func(geom, theta_inputs, betas_per_row)
+
+
+# Generated case functions
+
+def _case3_sc1_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 1, eta < 0.  Row 1 is extra (R,T corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'extra')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'T')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bp_0*_phi_coupled(R, r) - _psi(R) * (bj_0*n2_0**2 + bm_0)
+    M[0, 1] = bp_0*_couple_off_fwd(R, r)
+    M[0, 2] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
+    M[1, 0] = -bp_1*_couple_off_rev(R, r)
+    M[1, 1] = -bp_1*_phi_mirror(R, r) + _psi(r) * (bj_1*n2_1**2 + bm_1)
+    M[2, 0] = bj_2*dy*n1_2*n2_2/(dx*R*(R + 1))
+    M[2, 2] = bp_2*-_phi(T) - _psi(T) * (bj_2*n1_2**2 + bm_2)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bp_0*dx*n2_0 - a_0*bp_0*_couple_avg(R, r) + b_0*dx*n1_0
+    d[1] = -a_tau_1*bp_1*dx*n2_1 + a_1*bp_1*_couple_avg(R, r) + b_1*dx*n1_1
+    d[2] = a_tau_2*bp_2*dy*n1_2 - a_2*bp_2*-_phi(T) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 0] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
+    N[0, 1] = R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 + bm_0*dy)/(dy*(R + 1))  # (-1, +0)
+    N[0, 2] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
+    N[0, 3] = -(bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R*T - bj_0*dx*n1_0*n2_0*R + bj_0*dy*n2_0**2*R*T + bj_0*dy*n2_0**2*T + bm_0*dy*R*T + bm_0*dy*T)/(dy*R*T)  # (+0, +0)
+    N[0, 6] = bp_0*_couple_avg(R, r)  # (+1, +0)
+    N[1, 6] = -bp_1*_couple_avg(R, r)  # (+1, +0)
+    N[1, 7] = (1/2)*bj_1*dx*n1_1*n2_1*(2*r + 1)/dy  # (+2, -1)
+    N[1, 8] = -(bj_1*dx*n1_1*n2_1*r**2 - bj_1*dy*n2_1**2*r - bj_1*dy*n2_1**2 - bm_1*dy*r - bm_1*dy)/(dy*r)  # (+2, +0)
+    N[1, 9] = -1/2*bj_1*dx*n1_1*n2_1/dy  # (+2, +1)
+    N[1, 10] = -bj_1*dx*n1_1*n2_1*r/dy  # (+3, -1)
+    N[1, 11] = r*(bj_1*dx*n1_1*n2_1*r + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 - bm_1*dy)/(dy*(r + 1))  # (+3, +0)
+    N[2, 0] = -bj_2*dy*n1_2*n2_2*T/dx  # (-1, -1)
+    N[2, 1] = bj_2*dy*n1_2*n2_2*(R*T + R + T)/(dx*(R + 1))  # (-1, +0)
+    N[2, 2] = T*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*T + bj_2*dy*n1_2*n2_2 + bm_2*dx)/(dx*(T + 1))  # (+0, -1)
+    N[2, 3] = -(bj_2*dx*n1_2**2*R*T + bj_2*dx*n1_2**2*R + bj_2*dy*n1_2*n2_2*R*T**2 + bj_2*dy*n1_2*n2_2*R*T - bj_2*dy*n1_2*n2_2*T + bm_2*dx*R*T + bm_2*dx*R)/(dx*R*T)  # (+0, +0)
+    N[2, 4] = -bp_2*(T - 2)/(T - 1)  # (+0, +1)
+    N[2, 5] = bp_2*(T - 1)/(T - 2)  # (+0, +2)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc1_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 1, eta > 0.  Row 1 is extra (R,T corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'extra')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'T')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bm_0*_phi_coupled(R, r) - _psi(R) * (bj_0*n2_0**2 - bp_0)
+    M[0, 1] = -bm_0*_couple_off_fwd(R, r)
+    M[0, 2] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
+    M[1, 0] = bm_1*_couple_off_rev(R, r)
+    M[1, 1] = bm_1*_phi_mirror(R, r) + _psi(r) * (bj_1*n2_1**2 - bp_1)
+    M[2, 0] = bj_2*dy*n1_2*n2_2/(dx*R*(R + 1))
+    M[2, 2] = -bm_2*-_phi(T) - _psi(T) * (bj_2*n1_2**2 - bp_2)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bm_0*dx*n2_0 - a_0*bm_0*_couple_avg(R, r) + b_0*dx*n1_0
+    d[1] = -a_tau_1*bm_1*dx*n2_1 + a_1*bm_1*_couple_avg(R, r) + b_1*dx*n1_1
+    d[2] = a_tau_2*bm_2*dy*n1_2 - a_2*bm_2*-_phi(T) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 0] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
+    N[0, 1] = R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 - bp_0*dy)/(dy*(R + 1))  # (-1, +0)
+    N[0, 2] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
+    N[0, 3] = -(bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R*T - bj_0*dx*n1_0*n2_0*R + bj_0*dy*n2_0**2*R*T + bj_0*dy*n2_0**2*T - bp_0*dy*R*T - bp_0*dy*T)/(dy*R*T)  # (+0, +0)
+    N[0, 6] = -bm_0*_couple_avg(R, r)  # (+1, +0)
+    N[1, 6] = bm_1*_couple_avg(R, r)  # (+1, +0)
+    N[1, 7] = (1/2)*bj_1*dx*n1_1*n2_1*(2*r + 1)/dy  # (+2, -1)
+    N[1, 8] = -(bj_1*dx*n1_1*n2_1*r**2 - bj_1*dy*n2_1**2*r - bj_1*dy*n2_1**2 + bp_1*dy*r + bp_1*dy)/(dy*r)  # (+2, +0)
+    N[1, 9] = -1/2*bj_1*dx*n1_1*n2_1/dy  # (+2, +1)
+    N[1, 10] = -bj_1*dx*n1_1*n2_1*r/dy  # (+3, -1)
+    N[1, 11] = r*(bj_1*dx*n1_1*n2_1*r + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 + bp_1*dy)/(dy*(r + 1))  # (+3, +0)
+    N[2, 0] = -bj_2*dy*n1_2*n2_2*T/dx  # (-1, -1)
+    N[2, 1] = bj_2*dy*n1_2*n2_2*(R*T + R + T)/(dx*(R + 1))  # (-1, +0)
+    N[2, 2] = T*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*T + bj_2*dy*n1_2*n2_2 - bp_2*dx)/(dx*(T + 1))  # (+0, -1)
+    N[2, 3] = -(bj_2*dx*n1_2**2*R*T + bj_2*dx*n1_2**2*R + bj_2*dy*n1_2*n2_2*R*T**2 + bj_2*dy*n1_2*n2_2*R*T - bj_2*dy*n1_2*n2_2*T - bp_2*dx*R*T - bp_2*dx*R)/(dx*R*T)  # (+0, +0)
+    N[2, 4] = bm_2*(T - 2)/(T - 1)  # (+0, +1)
+    N[2, 5] = -bm_2*(T - 1)/(T - 2)  # (+0, +2)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc2_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 2, eta < 0.  Row 2 is extra (R,T corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-1, -1), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, +0), (+1, +2), (+2, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bp_0*-_phi(R) - _psi(R) * (bj_0*n2_0**2 + bm_0)
+    M[0, 1] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
+    M[1, 0] = bj_1*dy*n1_1*n2_1/(dx*R*(R + 1))
+    M[1, 1] = bp_1*_phi_coupled(T, t) - _psi(T) * (bj_1*n1_1**2 + bm_1)
+    M[1, 2] = bp_1*_couple_off_fwd(T, t)
+    M[2, 2] = -bp_2*_couple_off_rev(T, t)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bp_0*dx*n2_0 - a_0*bp_0*-_phi(R) + b_0*dx*n1_0
+    d[1] = a_tau_1*bp_1*dy*n1_1 - a_1*bp_1*_couple_avg(T, t) + b_1*dy*n2_1
+    d[2] = a_tau_2*bp_2*dy*n1_2 + a_2*bp_2*_couple_avg(T, t) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 0] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
+    N[0, 1] = R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 + bm_0*dy)/(dy*(R + 1))  # (-1, +0)
+    N[0, 4] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
+    N[0, 5] = -(bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R*T - bj_0*dx*n1_0*n2_0*R + bj_0*dy*n2_0**2*R*T + bj_0*dy*n2_0**2*T + bm_0*dy*R*T + bm_0*dy*T)/(dy*R*T)  # (+0, +0)
+    N[0, 9] = -bp_0*(R - 2)/(R - 1)  # (+1, +0)
+    N[0, 11] = bp_0*(R - 1)/(R - 2)  # (+2, +0)
+    N[1, 0] = -bj_1*dy*n1_1*n2_1*T/dx  # (-1, -1)
+    N[1, 1] = bj_1*dy*n1_1*n2_1*(R*T + R + T)/(dx*(R + 1))  # (-1, +0)
+    N[1, 4] = T*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*T + bj_1*dy*n1_1*n2_1 + bm_1*dx)/(dx*(T + 1))  # (+0, -1)
+    N[1, 5] = -(bj_1*dx*n1_1**2*R*T + bj_1*dx*n1_1**2*R + bj_1*dy*n1_1*n2_1*R*T**2 + bj_1*dy*n1_1*n2_1*R*T - bj_1*dy*n1_1*n2_1*T + bm_1*dx*R*T + bm_1*dx*R)/(dx*R*T)  # (+0, +0)
+    N[1, 6] = bp_1*_couple_avg(T, t)  # (+0, +1)
+    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*t + 1)/dx  # (-1, +2)
+    N[2, 3] = -bj_2*dy*n1_2*n2_2*t/dx  # (-1, +3)
+    N[2, 6] = -bp_2*_couple_avg(T, t)  # (+0, +1)
+    N[2, 7] = (bj_2*dx*n1_2**2*t + bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t**2 + bm_2*dx*t + bm_2*dx)/(dx*t)  # (+0, +2)
+    N[2, 8] = -t*(bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t - bj_2*dy*n1_2*n2_2 + bm_2*dx)/(dx*(t + 1))  # (+0, +3)
+    N[2, 10] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, +2)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc2_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 2, eta > 0.  Row 2 is extra (R,T corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-1, -1), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, +0), (+1, +2), (+2, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bm_0*-_phi(R) - _psi(R) * (bj_0*n2_0**2 - bp_0)
+    M[0, 1] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
+    M[1, 0] = bj_1*dy*n1_1*n2_1/(dx*R*(R + 1))
+    M[1, 1] = -bm_1*_phi_coupled(T, t) - _psi(T) * (bj_1*n1_1**2 - bp_1)
+    M[1, 2] = -bm_1*_couple_off_fwd(T, t)
+    M[2, 2] = bm_2*_couple_off_rev(T, t)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bm_0*dx*n2_0 - a_0*bm_0*-_phi(R) + b_0*dx*n1_0
+    d[1] = a_tau_1*bm_1*dy*n1_1 - a_1*bm_1*_couple_avg(T, t) + b_1*dy*n2_1
+    d[2] = a_tau_2*bm_2*dy*n1_2 + a_2*bm_2*_couple_avg(T, t) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 0] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
+    N[0, 1] = R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 - bp_0*dy)/(dy*(R + 1))  # (-1, +0)
+    N[0, 4] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
+    N[0, 5] = -(bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R*T - bj_0*dx*n1_0*n2_0*R + bj_0*dy*n2_0**2*R*T + bj_0*dy*n2_0**2*T - bp_0*dy*R*T - bp_0*dy*T)/(dy*R*T)  # (+0, +0)
+    N[0, 9] = bm_0*(R - 2)/(R - 1)  # (+1, +0)
+    N[0, 11] = -bm_0*(R - 1)/(R - 2)  # (+2, +0)
+    N[1, 0] = -bj_1*dy*n1_1*n2_1*T/dx  # (-1, -1)
+    N[1, 1] = bj_1*dy*n1_1*n2_1*(R*T + R + T)/(dx*(R + 1))  # (-1, +0)
+    N[1, 4] = T*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*T + bj_1*dy*n1_1*n2_1 - bp_1*dx)/(dx*(T + 1))  # (+0, -1)
+    N[1, 5] = -(bj_1*dx*n1_1**2*R*T + bj_1*dx*n1_1**2*R + bj_1*dy*n1_1*n2_1*R*T**2 + bj_1*dy*n1_1*n2_1*R*T - bj_1*dy*n1_1*n2_1*T - bp_1*dx*R*T - bp_1*dx*R)/(dx*R*T)  # (+0, +0)
+    N[1, 6] = -bm_1*_couple_avg(T, t)  # (+0, +1)
+    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*t + 1)/dx  # (-1, +2)
+    N[2, 3] = -bj_2*dy*n1_2*n2_2*t/dx  # (-1, +3)
+    N[2, 6] = bm_2*_couple_avg(T, t)  # (+0, +1)
+    N[2, 7] = (bj_2*dx*n1_2**2*t + bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t**2 - bp_2*dx*t - bp_2*dx)/(dx*t)  # (+0, +2)
+    N[2, 8] = -t*(bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t - bj_2*dy*n1_2*n2_2 - bp_2*dx)/(dx*(t + 1))  # (+0, +3)
+    N[2, 10] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, +2)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc3_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 3, eta < 0.  Row 2 is extra (T,L corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'L')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-2, +0), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, -1), (+1, +0), (+1, +2)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bp_0*_phi_coupled(T, t) - _psi(T) * (bj_0*n1_0**2 + bm_0)
+    M[0, 1] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
+    M[0, 2] = bp_0*_couple_off_fwd(T, t)
+    M[1, 0] = bj_1*dx*n1_1*n2_1/(dy*T*(T + 1))
+    M[1, 1] = -bp_1*-_phi(L) + _psi(L) * (bj_1*n2_1**2 + bm_1)
+    M[2, 0] = -bp_2*_couple_off_rev(T, t)
+    M[2, 2] = -bp_2*_phi_mirror(T, t) + _psi(t) * (bj_2*n1_2**2 + bm_2)
+
+    d = np.zeros(3)
+    d[0] = a_tau_0*bp_0*dy*n1_0 - a_0*bp_0*_couple_avg(T, t) + b_0*dy*n2_0
+    d[1] = -a_tau_1*bp_1*dx*n2_1 + a_1*bp_1*-_phi(L) + b_1*dx*n1_1
+    d[2] = a_tau_2*bp_2*dy*n1_2 + a_2*bp_2*_couple_avg(T, t) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 4] = T*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*T - bj_0*dy*n1_0*n2_0 + bm_0*dx)/(dx*(T + 1))  # (+0, -1)
+    N[0, 5] = -(bj_0*dx*n1_0**2*L*T + bj_0*dx*n1_0**2*L - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T + bj_0*dy*n1_0*n2_0*T + bm_0*dx*L*T + bm_0*dx*L)/(dx*L*T)  # (+0, +0)
+    N[0, 6] = bp_0*_couple_avg(T, t)  # (+0, +1)
+    N[0, 9] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
+    N[0, 10] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
+    N[1, 0] = -bp_1*(L - 1)/(L - 2)  # (-2, +0)
+    N[1, 1] = bp_1*(L - 2)/(L - 1)  # (-1, +0)
+    N[1, 4] = bj_1*dx*n1_1*n2_1*(L*T + L + T)/(dy*(T + 1))  # (+0, -1)
+    N[1, 5] = -(bj_1*dx*n1_1*n2_1*L**2*T + bj_1*dx*n1_1*n2_1*L*T - bj_1*dx*n1_1*n2_1*L - bj_1*dy*n2_1**2*L*T - bj_1*dy*n2_1**2*T - bm_1*dy*L*T - bm_1*dy*T)/(dy*L*T)  # (+0, +0)
+    N[1, 9] = -bj_1*dx*n1_1*n2_1*L/dy  # (+1, -1)
+    N[1, 10] = L*(bj_1*dx*n1_1*n2_1*L + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 - bm_1*dy)/(dy*(L + 1))  # (+1, +0)
+    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*t + 1)/dx  # (-1, +2)
+    N[2, 3] = -bj_2*dy*n1_2*n2_2*t/dx  # (-1, +3)
+    N[2, 6] = -bp_2*_couple_avg(T, t)  # (+0, +1)
+    N[2, 7] = (bj_2*dx*n1_2**2*t + bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t**2 + bm_2*dx*t + bm_2*dx)/(dx*t)  # (+0, +2)
+    N[2, 8] = -t*(bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t - bj_2*dy*n1_2*n2_2 + bm_2*dx)/(dx*(t + 1))  # (+0, +3)
+    N[2, 11] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, +2)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc3_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 3, eta > 0.  Row 2 is extra (T,L corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'L')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-2, +0), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, -1), (+1, +0), (+1, +2)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bm_0*_phi_coupled(T, t) - _psi(T) * (bj_0*n1_0**2 - bp_0)
+    M[0, 1] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
+    M[0, 2] = -bm_0*_couple_off_fwd(T, t)
+    M[1, 0] = bj_1*dx*n1_1*n2_1/(dy*T*(T + 1))
+    M[1, 1] = bm_1*-_phi(L) + _psi(L) * (bj_1*n2_1**2 - bp_1)
+    M[2, 0] = bm_2*_couple_off_rev(T, t)
+    M[2, 2] = bm_2*_phi_mirror(T, t) + _psi(t) * (bj_2*n1_2**2 - bp_2)
+
+    d = np.zeros(3)
+    d[0] = a_tau_0*bm_0*dy*n1_0 - a_0*bm_0*_couple_avg(T, t) + b_0*dy*n2_0
+    d[1] = -a_tau_1*bm_1*dx*n2_1 + a_1*bm_1*-_phi(L) + b_1*dx*n1_1
+    d[2] = a_tau_2*bm_2*dy*n1_2 + a_2*bm_2*_couple_avg(T, t) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 4] = T*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*T - bj_0*dy*n1_0*n2_0 - bp_0*dx)/(dx*(T + 1))  # (+0, -1)
+    N[0, 5] = -(bj_0*dx*n1_0**2*L*T + bj_0*dx*n1_0**2*L - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T + bj_0*dy*n1_0*n2_0*T - bp_0*dx*L*T - bp_0*dx*L)/(dx*L*T)  # (+0, +0)
+    N[0, 6] = -bm_0*_couple_avg(T, t)  # (+0, +1)
+    N[0, 9] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
+    N[0, 10] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
+    N[1, 0] = bm_1*(L - 1)/(L - 2)  # (-2, +0)
+    N[1, 1] = -bm_1*(L - 2)/(L - 1)  # (-1, +0)
+    N[1, 4] = bj_1*dx*n1_1*n2_1*(L*T + L + T)/(dy*(T + 1))  # (+0, -1)
+    N[1, 5] = -(bj_1*dx*n1_1*n2_1*L**2*T + bj_1*dx*n1_1*n2_1*L*T - bj_1*dx*n1_1*n2_1*L - bj_1*dy*n2_1**2*L*T - bj_1*dy*n2_1**2*T + bp_1*dy*L*T + bp_1*dy*T)/(dy*L*T)  # (+0, +0)
+    N[1, 9] = -bj_1*dx*n1_1*n2_1*L/dy  # (+1, -1)
+    N[1, 10] = L*(bj_1*dx*n1_1*n2_1*L + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 + bp_1*dy)/(dy*(L + 1))  # (+1, +0)
+    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*t + 1)/dx  # (-1, +2)
+    N[2, 3] = -bj_2*dy*n1_2*n2_2*t/dx  # (-1, +3)
+    N[2, 6] = bm_2*_couple_avg(T, t)  # (+0, +1)
+    N[2, 7] = (bj_2*dx*n1_2**2*t + bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t**2 - bp_2*dx*t - bp_2*dx)/(dx*t)  # (+0, +2)
+    N[2, 8] = -t*(bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t - bj_2*dy*n1_2*n2_2 - bp_2*dx)/(dx*(t + 1))  # (+0, +3)
+    N[2, 11] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, +2)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc4_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 4, eta < 0.  Row 2 is extra (T,L corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'L')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bp_0*-_phi(T) - _psi(T) * (bj_0*n1_0**2 + bm_0)
+    M[0, 1] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
+    M[1, 0] = bj_1*dx*n1_1*n2_1/(dy*T*(T + 1))
+    M[1, 1] = -bp_1*_phi_coupled(L, l) + _psi(L) * (bj_1*n2_1**2 + bm_1)
+    M[1, 2] = -bp_1*_couple_off_fwd(L, l)
+    M[2, 2] = bp_2*_couple_off_rev(L, l)
+
+    d = np.zeros(3)
+    d[0] = a_tau_0*bp_0*dy*n1_0 - a_0*bp_0*-_phi(T) + b_0*dy*n2_0
+    d[1] = -a_tau_1*bp_1*dx*n2_1 + a_1*bp_1*_couple_avg(L, l) + b_1*dx*n1_1
+    d[2] = -a_tau_2*bp_2*dx*n2_2 - a_2*bp_2*_couple_avg(L, l) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 6] = T*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*T - bj_0*dy*n1_0*n2_0 + bm_0*dx)/(dx*(T + 1))  # (+0, -1)
+    N[0, 7] = -(bj_0*dx*n1_0**2*L*T + bj_0*dx*n1_0**2*L - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T + bj_0*dy*n1_0*n2_0*T + bm_0*dx*L*T + bm_0*dx*L)/(dx*L*T)  # (+0, +0)
+    N[0, 8] = -bp_0*(T - 2)/(T - 1)  # (+0, +1)
+    N[0, 9] = bp_0*(T - 1)/(T - 2)  # (+0, +2)
+    N[0, 10] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
+    N[0, 11] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
+    N[1, 5] = -bp_1*_couple_avg(L, l)  # (-1, +0)
+    N[1, 6] = bj_1*dx*n1_1*n2_1*(L*T + L + T)/(dy*(T + 1))  # (+0, -1)
+    N[1, 7] = -(bj_1*dx*n1_1*n2_1*L**2*T + bj_1*dx*n1_1*n2_1*L*T - bj_1*dx*n1_1*n2_1*L - bj_1*dy*n2_1**2*L*T - bj_1*dy*n2_1**2*T - bm_1*dy*L*T - bm_1*dy*T)/(dy*L*T)  # (+0, +0)
+    N[1, 10] = -bj_1*dx*n1_1*n2_1*L/dy  # (+1, -1)
+    N[1, 11] = L*(bj_1*dx*n1_1*n2_1*L + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 - bm_1*dy)/(dy*(L + 1))  # (+1, +0)
+    N[2, 0] = -bj_2*dx*n1_2*n2_2*l/dy  # (-3, -1)
+    N[2, 1] = l*(bj_2*dx*n1_2*n2_2*l + bj_2*dx*n1_2*n2_2 + bj_2*dy*n2_2**2 + bm_2*dy)/(dy*(l + 1))  # (-3, +0)
+    N[2, 2] = (1/2)*bj_2*dx*n1_2*n2_2*(2*l + 1)/dy  # (-2, -1)
+    N[2, 3] = -(bj_2*dx*n1_2*n2_2*l**2 + bj_2*dy*n2_2**2*l + bj_2*dy*n2_2**2 + bm_2*dy*l + bm_2*dy)/(dy*l)  # (-2, +0)
+    N[2, 4] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (-2, +1)
+    N[2, 5] = bp_2*_couple_avg(L, l)  # (-1, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc4_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 4, eta > 0.  Row 2 is extra (T,L corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'L')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bm_0*-_phi(T) - _psi(T) * (bj_0*n1_0**2 - bp_0)
+    M[0, 1] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
+    M[1, 0] = bj_1*dx*n1_1*n2_1/(dy*T*(T + 1))
+    M[1, 1] = bm_1*_phi_coupled(L, l) + _psi(L) * (bj_1*n2_1**2 - bp_1)
+    M[1, 2] = bm_1*_couple_off_fwd(L, l)
+    M[2, 2] = -bm_2*_couple_off_rev(L, l)
+
+    d = np.zeros(3)
+    d[0] = a_tau_0*bm_0*dy*n1_0 - a_0*bm_0*-_phi(T) + b_0*dy*n2_0
+    d[1] = -a_tau_1*bm_1*dx*n2_1 + a_1*bm_1*_couple_avg(L, l) + b_1*dx*n1_1
+    d[2] = -a_tau_2*bm_2*dx*n2_2 - a_2*bm_2*_couple_avg(L, l) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 6] = T*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*T - bj_0*dy*n1_0*n2_0 - bp_0*dx)/(dx*(T + 1))  # (+0, -1)
+    N[0, 7] = -(bj_0*dx*n1_0**2*L*T + bj_0*dx*n1_0**2*L - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T + bj_0*dy*n1_0*n2_0*T - bp_0*dx*L*T - bp_0*dx*L)/(dx*L*T)  # (+0, +0)
+    N[0, 8] = bm_0*(T - 2)/(T - 1)  # (+0, +1)
+    N[0, 9] = -bm_0*(T - 1)/(T - 2)  # (+0, +2)
+    N[0, 10] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
+    N[0, 11] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
+    N[1, 5] = bm_1*_couple_avg(L, l)  # (-1, +0)
+    N[1, 6] = bj_1*dx*n1_1*n2_1*(L*T + L + T)/(dy*(T + 1))  # (+0, -1)
+    N[1, 7] = -(bj_1*dx*n1_1*n2_1*L**2*T + bj_1*dx*n1_1*n2_1*L*T - bj_1*dx*n1_1*n2_1*L - bj_1*dy*n2_1**2*L*T - bj_1*dy*n2_1**2*T + bp_1*dy*L*T + bp_1*dy*T)/(dy*L*T)  # (+0, +0)
+    N[1, 10] = -bj_1*dx*n1_1*n2_1*L/dy  # (+1, -1)
+    N[1, 11] = L*(bj_1*dx*n1_1*n2_1*L + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 + bp_1*dy)/(dy*(L + 1))  # (+1, +0)
+    N[2, 0] = -bj_2*dx*n1_2*n2_2*l/dy  # (-3, -1)
+    N[2, 1] = l*(bj_2*dx*n1_2*n2_2*l + bj_2*dx*n1_2*n2_2 + bj_2*dy*n2_2**2 - bp_2*dy)/(dy*(l + 1))  # (-3, +0)
+    N[2, 2] = (1/2)*bj_2*dx*n1_2*n2_2*(2*l + 1)/dy  # (-2, -1)
+    N[2, 3] = -(bj_2*dx*n1_2*n2_2*l**2 + bj_2*dy*n2_2**2*l + bj_2*dy*n2_2**2 - bp_2*dy*l - bp_2*dy)/(dy*l)  # (-2, +0)
+    N[2, 4] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (-2, +1)
+    N[2, 5] = -bm_2*_couple_avg(L, l)  # (-1, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc5_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 5, eta < 0.  Row 2 is extra (L,B corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'L')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+1, +1)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bp_0*_phi_coupled(L, l) + _psi(L) * (bj_0*n2_0**2 + bm_0)
+    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
+    M[0, 2] = -bp_0*_couple_off_fwd(L, l)
+    M[1, 0] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
+    M[1, 1] = -bp_1*-_phi(B) + _psi(B) * (bj_1*n1_1**2 + bm_1)
+    M[2, 0] = bp_2*_couple_off_rev(L, l)
+    M[2, 2] = bp_2*_phi_mirror(L, l) - _psi(l) * (bj_2*n2_2**2 + bm_2)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bp_0*dx*n2_0 + a_0*bp_0*_couple_avg(L, l) + b_0*dx*n1_0
+    d[1] = a_tau_1*bp_1*dy*n1_1 + a_1*bp_1*-_phi(B) + b_1*dy*n2_1
+    d[2] = -a_tau_2*bp_2*dx*n2_2 - a_2*bp_2*_couple_avg(L, l) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 5] = -bp_0*_couple_avg(L, l)  # (-1, +0)
+    N[0, 8] = (bj_0*dx*n1_0*n2_0*B*L**2 + bj_0*dx*n1_0*n2_0*B*L - bj_0*dx*n1_0*n2_0*L + bj_0*dy*n2_0**2*B*L + bj_0*dy*n2_0**2*B + bm_0*dy*B*L + bm_0*dy*B)/(dy*B*L)  # (+0, +0)
+    N[0, 9] = -bj_0*dx*n1_0*n2_0*(B*L + B + L)/(dy*(B + 1))  # (+0, +1)
+    N[0, 10] = -L*(bj_0*dx*n1_0*n2_0*L + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 + bm_0*dy)/(dy*(L + 1))  # (+1, +0)
+    N[0, 11] = bj_0*dx*n1_0*n2_0*L/dy  # (+1, +1)
+    N[1, 6] = -bp_1*(B - 1)/(B - 2)  # (+0, -2)
+    N[1, 7] = bp_1*(B - 2)/(B - 1)  # (+0, -1)
+    N[1, 8] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L + bj_1*dy*n1_1*n2_1*B**2*L + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B + bm_1*dx*B*L + bm_1*dx*L)/(dx*B*L)  # (+0, +0)
+    N[1, 9] = -B*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*B + bj_1*dy*n1_1*n2_1 + bm_1*dx)/(dx*(B + 1))  # (+0, +1)
+    N[1, 10] = -bj_1*dy*n1_1*n2_1*(B*L + B + L)/(dx*(L + 1))  # (+1, +0)
+    N[1, 11] = bj_1*dy*n1_1*n2_1*B/dx  # (+1, +1)
+    N[2, 0] = -bj_2*dx*n1_2*n2_2*l/dy  # (-3, -1)
+    N[2, 1] = l*(bj_2*dx*n1_2*n2_2*l + bj_2*dx*n1_2*n2_2 + bj_2*dy*n2_2**2 + bm_2*dy)/(dy*(l + 1))  # (-3, +0)
+    N[2, 2] = (1/2)*bj_2*dx*n1_2*n2_2*(2*l + 1)/dy  # (-2, -1)
+    N[2, 3] = -(bj_2*dx*n1_2*n2_2*l**2 + bj_2*dy*n2_2**2*l + bj_2*dy*n2_2**2 + bm_2*dy*l + bm_2*dy)/(dy*l)  # (-2, +0)
+    N[2, 4] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (-2, +1)
+    N[2, 5] = bp_2*_couple_avg(L, l)  # (-1, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc5_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 5, eta > 0.  Row 2 is extra (L,B corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'L')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+1, +1)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bm_0*_phi_coupled(L, l) + _psi(L) * (bj_0*n2_0**2 - bp_0)
+    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
+    M[0, 2] = bm_0*_couple_off_fwd(L, l)
+    M[1, 0] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
+    M[1, 1] = bm_1*-_phi(B) + _psi(B) * (bj_1*n1_1**2 - bp_1)
+    M[2, 0] = -bm_2*_couple_off_rev(L, l)
+    M[2, 2] = -bm_2*_phi_mirror(L, l) - _psi(l) * (bj_2*n2_2**2 - bp_2)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bm_0*dx*n2_0 + a_0*bm_0*_couple_avg(L, l) + b_0*dx*n1_0
+    d[1] = a_tau_1*bm_1*dy*n1_1 + a_1*bm_1*-_phi(B) + b_1*dy*n2_1
+    d[2] = -a_tau_2*bm_2*dx*n2_2 - a_2*bm_2*_couple_avg(L, l) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 5] = bm_0*_couple_avg(L, l)  # (-1, +0)
+    N[0, 8] = (bj_0*dx*n1_0*n2_0*B*L**2 + bj_0*dx*n1_0*n2_0*B*L - bj_0*dx*n1_0*n2_0*L + bj_0*dy*n2_0**2*B*L + bj_0*dy*n2_0**2*B - bp_0*dy*B*L - bp_0*dy*B)/(dy*B*L)  # (+0, +0)
+    N[0, 9] = -bj_0*dx*n1_0*n2_0*(B*L + B + L)/(dy*(B + 1))  # (+0, +1)
+    N[0, 10] = -L*(bj_0*dx*n1_0*n2_0*L + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 - bp_0*dy)/(dy*(L + 1))  # (+1, +0)
+    N[0, 11] = bj_0*dx*n1_0*n2_0*L/dy  # (+1, +1)
+    N[1, 6] = bm_1*(B - 1)/(B - 2)  # (+0, -2)
+    N[1, 7] = -bm_1*(B - 2)/(B - 1)  # (+0, -1)
+    N[1, 8] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L + bj_1*dy*n1_1*n2_1*B**2*L + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B - bp_1*dx*B*L - bp_1*dx*L)/(dx*B*L)  # (+0, +0)
+    N[1, 9] = -B*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*B + bj_1*dy*n1_1*n2_1 - bp_1*dx)/(dx*(B + 1))  # (+0, +1)
+    N[1, 10] = -bj_1*dy*n1_1*n2_1*(B*L + B + L)/(dx*(L + 1))  # (+1, +0)
+    N[1, 11] = bj_1*dy*n1_1*n2_1*B/dx  # (+1, +1)
+    N[2, 0] = -bj_2*dx*n1_2*n2_2*l/dy  # (-3, -1)
+    N[2, 1] = l*(bj_2*dx*n1_2*n2_2*l + bj_2*dx*n1_2*n2_2 + bj_2*dy*n2_2**2 - bp_2*dy)/(dy*(l + 1))  # (-3, +0)
+    N[2, 2] = (1/2)*bj_2*dx*n1_2*n2_2*(2*l + 1)/dy  # (-2, -1)
+    N[2, 3] = -(bj_2*dx*n1_2*n2_2*l**2 + bj_2*dy*n2_2**2*l + bj_2*dy*n2_2**2 - bp_2*dy*l - bp_2*dy)/(dy*l)  # (-2, +0)
+    N[2, 4] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (-2, +1)
+    N[2, 5] = -bm_2*_couple_avg(L, l)  # (-1, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc6_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 6, eta < 0.  Row 2 is extra (L,B corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'L')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-2, +0), (-1, -3), (-1, -2), (-1, +0), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+1, +1)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bp_0*-_phi(L) + _psi(L) * (bj_0*n2_0**2 + bm_0)
+    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
+    M[1, 0] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
+    M[1, 1] = -bp_1*_phi_coupled(B, b) + _psi(B) * (bj_1*n1_1**2 + bm_1)
+    M[1, 2] = -bp_1*_couple_off_fwd(B, b)
+    M[2, 2] = bp_2*_couple_off_rev(B, b)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bp_0*dx*n2_0 + a_0*bp_0*-_phi(L) + b_0*dx*n1_0
+    d[1] = a_tau_1*bp_1*dy*n1_1 + a_1*bp_1*_couple_avg(B, b) + b_1*dy*n2_1
+    d[2] = a_tau_2*bp_2*dy*n1_2 - a_2*bp_2*_couple_avg(B, b) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 0] = -bp_0*(L - 1)/(L - 2)  # (-2, +0)
+    N[0, 3] = bp_0*(L - 2)/(L - 1)  # (-1, +0)
+    N[0, 7] = (bj_0*dx*n1_0*n2_0*B*L**2 + bj_0*dx*n1_0*n2_0*B*L - bj_0*dx*n1_0*n2_0*L + bj_0*dy*n2_0**2*B*L + bj_0*dy*n2_0**2*B + bm_0*dy*B*L + bm_0*dy*B)/(dy*B*L)  # (+0, +0)
+    N[0, 8] = -bj_0*dx*n1_0*n2_0*(B*L + B + L)/(dy*(B + 1))  # (+0, +1)
+    N[0, 10] = -L*(bj_0*dx*n1_0*n2_0*L + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 + bm_0*dy)/(dy*(L + 1))  # (+1, +0)
+    N[0, 11] = bj_0*dx*n1_0*n2_0*L/dy  # (+1, +1)
+    N[1, 6] = -bp_1*_couple_avg(B, b)  # (+0, -1)
+    N[1, 7] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L + bj_1*dy*n1_1*n2_1*B**2*L + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B + bm_1*dx*B*L + bm_1*dx*L)/(dx*B*L)  # (+0, +0)
+    N[1, 8] = -B*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*B + bj_1*dy*n1_1*n2_1 + bm_1*dx)/(dx*(B + 1))  # (+0, +1)
+    N[1, 10] = -bj_1*dy*n1_1*n2_1*(B*L + B + L)/(dx*(L + 1))  # (+1, +0)
+    N[1, 11] = bj_1*dy*n1_1*n2_1*B/dx  # (+1, +1)
+    N[2, 1] = -bj_2*dy*n1_2*n2_2*b/dx  # (-1, -3)
+    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*b + 1)/dx  # (-1, -2)
+    N[2, 4] = b*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b + bj_2*dy*n1_2*n2_2 + bm_2*dx)/(dx*(b + 1))  # (+0, -3)
+    N[2, 5] = -(bj_2*dx*n1_2**2*b + bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b**2 + bm_2*dx*b + bm_2*dx)/(dx*b)  # (+0, -2)
+    N[2, 6] = bp_2*_couple_avg(B, b)  # (+0, -1)
+    N[2, 9] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, -2)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc6_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 6, eta > 0.  Row 2 is extra (L,B corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'L')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-2, +0), (-1, -3), (-1, -2), (-1, +0), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+1, +1)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bm_0*-_phi(L) + _psi(L) * (bj_0*n2_0**2 - bp_0)
+    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
+    M[1, 0] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
+    M[1, 1] = bm_1*_phi_coupled(B, b) + _psi(B) * (bj_1*n1_1**2 - bp_1)
+    M[1, 2] = bm_1*_couple_off_fwd(B, b)
+    M[2, 2] = -bm_2*_couple_off_rev(B, b)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bm_0*dx*n2_0 + a_0*bm_0*-_phi(L) + b_0*dx*n1_0
+    d[1] = a_tau_1*bm_1*dy*n1_1 + a_1*bm_1*_couple_avg(B, b) + b_1*dy*n2_1
+    d[2] = a_tau_2*bm_2*dy*n1_2 - a_2*bm_2*_couple_avg(B, b) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 0] = bm_0*(L - 1)/(L - 2)  # (-2, +0)
+    N[0, 3] = -bm_0*(L - 2)/(L - 1)  # (-1, +0)
+    N[0, 7] = (bj_0*dx*n1_0*n2_0*B*L**2 + bj_0*dx*n1_0*n2_0*B*L - bj_0*dx*n1_0*n2_0*L + bj_0*dy*n2_0**2*B*L + bj_0*dy*n2_0**2*B - bp_0*dy*B*L - bp_0*dy*B)/(dy*B*L)  # (+0, +0)
+    N[0, 8] = -bj_0*dx*n1_0*n2_0*(B*L + B + L)/(dy*(B + 1))  # (+0, +1)
+    N[0, 10] = -L*(bj_0*dx*n1_0*n2_0*L + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 - bp_0*dy)/(dy*(L + 1))  # (+1, +0)
+    N[0, 11] = bj_0*dx*n1_0*n2_0*L/dy  # (+1, +1)
+    N[1, 6] = bm_1*_couple_avg(B, b)  # (+0, -1)
+    N[1, 7] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L + bj_1*dy*n1_1*n2_1*B**2*L + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B - bp_1*dx*B*L - bp_1*dx*L)/(dx*B*L)  # (+0, +0)
+    N[1, 8] = -B*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*B + bj_1*dy*n1_1*n2_1 - bp_1*dx)/(dx*(B + 1))  # (+0, +1)
+    N[1, 10] = -bj_1*dy*n1_1*n2_1*(B*L + B + L)/(dx*(L + 1))  # (+1, +0)
+    N[1, 11] = bj_1*dy*n1_1*n2_1*B/dx  # (+1, +1)
+    N[2, 1] = -bj_2*dy*n1_2*n2_2*b/dx  # (-1, -3)
+    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*b + 1)/dx  # (-1, -2)
+    N[2, 4] = b*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b + bj_2*dy*n1_2*n2_2 - bp_2*dx)/(dx*(b + 1))  # (+0, -3)
+    N[2, 5] = -(bj_2*dx*n1_2**2*b + bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b**2 - bp_2*dx*b - bp_2*dx)/(dx*b)  # (+0, -2)
+    N[2, 6] = -bm_2*_couple_avg(B, b)  # (+0, -1)
+    N[2, 9] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, -2)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc7_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 7, eta < 0.  Row 2 is extra (B,R corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'B')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'R')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-1, -3), (-1, -2), (-1, +0), (-1, +1), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+2, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bp_0*_phi_coupled(B, b) + _psi(B) * (bj_0*n1_0**2 + bm_0)
+    M[0, 1] = bj_0*dy*n1_0*n2_0/(dx*R*(R + 1))
+    M[0, 2] = -bp_0*_couple_off_fwd(B, b)
+    M[1, 0] = -bj_1*dx*n1_1*n2_1/(dy*B*(B + 1))
+    M[1, 1] = bp_1*-_phi(R) - _psi(R) * (bj_1*n2_1**2 + bm_1)
+    M[2, 0] = bp_2*_couple_off_rev(B, b)
+    M[2, 2] = bp_2*_phi_mirror(B, b) - _psi(b) * (bj_2*n1_2**2 + bm_2)
+
+    d = np.zeros(3)
+    d[0] = a_tau_0*bp_0*dy*n1_0 + a_0*bp_0*_couple_avg(B, b) + b_0*dy*n2_0
+    d[1] = -a_tau_1*bp_1*dx*n2_1 - a_1*bp_1*-_phi(R) + b_1*dx*n1_1
+    d[2] = a_tau_2*bp_2*dy*n1_2 - a_2*bp_2*_couple_avg(B, b) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 2] = bj_0*dy*n1_0*n2_0*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
+    N[0, 3] = -bj_0*dy*n1_0*n2_0*B/dx  # (-1, +1)
+    N[0, 6] = -bp_0*_couple_avg(B, b)  # (+0, -1)
+    N[0, 7] = (bj_0*dx*n1_0**2*B*R + bj_0*dx*n1_0**2*R - bj_0*dy*n1_0*n2_0*B**2*R - bj_0*dy*n1_0*n2_0*B*R + bj_0*dy*n1_0*n2_0*B + bm_0*dx*B*R + bm_0*dx*R)/(dx*B*R)  # (+0, +0)
+    N[0, 8] = -B*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*B - bj_0*dy*n1_0*n2_0 + bm_0*dx)/(dx*(B + 1))  # (+0, +1)
+    N[1, 2] = -R*(bj_1*dx*n1_1*n2_1*R + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 - bm_1*dy)/(dy*(R + 1))  # (-1, +0)
+    N[1, 3] = bj_1*dx*n1_1*n2_1*R/dy  # (-1, +1)
+    N[1, 7] = (bj_1*dx*n1_1*n2_1*B*R**2 + bj_1*dx*n1_1*n2_1*B*R - bj_1*dx*n1_1*n2_1*R - bj_1*dy*n2_1**2*B*R - bj_1*dy*n2_1**2*B - bm_1*dy*B*R - bm_1*dy*B)/(dy*B*R)  # (+0, +0)
+    N[1, 8] = -bj_1*dx*n1_1*n2_1*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
+    N[1, 10] = -bp_1*(R - 2)/(R - 1)  # (+1, +0)
+    N[1, 11] = bp_1*(R - 1)/(R - 2)  # (+2, +0)
+    N[2, 0] = -bj_2*dy*n1_2*n2_2*b/dx  # (-1, -3)
+    N[2, 1] = (1/2)*bj_2*dy*n1_2*n2_2*(2*b + 1)/dx  # (-1, -2)
+    N[2, 4] = b*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b + bj_2*dy*n1_2*n2_2 + bm_2*dx)/(dx*(b + 1))  # (+0, -3)
+    N[2, 5] = -(bj_2*dx*n1_2**2*b + bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b**2 + bm_2*dx*b + bm_2*dx)/(dx*b)  # (+0, -2)
+    N[2, 6] = bp_2*_couple_avg(B, b)  # (+0, -1)
+    N[2, 9] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, -2)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc7_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 7, eta > 0.  Row 2 is extra (B,R corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'B')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'R')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-1, -3), (-1, -2), (-1, +0), (-1, +1), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+2, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bm_0*_phi_coupled(B, b) + _psi(B) * (bj_0*n1_0**2 - bp_0)
+    M[0, 1] = bj_0*dy*n1_0*n2_0/(dx*R*(R + 1))
+    M[0, 2] = bm_0*_couple_off_fwd(B, b)
+    M[1, 0] = -bj_1*dx*n1_1*n2_1/(dy*B*(B + 1))
+    M[1, 1] = -bm_1*-_phi(R) - _psi(R) * (bj_1*n2_1**2 - bp_1)
+    M[2, 0] = -bm_2*_couple_off_rev(B, b)
+    M[2, 2] = -bm_2*_phi_mirror(B, b) - _psi(b) * (bj_2*n1_2**2 - bp_2)
+
+    d = np.zeros(3)
+    d[0] = a_tau_0*bm_0*dy*n1_0 + a_0*bm_0*_couple_avg(B, b) + b_0*dy*n2_0
+    d[1] = -a_tau_1*bm_1*dx*n2_1 - a_1*bm_1*-_phi(R) + b_1*dx*n1_1
+    d[2] = a_tau_2*bm_2*dy*n1_2 - a_2*bm_2*_couple_avg(B, b) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 2] = bj_0*dy*n1_0*n2_0*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
+    N[0, 3] = -bj_0*dy*n1_0*n2_0*B/dx  # (-1, +1)
+    N[0, 6] = bm_0*_couple_avg(B, b)  # (+0, -1)
+    N[0, 7] = (bj_0*dx*n1_0**2*B*R + bj_0*dx*n1_0**2*R - bj_0*dy*n1_0*n2_0*B**2*R - bj_0*dy*n1_0*n2_0*B*R + bj_0*dy*n1_0*n2_0*B - bp_0*dx*B*R - bp_0*dx*R)/(dx*B*R)  # (+0, +0)
+    N[0, 8] = -B*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*B - bj_0*dy*n1_0*n2_0 - bp_0*dx)/(dx*(B + 1))  # (+0, +1)
+    N[1, 2] = -R*(bj_1*dx*n1_1*n2_1*R + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 + bp_1*dy)/(dy*(R + 1))  # (-1, +0)
+    N[1, 3] = bj_1*dx*n1_1*n2_1*R/dy  # (-1, +1)
+    N[1, 7] = (bj_1*dx*n1_1*n2_1*B*R**2 + bj_1*dx*n1_1*n2_1*B*R - bj_1*dx*n1_1*n2_1*R - bj_1*dy*n2_1**2*B*R - bj_1*dy*n2_1**2*B + bp_1*dy*B*R + bp_1*dy*B)/(dy*B*R)  # (+0, +0)
+    N[1, 8] = -bj_1*dx*n1_1*n2_1*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
+    N[1, 10] = bm_1*(R - 2)/(R - 1)  # (+1, +0)
+    N[1, 11] = -bm_1*(R - 1)/(R - 2)  # (+2, +0)
+    N[2, 0] = -bj_2*dy*n1_2*n2_2*b/dx  # (-1, -3)
+    N[2, 1] = (1/2)*bj_2*dy*n1_2*n2_2*(2*b + 1)/dx  # (-1, -2)
+    N[2, 4] = b*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b + bj_2*dy*n1_2*n2_2 - bp_2*dx)/(dx*(b + 1))  # (+0, -3)
+    N[2, 5] = -(bj_2*dx*n1_2**2*b + bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b**2 - bp_2*dx*b - bp_2*dx)/(dx*b)  # (+0, -2)
+    N[2, 6] = -bm_2*_couple_avg(B, b)  # (+0, -1)
+    N[2, 9] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, -2)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc8_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 8, eta < 0.  Row 2 is extra (B,R corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'B')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'R')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bp_0*-_phi(B) + _psi(B) * (bj_0*n1_0**2 + bm_0)
+    M[0, 1] = bj_0*dy*n1_0*n2_0/(dx*R*(R + 1))
+    M[1, 0] = -bj_1*dx*n1_1*n2_1/(dy*B*(B + 1))
+    M[1, 1] = bp_1*_phi_coupled(R, r) - _psi(R) * (bj_1*n2_1**2 + bm_1)
+    M[1, 2] = bp_1*_couple_off_fwd(R, r)
+    M[2, 2] = -bp_2*_couple_off_rev(R, r)
+
+    d = np.zeros(3)
+    d[0] = a_tau_0*bp_0*dy*n1_0 + a_0*bp_0*-_phi(B) + b_0*dy*n2_0
+    d[1] = -a_tau_1*bp_1*dx*n2_1 - a_1*bp_1*_couple_avg(R, r) + b_1*dx*n1_1
+    d[2] = -a_tau_2*bp_2*dx*n2_2 + a_2*bp_2*_couple_avg(R, r) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 0] = bj_0*dy*n1_0*n2_0*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
+    N[0, 1] = -bj_0*dy*n1_0*n2_0*B/dx  # (-1, +1)
+    N[0, 2] = -bp_0*(B - 1)/(B - 2)  # (+0, -2)
+    N[0, 3] = bp_0*(B - 2)/(B - 1)  # (+0, -1)
+    N[0, 4] = (bj_0*dx*n1_0**2*B*R + bj_0*dx*n1_0**2*R - bj_0*dy*n1_0*n2_0*B**2*R - bj_0*dy*n1_0*n2_0*B*R + bj_0*dy*n1_0*n2_0*B + bm_0*dx*B*R + bm_0*dx*R)/(dx*B*R)  # (+0, +0)
+    N[0, 5] = -B*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*B - bj_0*dy*n1_0*n2_0 + bm_0*dx)/(dx*(B + 1))  # (+0, +1)
+    N[1, 0] = -R*(bj_1*dx*n1_1*n2_1*R + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 - bm_1*dy)/(dy*(R + 1))  # (-1, +0)
+    N[1, 1] = bj_1*dx*n1_1*n2_1*R/dy  # (-1, +1)
+    N[1, 4] = (bj_1*dx*n1_1*n2_1*B*R**2 + bj_1*dx*n1_1*n2_1*B*R - bj_1*dx*n1_1*n2_1*R - bj_1*dy*n2_1**2*B*R - bj_1*dy*n2_1**2*B - bm_1*dy*B*R - bm_1*dy*B)/(dy*B*R)  # (+0, +0)
+    N[1, 5] = -bj_1*dx*n1_1*n2_1*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
+    N[1, 6] = bp_1*_couple_avg(R, r)  # (+1, +0)
+    N[2, 6] = -bp_2*_couple_avg(R, r)  # (+1, +0)
+    N[2, 7] = (1/2)*bj_2*dx*n1_2*n2_2*(2*r + 1)/dy  # (+2, -1)
+    N[2, 8] = -(bj_2*dx*n1_2*n2_2*r**2 - bj_2*dy*n2_2**2*r - bj_2*dy*n2_2**2 - bm_2*dy*r - bm_2*dy)/(dy*r)  # (+2, +0)
+    N[2, 9] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (+2, +1)
+    N[2, 10] = -bj_2*dx*n1_2*n2_2*r/dy  # (+3, -1)
+    N[2, 11] = r*(bj_2*dx*n1_2*n2_2*r + bj_2*dx*n1_2*n2_2 - bj_2*dy*n2_2**2 - bm_2*dy)/(dy*(r + 1))  # (+3, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case3_sc8_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 3 sub-case 8, eta > 0.  Row 2 is extra (B,R corner)."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'B')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'R')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bm_0*-_phi(B) + _psi(B) * (bj_0*n1_0**2 - bp_0)
+    M[0, 1] = bj_0*dy*n1_0*n2_0/(dx*R*(R + 1))
+    M[1, 0] = -bj_1*dx*n1_1*n2_1/(dy*B*(B + 1))
+    M[1, 1] = -bm_1*_phi_coupled(R, r) - _psi(R) * (bj_1*n2_1**2 - bp_1)
+    M[1, 2] = -bm_1*_couple_off_fwd(R, r)
+    M[2, 2] = bm_2*_couple_off_rev(R, r)
+
+    d = np.zeros(3)
+    d[0] = a_tau_0*bm_0*dy*n1_0 + a_0*bm_0*-_phi(B) + b_0*dy*n2_0
+    d[1] = -a_tau_1*bm_1*dx*n2_1 - a_1*bm_1*_couple_avg(R, r) + b_1*dx*n1_1
+    d[2] = -a_tau_2*bm_2*dx*n2_2 + a_2*bm_2*_couple_avg(R, r) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 0] = bj_0*dy*n1_0*n2_0*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
+    N[0, 1] = -bj_0*dy*n1_0*n2_0*B/dx  # (-1, +1)
+    N[0, 2] = bm_0*(B - 1)/(B - 2)  # (+0, -2)
+    N[0, 3] = -bm_0*(B - 2)/(B - 1)  # (+0, -1)
+    N[0, 4] = (bj_0*dx*n1_0**2*B*R + bj_0*dx*n1_0**2*R - bj_0*dy*n1_0*n2_0*B**2*R - bj_0*dy*n1_0*n2_0*B*R + bj_0*dy*n1_0*n2_0*B - bp_0*dx*B*R - bp_0*dx*R)/(dx*B*R)  # (+0, +0)
+    N[0, 5] = -B*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*B - bj_0*dy*n1_0*n2_0 - bp_0*dx)/(dx*(B + 1))  # (+0, +1)
+    N[1, 0] = -R*(bj_1*dx*n1_1*n2_1*R + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 + bp_1*dy)/(dy*(R + 1))  # (-1, +0)
+    N[1, 1] = bj_1*dx*n1_1*n2_1*R/dy  # (-1, +1)
+    N[1, 4] = (bj_1*dx*n1_1*n2_1*B*R**2 + bj_1*dx*n1_1*n2_1*B*R - bj_1*dx*n1_1*n2_1*R - bj_1*dy*n2_1**2*B*R - bj_1*dy*n2_1**2*B + bp_1*dy*B*R + bp_1*dy*B)/(dy*B*R)  # (+0, +0)
+    N[1, 5] = -bj_1*dx*n1_1*n2_1*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
+    N[1, 6] = -bm_1*_couple_avg(R, r)  # (+1, +0)
+    N[2, 6] = bm_2*_couple_avg(R, r)  # (+1, +0)
+    N[2, 7] = (1/2)*bj_2*dx*n1_2*n2_2*(2*r + 1)/dy  # (+2, -1)
+    N[2, 8] = -(bj_2*dx*n1_2*n2_2*r**2 - bj_2*dy*n2_2**2*r - bj_2*dy*n2_2**2 + bp_2*dy*r + bp_2*dy)/(dy*r)  # (+2, +0)
+    N[2, 9] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (+2, +1)
+    N[2, 10] = -bj_2*dx*n1_2*n2_2*r/dy  # (+3, -1)
+    N[2, 11] = r*(bj_2*dx*n1_2*n2_2*r + bj_2*dx*n1_2*n2_2 - bj_2*dy*n2_2**2 + bp_2*dy)/(dy*(r + 1))  # (+3, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case4_sc1_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 4 sub-case 1, eta < 0."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-2, +0), (-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bj_0*n2_0*(dx*n1_0*L*R - dx*n1_0*R - dy*n2_0*L - 2*dy*n2_0*R)/(dy*R*(L + R)) - bm_0*(L + 2*R)/(R*(L + R)) + bp_0*-_phi(R)
+    M[0, 1] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
+    M[0, 2] = -bj_0*n2_0*R*(dx*n1_0*R + dx*n1_0 + dy*n2_0)/(dy*L*(L + R)) - bm_0*R/(L*(L + R))
+    M[1, 0] = bj_1*dy*n1_1*n2_1*(L*T + L - T)/(dx*R*(L + R))
+    M[1, 1] = bp_1*-_phi(T) - _psi(T) * (bj_1*n1_1**2 + bm_1)
+    M[1, 2] = -bj_1*dy*n1_1*n2_1*(R*T + R + T)/(dx*L*(L + R))
+    M[2, 0] = -bj_2*n2_2*L*(dx*n1_2*L - dx*n1_2 - dy*n2_2)/(dy*R*(L + R)) + bm_2*L/(R*(L + R))
+    M[2, 1] = bj_2*dx*n1_2*n2_2/(dy*T*(T + 1))
+    M[2, 2] = bj_2*n2_2*(dx*n1_2*L*R + dx*n1_2*L + 2*dy*n2_2*L + dy*n2_2*R)/(dy*L*(L + R)) + bm_2*(2*L + R)/(L*(L + R)) - bp_2*-_phi(L)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bp_0*dx*n2_0 - a_0*bp_0*-_phi(R) + b_0*dx*n1_0
+    d[1] = a_tau_1*bp_1*dy*n1_1 - a_1*bp_1*-_phi(T) + b_1*dy*n2_1
+    d[2] = -a_tau_2*bp_2*dx*n2_2 + a_2*bp_2*-_phi(L) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 1] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
+    N[0, 3] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
+    N[0, 4] = (bj_0*dx*n1_0*n2_0*L*R - bj_0*dx*n1_0*n2_0*R**2*T - bj_0*dx*n1_0*n2_0*R*T - bj_0*dy*n2_0**2*L*T - bj_0*dy*n2_0**2*R*T - bm_0*dy*L*T - bm_0*dy*R*T)/(dy*L*R*T)  # (+0, +0)
+    N[0, 7] = -bp_0*(R - 2)/(R - 1)  # (+1, +0)
+    N[0, 8] = bp_0*(R - 1)/(R - 2)  # (+2, +0)
+    N[1, 1] = -bj_1*dy*n1_1*n2_1*T/dx  # (-1, -1)
+    N[1, 3] = T*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*T + bj_1*dy*n1_1*n2_1 + bm_1*dx)/(dx*(T + 1))  # (+0, -1)
+    N[1, 4] = -(bj_1*dx*n1_1**2*L*R*T + bj_1*dx*n1_1**2*L*R - bj_1*dy*n1_1*n2_1*L*T**2 - bj_1*dy*n1_1*n2_1*L*T + bj_1*dy*n1_1*n2_1*R*T**2 + bj_1*dy*n1_1*n2_1*R*T + bj_1*dy*n1_1*n2_1*T**2 + bm_1*dx*L*R*T + bm_1*dx*L*R)/(dx*L*R*T)  # (+0, +0)
+    N[1, 5] = -bp_1*(T - 2)/(T - 1)  # (+0, +1)
+    N[1, 6] = bp_1*(T - 1)/(T - 2)  # (+0, +2)
+    N[2, 0] = -bp_2*(L - 1)/(L - 2)  # (-2, +0)
+    N[2, 1] = bj_2*dx*n1_2*n2_2*L/dy  # (-1, -1)
+    N[2, 2] = bp_2*(L - 2)/(L - 1)  # (-1, +0)
+    N[2, 3] = -bj_2*dx*n1_2*n2_2*(L*T + L - T)/(dy*(T + 1))  # (+0, -1)
+    N[2, 4] = -(bj_2*dx*n1_2*n2_2*L**2*T - bj_2*dx*n1_2*n2_2*L*R - bj_2*dx*n1_2*n2_2*L*T - bj_2*dy*n2_2**2*L*T - bj_2*dy*n2_2**2*R*T - bm_2*dy*L*T - bm_2*dy*R*T)/(dy*L*R*T)  # (+0, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case4_sc1_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 4 sub-case 1, eta > 0."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-2, +0), (-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bj_0*n2_0*(dx*n1_0*L*R - dx*n1_0*R - dy*n2_0*L - 2*dy*n2_0*R)/(dy*R*(L + R)) - bm_0*-_phi(R) + bp_0*(L + 2*R)/(R*(L + R))
+    M[0, 1] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
+    M[0, 2] = -bj_0*n2_0*R*(dx*n1_0*R + dx*n1_0 + dy*n2_0)/(dy*L*(L + R)) + bp_0*R/(L*(L + R))
+    M[1, 0] = bj_1*dy*n1_1*n2_1*(L*T + L - T)/(dx*R*(L + R))
+    M[1, 1] = -bm_1*-_phi(T) - _psi(T) * (bj_1*n1_1**2 - bp_1)
+    M[1, 2] = -bj_1*dy*n1_1*n2_1*(R*T + R + T)/(dx*L*(L + R))
+    M[2, 0] = -bj_2*n2_2*L*(dx*n1_2*L - dx*n1_2 - dy*n2_2)/(dy*R*(L + R)) - bp_2*L/(R*(L + R))
+    M[2, 1] = bj_2*dx*n1_2*n2_2/(dy*T*(T + 1))
+    M[2, 2] = bj_2*n2_2*(dx*n1_2*L*R + dx*n1_2*L + 2*dy*n2_2*L + dy*n2_2*R)/(dy*L*(L + R)) + bm_2*-_phi(L) - bp_2*(2*L + R)/(L*(L + R))
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bm_0*dx*n2_0 - a_0*bm_0*-_phi(R) + b_0*dx*n1_0
+    d[1] = a_tau_1*bm_1*dy*n1_1 - a_1*bm_1*-_phi(T) + b_1*dy*n2_1
+    d[2] = -a_tau_2*bm_2*dx*n2_2 + a_2*bm_2*-_phi(L) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 1] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
+    N[0, 3] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
+    N[0, 4] = (bj_0*dx*n1_0*n2_0*L*R - bj_0*dx*n1_0*n2_0*R**2*T - bj_0*dx*n1_0*n2_0*R*T - bj_0*dy*n2_0**2*L*T - bj_0*dy*n2_0**2*R*T + bp_0*dy*L*T + bp_0*dy*R*T)/(dy*L*R*T)  # (+0, +0)
+    N[0, 7] = bm_0*(R - 2)/(R - 1)  # (+1, +0)
+    N[0, 8] = -bm_0*(R - 1)/(R - 2)  # (+2, +0)
+    N[1, 1] = -bj_1*dy*n1_1*n2_1*T/dx  # (-1, -1)
+    N[1, 3] = T*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*T + bj_1*dy*n1_1*n2_1 - bp_1*dx)/(dx*(T + 1))  # (+0, -1)
+    N[1, 4] = -(bj_1*dx*n1_1**2*L*R*T + bj_1*dx*n1_1**2*L*R - bj_1*dy*n1_1*n2_1*L*T**2 - bj_1*dy*n1_1*n2_1*L*T + bj_1*dy*n1_1*n2_1*R*T**2 + bj_1*dy*n1_1*n2_1*R*T + bj_1*dy*n1_1*n2_1*T**2 - bp_1*dx*L*R*T - bp_1*dx*L*R)/(dx*L*R*T)  # (+0, +0)
+    N[1, 5] = bm_1*(T - 2)/(T - 1)  # (+0, +1)
+    N[1, 6] = -bm_1*(T - 1)/(T - 2)  # (+0, +2)
+    N[2, 0] = bm_2*(L - 1)/(L - 2)  # (-2, +0)
+    N[2, 1] = bj_2*dx*n1_2*n2_2*L/dy  # (-1, -1)
+    N[2, 2] = -bm_2*(L - 2)/(L - 1)  # (-1, +0)
+    N[2, 3] = -bj_2*dx*n1_2*n2_2*(L*T + L - T)/(dy*(T + 1))  # (+0, -1)
+    N[2, 4] = -(bj_2*dx*n1_2*n2_2*L**2*T - bj_2*dx*n1_2*n2_2*L*R - bj_2*dx*n1_2*n2_2*L*T - bj_2*dy*n2_2**2*L*T - bj_2*dy*n2_2**2*R*T + bp_2*dy*L*T + bp_2*dy*R*T)/(dy*L*R*T)  # (+0, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case4_sc2_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 4 sub-case 2, eta < 0."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'B')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = bp_0*-_phi(R) - _psi(R) * (bj_0*n2_0**2 + bm_0)
+    M[0, 1] = bj_0*dx*n1_0*n2_0*(B*R + B + R)/(dy*T*(B + T))
+    M[0, 2] = -bj_0*dx*n1_0*n2_0*(R*T - R + T)/(dy*B*(B + T))
+    M[1, 0] = bj_1*dy*n1_1*n2_1/(dx*R*(R + 1))
+    M[1, 1] = -bj_1*n1_1*(dx*n1_1*B + 2*dx*n1_1*T - dy*n2_1*B*T - dy*n2_1*T)/(dx*T*(B + T)) - bm_1*(B + 2*T)/(T*(B + T)) + bp_1*-_phi(T)
+    M[1, 2] = -bj_1*n1_1*T*(dx*n1_1 + dy*n2_1*T - dy*n2_1)/(dx*B*(B + T)) - bm_1*T/(B*(B + T))
+    M[2, 0] = bj_2*dy*n1_2*n2_2/(dx*R*(R + 1))
+    M[2, 1] = bj_2*n1_2*B*(dx*n1_2 - dy*n2_2*B - dy*n2_2)/(dx*T*(B + T)) + bm_2*B/(T*(B + T))
+    M[2, 2] = bj_2*n1_2*(2*dx*n1_2*B + dx*n1_2*T + dy*n2_2*B*T - dy*n2_2*B)/(dx*B*(B + T)) + bm_2*(2*B + T)/(B*(B + T)) - bp_2*-_phi(B)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bp_0*dx*n2_0 - a_0*bp_0*-_phi(R) + b_0*dx*n1_0
+    d[1] = a_tau_1*bp_1*dy*n1_1 - a_1*bp_1*-_phi(T) + b_1*dy*n2_1
+    d[2] = a_tau_2*bp_2*dy*n1_2 + a_2*bp_2*-_phi(B) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 0] = -R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 - bj_0*dy*n2_0**2 - bm_0*dy)/(dy*(R + 1))  # (-1, +0)
+    N[0, 1] = bj_0*dx*n1_0*n2_0*R/dy  # (-1, +1)
+    N[0, 4] = (bj_0*dx*n1_0*n2_0*B*R**2 + bj_0*dx*n1_0*n2_0*B*R - bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R**2 - bj_0*dx*n1_0*n2_0*R*T - bj_0*dy*n2_0**2*B*R*T - bj_0*dy*n2_0**2*B*T - bm_0*dy*B*R*T - bm_0*dy*B*T)/(dy*B*R*T)  # (+0, +0)
+    N[0, 7] = -bp_0*(R - 2)/(R - 1)  # (+1, +0)
+    N[0, 8] = bp_0*(R - 1)/(R - 2)  # (+2, +0)
+    N[1, 0] = -bj_1*dy*n1_1*n2_1*(R*T - R + T)/(dx*(R + 1))  # (-1, +0)
+    N[1, 1] = bj_1*dy*n1_1*n2_1*T/dx  # (-1, +1)
+    N[1, 4] = -(bj_1*dx*n1_1**2*B*R + bj_1*dx*n1_1**2*R*T - bj_1*dy*n1_1*n2_1*B*T + bj_1*dy*n1_1*n2_1*R*T**2 - bj_1*dy*n1_1*n2_1*R*T + bm_1*dx*B*R + bm_1*dx*R*T)/(dx*B*R*T)  # (+0, +0)
+    N[1, 5] = -bp_1*(T - 2)/(T - 1)  # (+0, +1)
+    N[1, 6] = bp_1*(T - 1)/(T - 2)  # (+0, +2)
+    N[2, 0] = bj_2*dy*n1_2*n2_2*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
+    N[2, 1] = -bj_2*dy*n1_2*n2_2*B/dx  # (-1, +1)
+    N[2, 2] = -bp_2*(B - 1)/(B - 2)  # (+0, -2)
+    N[2, 3] = bp_2*(B - 2)/(B - 1)  # (+0, -1)
+    N[2, 4] = (bj_2*dx*n1_2**2*B*R + bj_2*dx*n1_2**2*R*T - bj_2*dy*n1_2*n2_2*B**2*R - bj_2*dy*n1_2*n2_2*B*R + bj_2*dy*n1_2*n2_2*B*T + bm_2*dx*B*R + bm_2*dx*R*T)/(dx*B*R*T)  # (+0, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case4_sc2_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 4 sub-case 2, eta > 0."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'B')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bm_0*-_phi(R) - _psi(R) * (bj_0*n2_0**2 - bp_0)
+    M[0, 1] = bj_0*dx*n1_0*n2_0*(B*R + B + R)/(dy*T*(B + T))
+    M[0, 2] = -bj_0*dx*n1_0*n2_0*(R*T - R + T)/(dy*B*(B + T))
+    M[1, 0] = bj_1*dy*n1_1*n2_1/(dx*R*(R + 1))
+    M[1, 1] = -bj_1*n1_1*(dx*n1_1*B + 2*dx*n1_1*T - dy*n2_1*B*T - dy*n2_1*T)/(dx*T*(B + T)) - bm_1*-_phi(T) + bp_1*(B + 2*T)/(T*(B + T))
+    M[1, 2] = -bj_1*n1_1*T*(dx*n1_1 + dy*n2_1*T - dy*n2_1)/(dx*B*(B + T)) + bp_1*T/(B*(B + T))
+    M[2, 0] = bj_2*dy*n1_2*n2_2/(dx*R*(R + 1))
+    M[2, 1] = bj_2*n1_2*B*(dx*n1_2 - dy*n2_2*B - dy*n2_2)/(dx*T*(B + T)) - bp_2*B/(T*(B + T))
+    M[2, 2] = bj_2*n1_2*(2*dx*n1_2*B + dx*n1_2*T + dy*n2_2*B*T - dy*n2_2*B)/(dx*B*(B + T)) + bm_2*-_phi(B) - bp_2*(2*B + T)/(B*(B + T))
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bm_0*dx*n2_0 - a_0*bm_0*-_phi(R) + b_0*dx*n1_0
+    d[1] = a_tau_1*bm_1*dy*n1_1 - a_1*bm_1*-_phi(T) + b_1*dy*n2_1
+    d[2] = a_tau_2*bm_2*dy*n1_2 + a_2*bm_2*-_phi(B) + b_2*dy*n2_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 0] = -R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 - bj_0*dy*n2_0**2 + bp_0*dy)/(dy*(R + 1))  # (-1, +0)
+    N[0, 1] = bj_0*dx*n1_0*n2_0*R/dy  # (-1, +1)
+    N[0, 4] = (bj_0*dx*n1_0*n2_0*B*R**2 + bj_0*dx*n1_0*n2_0*B*R - bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R**2 - bj_0*dx*n1_0*n2_0*R*T - bj_0*dy*n2_0**2*B*R*T - bj_0*dy*n2_0**2*B*T + bp_0*dy*B*R*T + bp_0*dy*B*T)/(dy*B*R*T)  # (+0, +0)
+    N[0, 7] = bm_0*(R - 2)/(R - 1)  # (+1, +0)
+    N[0, 8] = -bm_0*(R - 1)/(R - 2)  # (+2, +0)
+    N[1, 0] = -bj_1*dy*n1_1*n2_1*(R*T - R + T)/(dx*(R + 1))  # (-1, +0)
+    N[1, 1] = bj_1*dy*n1_1*n2_1*T/dx  # (-1, +1)
+    N[1, 4] = -(bj_1*dx*n1_1**2*B*R + bj_1*dx*n1_1**2*R*T - bj_1*dy*n1_1*n2_1*B*T + bj_1*dy*n1_1*n2_1*R*T**2 - bj_1*dy*n1_1*n2_1*R*T - bp_1*dx*B*R - bp_1*dx*R*T)/(dx*B*R*T)  # (+0, +0)
+    N[1, 5] = bm_1*(T - 2)/(T - 1)  # (+0, +1)
+    N[1, 6] = -bm_1*(T - 1)/(T - 2)  # (+0, +2)
+    N[2, 0] = bj_2*dy*n1_2*n2_2*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
+    N[2, 1] = -bj_2*dy*n1_2*n2_2*B/dx  # (-1, +1)
+    N[2, 2] = bm_2*(B - 1)/(B - 2)  # (+0, -2)
+    N[2, 3] = -bm_2*(B - 2)/(B - 1)  # (+0, -1)
+    N[2, 4] = (bj_2*dx*n1_2**2*B*R + bj_2*dx*n1_2**2*R*T - bj_2*dy*n1_2*n2_2*B**2*R - bj_2*dy*n1_2*n2_2*B*R + bj_2*dy*n1_2*n2_2*B*T - bp_2*dx*B*R - bp_2*dx*R*T)/(dx*B*R*T)  # (+0, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case4_sc3_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 4 sub-case 3, eta < 0."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-2, +0), (-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bj_0*n2_0*(dx*n1_0*L*R - dx*n1_0*R + dy*n2_0*L + 2*dy*n2_0*R)/(dy*R*(L + R)) - bm_0*(L + 2*R)/(R*(L + R)) + bp_0*-_phi(R)
+    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
+    M[0, 2] = bj_0*n2_0*R*(dx*n1_0*R + dx*n1_0 - dy*n2_0)/(dy*L*(L + R)) - bm_0*R/(L*(L + R))
+    M[1, 0] = bj_1*dy*n1_1*n2_1*(B*L - B + L)/(dx*R*(L + R))
+    M[1, 1] = -bp_1*-_phi(B) + _psi(B) * (bj_1*n1_1**2 + bm_1)
+    M[1, 2] = -bj_1*dy*n1_1*n2_1*(B*R + B + R)/(dx*L*(L + R))
+    M[2, 0] = bj_2*n2_2*L*(dx*n1_2*L - dx*n1_2 + dy*n2_2)/(dy*R*(L + R)) + bm_2*L/(R*(L + R))
+    M[2, 1] = -bj_2*dx*n1_2*n2_2/(dy*B*(B + 1))
+    M[2, 2] = -bj_2*n2_2*(dx*n1_2*L*R + dx*n1_2*L - 2*dy*n2_2*L - dy*n2_2*R)/(dy*L*(L + R)) + bm_2*(2*L + R)/(L*(L + R)) - bp_2*-_phi(L)
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bp_0*dx*n2_0 - a_0*bp_0*-_phi(R) + b_0*dx*n1_0
+    d[1] = a_tau_1*bp_1*dy*n1_1 + a_1*bp_1*-_phi(B) + b_1*dy*n2_1
+    d[2] = -a_tau_2*bp_2*dx*n2_2 + a_2*bp_2*-_phi(L) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 2] = bj_0*dx*n1_0*n2_0*R/dy  # (-1, +1)
+    N[0, 5] = (bj_0*dx*n1_0*n2_0*B*R**2 + bj_0*dx*n1_0*n2_0*B*R - bj_0*dx*n1_0*n2_0*L*R - bj_0*dy*n2_0**2*B*L - bj_0*dy*n2_0**2*B*R - bm_0*dy*B*L - bm_0*dy*B*R)/(dy*B*L*R)  # (+0, +0)
+    N[0, 6] = -bj_0*dx*n1_0*n2_0*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
+    N[0, 7] = -bp_0*(R - 2)/(R - 1)  # (+1, +0)
+    N[0, 8] = bp_0*(R - 1)/(R - 2)  # (+2, +0)
+    N[1, 2] = -bj_1*dy*n1_1*n2_1*B/dx  # (-1, +1)
+    N[1, 3] = -bp_1*(B - 1)/(B - 2)  # (+0, -2)
+    N[1, 4] = bp_1*(B - 2)/(B - 1)  # (+0, -1)
+    N[1, 5] = (bj_1*dx*n1_1**2*B*L*R + bj_1*dx*n1_1**2*L*R + bj_1*dy*n1_1*n2_1*B**2*L - bj_1*dy*n1_1*n2_1*B**2*R - bj_1*dy*n1_1*n2_1*B**2 + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B*R + bm_1*dx*B*L*R + bm_1*dx*L*R)/(dx*B*L*R)  # (+0, +0)
+    N[1, 6] = -B*(bj_1*dx*n1_1**2 - bj_1*dy*n1_1*n2_1*B - bj_1*dy*n1_1*n2_1 + bm_1*dx)/(dx*(B + 1))  # (+0, +1)
+    N[2, 0] = -bp_2*(L - 1)/(L - 2)  # (-2, +0)
+    N[2, 1] = bp_2*(L - 2)/(L - 1)  # (-1, +0)
+    N[2, 2] = -bj_2*dx*n1_2*n2_2*L/dy  # (-1, +1)
+    N[2, 5] = (bj_2*dx*n1_2*n2_2*B*L**2 - bj_2*dx*n1_2*n2_2*B*L - bj_2*dx*n1_2*n2_2*L*R + bj_2*dy*n2_2**2*B*L + bj_2*dy*n2_2**2*B*R + bm_2*dy*B*L + bm_2*dy*B*R)/(dy*B*L*R)  # (+0, +0)
+    N[2, 6] = bj_2*dx*n1_2*n2_2*(B*L - B + L)/(dy*(B + 1))  # (+0, +1)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case4_sc3_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 4 sub-case 3, eta > 0."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-2, +0), (-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bj_0*n2_0*(dx*n1_0*L*R - dx*n1_0*R + dy*n2_0*L + 2*dy*n2_0*R)/(dy*R*(L + R)) - bm_0*-_phi(R) + bp_0*(L + 2*R)/(R*(L + R))
+    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
+    M[0, 2] = bj_0*n2_0*R*(dx*n1_0*R + dx*n1_0 - dy*n2_0)/(dy*L*(L + R)) + bp_0*R/(L*(L + R))
+    M[1, 0] = bj_1*dy*n1_1*n2_1*(B*L - B + L)/(dx*R*(L + R))
+    M[1, 1] = bm_1*-_phi(B) + _psi(B) * (bj_1*n1_1**2 - bp_1)
+    M[1, 2] = -bj_1*dy*n1_1*n2_1*(B*R + B + R)/(dx*L*(L + R))
+    M[2, 0] = bj_2*n2_2*L*(dx*n1_2*L - dx*n1_2 + dy*n2_2)/(dy*R*(L + R)) - bp_2*L/(R*(L + R))
+    M[2, 1] = -bj_2*dx*n1_2*n2_2/(dy*B*(B + 1))
+    M[2, 2] = -bj_2*n2_2*(dx*n1_2*L*R + dx*n1_2*L - 2*dy*n2_2*L - dy*n2_2*R)/(dy*L*(L + R)) + bm_2*-_phi(L) - bp_2*(2*L + R)/(L*(L + R))
+
+    d = np.zeros(3)
+    d[0] = -a_tau_0*bm_0*dx*n2_0 - a_0*bm_0*-_phi(R) + b_0*dx*n1_0
+    d[1] = a_tau_1*bm_1*dy*n1_1 + a_1*bm_1*-_phi(B) + b_1*dy*n2_1
+    d[2] = -a_tau_2*bm_2*dx*n2_2 + a_2*bm_2*-_phi(L) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 2] = bj_0*dx*n1_0*n2_0*R/dy  # (-1, +1)
+    N[0, 5] = (bj_0*dx*n1_0*n2_0*B*R**2 + bj_0*dx*n1_0*n2_0*B*R - bj_0*dx*n1_0*n2_0*L*R - bj_0*dy*n2_0**2*B*L - bj_0*dy*n2_0**2*B*R + bp_0*dy*B*L + bp_0*dy*B*R)/(dy*B*L*R)  # (+0, +0)
+    N[0, 6] = -bj_0*dx*n1_0*n2_0*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
+    N[0, 7] = bm_0*(R - 2)/(R - 1)  # (+1, +0)
+    N[0, 8] = -bm_0*(R - 1)/(R - 2)  # (+2, +0)
+    N[1, 2] = -bj_1*dy*n1_1*n2_1*B/dx  # (-1, +1)
+    N[1, 3] = bm_1*(B - 1)/(B - 2)  # (+0, -2)
+    N[1, 4] = -bm_1*(B - 2)/(B - 1)  # (+0, -1)
+    N[1, 5] = (bj_1*dx*n1_1**2*B*L*R + bj_1*dx*n1_1**2*L*R + bj_1*dy*n1_1*n2_1*B**2*L - bj_1*dy*n1_1*n2_1*B**2*R - bj_1*dy*n1_1*n2_1*B**2 + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B*R - bp_1*dx*B*L*R - bp_1*dx*L*R)/(dx*B*L*R)  # (+0, +0)
+    N[1, 6] = -B*(bj_1*dx*n1_1**2 - bj_1*dy*n1_1*n2_1*B - bj_1*dy*n1_1*n2_1 - bp_1*dx)/(dx*(B + 1))  # (+0, +1)
+    N[2, 0] = bm_2*(L - 1)/(L - 2)  # (-2, +0)
+    N[2, 1] = -bm_2*(L - 2)/(L - 1)  # (-1, +0)
+    N[2, 2] = -bj_2*dx*n1_2*n2_2*L/dy  # (-1, +1)
+    N[2, 5] = (bj_2*dx*n1_2*n2_2*B*L**2 - bj_2*dx*n1_2*n2_2*B*L - bj_2*dx*n1_2*n2_2*L*R + bj_2*dy*n2_2**2*B*L + bj_2*dy*n2_2**2*B*R - bp_2*dy*B*L - bp_2*dy*B*R)/(dy*B*L*R)  # (+0, +0)
+    N[2, 6] = bj_2*dx*n1_2*n2_2*(B*L - B + L)/(dy*(B + 1))  # (+0, +1)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case4_sc4_eta_m1(geom, theta_inputs, betas_per_row):
+    """Case 4 sub-case 4, eta < 0."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-2, +0), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bj_0*n1_0*(dx*n1_0*B + 2*dx*n1_0*T + dy*n2_0*B*T - dy*n2_0*T)/(dx*T*(B + T)) - bm_0*(B + 2*T)/(T*(B + T)) + bp_0*-_phi(T)
+    M[0, 1] = -bj_0*n1_0*T*(dx*n1_0 - dy*n2_0*T - dy*n2_0)/(dx*B*(B + T)) - bm_0*T/(B*(B + T))
+    M[0, 2] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
+    M[1, 0] = bj_1*n1_1*B*(dx*n1_1 + dy*n2_1*B - dy*n2_1)/(dx*T*(B + T)) + bm_1*B/(T*(B + T))
+    M[1, 1] = bj_1*n1_1*(2*dx*n1_1*B + dx*n1_1*T - dy*n2_1*B*T - dy*n2_1*B)/(dx*B*(B + T)) + bm_1*(2*B + T)/(B*(B + T)) - bp_1*-_phi(B)
+    M[1, 2] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
+    M[2, 0] = bj_2*dx*n1_2*n2_2*(B*L + B - L)/(dy*T*(B + T))
+    M[2, 1] = -bj_2*dx*n1_2*n2_2*(L*T + L + T)/(dy*B*(B + T))
+    M[2, 2] = -bp_2*-_phi(L) + _psi(L) * (bj_2*n2_2**2 + bm_2)
+
+    d = np.zeros(3)
+    d[0] = a_tau_0*bp_0*dy*n1_0 - a_0*bp_0*-_phi(T) + b_0*dy*n2_0
+    d[1] = a_tau_1*bp_1*dy*n1_1 + a_1*bp_1*-_phi(B) + b_1*dy*n2_1
+    d[2] = -a_tau_2*bp_2*dx*n2_2 + a_2*bp_2*-_phi(L) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 4] = -(bj_0*dx*n1_0**2*B*L + bj_0*dx*n1_0**2*L*T + bj_0*dy*n1_0*n2_0*B*T - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T + bm_0*dx*B*L + bm_0*dx*L*T)/(dx*B*L*T)  # (+0, +0)
+    N[0, 5] = -bp_0*(T - 2)/(T - 1)  # (+0, +1)
+    N[0, 6] = bp_0*(T - 1)/(T - 2)  # (+0, +2)
+    N[0, 7] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
+    N[0, 8] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
+    N[1, 2] = -bp_1*(B - 1)/(B - 2)  # (+0, -2)
+    N[1, 3] = bp_1*(B - 2)/(B - 1)  # (+0, -1)
+    N[1, 4] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L*T + bj_1*dy*n1_1*n2_1*B**2*L - bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B*T + bm_1*dx*B*L + bm_1*dx*L*T)/(dx*B*L*T)  # (+0, +0)
+    N[1, 7] = -bj_1*dy*n1_1*n2_1*B/dx  # (+1, -1)
+    N[1, 8] = bj_1*dy*n1_1*n2_1*(B*L + B - L)/(dx*(L + 1))  # (+1, +0)
+    N[2, 0] = -bp_2*(L - 1)/(L - 2)  # (-2, +0)
+    N[2, 1] = bp_2*(L - 2)/(L - 1)  # (-1, +0)
+    N[2, 4] = (bj_2*dx*n1_2*n2_2*B*L**2 + bj_2*dx*n1_2*n2_2*B*L - bj_2*dx*n1_2*n2_2*L**2*T - bj_2*dx*n1_2*n2_2*L**2 - bj_2*dx*n1_2*n2_2*L*T + bj_2*dy*n2_2**2*B*L*T + bj_2*dy*n2_2**2*B*T + bm_2*dy*B*L*T + bm_2*dy*B*T)/(dy*B*L*T)  # (+0, +0)
+    N[2, 7] = -bj_2*dx*n1_2*n2_2*L/dy  # (+1, -1)
+    N[2, 8] = L*(bj_2*dx*n1_2*n2_2*L + bj_2*dx*n1_2*n2_2 - bj_2*dy*n2_2**2 - bm_2*dy)/(dy*(L + 1))  # (+1, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+def _case4_sc4_eta_p1(geom, theta_inputs, betas_per_row):
+    """Case 4 sub-case 4, eta > 0."""
+    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
+    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    bp_0, bm_0, bj_0 = betas_per_row[0]
+    bp_1, bm_1, bj_1 = betas_per_row[1]
+    bp_2, bm_2, bj_2 = betas_per_row[2]
+
+    offsets = [(-2, +0), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+
+    M = np.zeros((3, 3))
+    M[0, 0] = -bj_0*n1_0*(dx*n1_0*B + 2*dx*n1_0*T + dy*n2_0*B*T - dy*n2_0*T)/(dx*T*(B + T)) - bm_0*-_phi(T) + bp_0*(B + 2*T)/(T*(B + T))
+    M[0, 1] = -bj_0*n1_0*T*(dx*n1_0 - dy*n2_0*T - dy*n2_0)/(dx*B*(B + T)) + bp_0*T/(B*(B + T))
+    M[0, 2] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
+    M[1, 0] = bj_1*n1_1*B*(dx*n1_1 + dy*n2_1*B - dy*n2_1)/(dx*T*(B + T)) - bp_1*B/(T*(B + T))
+    M[1, 1] = bj_1*n1_1*(2*dx*n1_1*B + dx*n1_1*T - dy*n2_1*B*T - dy*n2_1*B)/(dx*B*(B + T)) + bm_1*-_phi(B) - bp_1*(2*B + T)/(B*(B + T))
+    M[1, 2] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
+    M[2, 0] = bj_2*dx*n1_2*n2_2*(B*L + B - L)/(dy*T*(B + T))
+    M[2, 1] = -bj_2*dx*n1_2*n2_2*(L*T + L + T)/(dy*B*(B + T))
+    M[2, 2] = bm_2*-_phi(L) + _psi(L) * (bj_2*n2_2**2 - bp_2)
+
+    d = np.zeros(3)
+    d[0] = a_tau_0*bm_0*dy*n1_0 - a_0*bm_0*-_phi(T) + b_0*dy*n2_0
+    d[1] = a_tau_1*bm_1*dy*n1_1 + a_1*bm_1*-_phi(B) + b_1*dy*n2_1
+    d[2] = -a_tau_2*bm_2*dx*n2_2 + a_2*bm_2*-_phi(L) + b_2*dx*n1_2
+
+    N = np.zeros((3, len(offsets)))
+    N[0, 4] = -(bj_0*dx*n1_0**2*B*L + bj_0*dx*n1_0**2*L*T + bj_0*dy*n1_0*n2_0*B*T - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T - bp_0*dx*B*L - bp_0*dx*L*T)/(dx*B*L*T)  # (+0, +0)
+    N[0, 5] = bm_0*(T - 2)/(T - 1)  # (+0, +1)
+    N[0, 6] = -bm_0*(T - 1)/(T - 2)  # (+0, +2)
+    N[0, 7] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
+    N[0, 8] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
+    N[1, 2] = bm_1*(B - 1)/(B - 2)  # (+0, -2)
+    N[1, 3] = -bm_1*(B - 2)/(B - 1)  # (+0, -1)
+    N[1, 4] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L*T + bj_1*dy*n1_1*n2_1*B**2*L - bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B*T - bp_1*dx*B*L - bp_1*dx*L*T)/(dx*B*L*T)  # (+0, +0)
+    N[1, 7] = -bj_1*dy*n1_1*n2_1*B/dx  # (+1, -1)
+    N[1, 8] = bj_1*dy*n1_1*n2_1*(B*L + B - L)/(dx*(L + 1))  # (+1, +0)
+    N[2, 0] = bm_2*(L - 1)/(L - 2)  # (-2, +0)
+    N[2, 1] = -bm_2*(L - 2)/(L - 1)  # (-1, +0)
+    N[2, 4] = (bj_2*dx*n1_2*n2_2*B*L**2 + bj_2*dx*n1_2*n2_2*B*L - bj_2*dx*n1_2*n2_2*L**2*T - bj_2*dx*n1_2*n2_2*L**2 - bj_2*dx*n1_2*n2_2*L*T + bj_2*dy*n2_2**2*B*L*T + bj_2*dy*n2_2**2*B*T - bp_2*dy*B*L*T - bp_2*dy*B*T)/(dy*B*L*T)  # (+0, +0)
+    N[2, 7] = -bj_2*dx*n1_2*n2_2*L/dy  # (+1, -1)
+    N[2, 8] = L*(bj_2*dx*n1_2*n2_2*L + bj_2*dx*n1_2*n2_2 - bj_2*dy*n2_2**2 + bp_2*dy)/(dy*(L + 1))  # (+1, +0)
+
+    M_inv_d = np.linalg.solve(M, d)
+    M_inv_N = np.linalg.solve(M, N)
+    return M_inv_d, M_inv_N, offsets
+
+
+
+# Row interfaces for each sub-case (needed by _row_betas)
+CASE3_ROW_IFACES = {
+    (1, -1): ('R', 'extra', 'T'),
+    (1, 1): ('R', 'extra', 'T'),
+    (2, -1): ('R', 'T', 'extra'),
+    (2, 1): ('R', 'T', 'extra'),
+    (3, -1): ('T', 'L', 'extra'),
+    (3, 1): ('T', 'L', 'extra'),
+    (4, -1): ('T', 'L', 'extra'),
+    (4, 1): ('T', 'L', 'extra'),
+    (5, -1): ('L', 'B', 'extra'),
+    (5, 1): ('L', 'B', 'extra'),
+    (6, -1): ('L', 'B', 'extra'),
+    (6, 1): ('L', 'B', 'extra'),
+    (7, -1): ('B', 'R', 'extra'),
+    (7, 1): ('B', 'R', 'extra'),
+    (8, -1): ('B', 'R', 'extra'),
+    (8, 1): ('B', 'R', 'extra'),
+}
+CASE4_ROW_IFACES = {
+    (1, -1): ('R', 'T', 'L'),
+    (1, 1): ('R', 'T', 'L'),
+    (2, -1): ('R', 'T', 'B'),
+    (2, 1): ('R', 'T', 'B'),
+    (3, -1): ('R', 'B', 'L'),
+    (3, 1): ('R', 'B', 'L'),
+    (4, -1): ('T', 'B', 'L'),
+    (4, 1): ('T', 'B', 'L'),
+}
+
+# Dispatch dicts
+CASE3_FUNCS = {}
+CASE4_FUNCS = {}
+CASE3_FUNCS[(1, -1)] = _case3_sc1_eta_m1
+CASE3_FUNCS[(1, 1)] = _case3_sc1_eta_p1
+CASE3_FUNCS[(2, -1)] = _case3_sc2_eta_m1
+CASE3_FUNCS[(2, 1)] = _case3_sc2_eta_p1
+CASE3_FUNCS[(3, -1)] = _case3_sc3_eta_m1
+CASE3_FUNCS[(3, 1)] = _case3_sc3_eta_p1
+CASE3_FUNCS[(4, -1)] = _case3_sc4_eta_m1
+CASE3_FUNCS[(4, 1)] = _case3_sc4_eta_p1
+CASE3_FUNCS[(5, -1)] = _case3_sc5_eta_m1
+CASE3_FUNCS[(5, 1)] = _case3_sc5_eta_p1
+CASE3_FUNCS[(6, -1)] = _case3_sc6_eta_m1
+CASE3_FUNCS[(6, 1)] = _case3_sc6_eta_p1
+CASE3_FUNCS[(7, -1)] = _case3_sc7_eta_m1
+CASE3_FUNCS[(7, 1)] = _case3_sc7_eta_p1
+CASE3_FUNCS[(8, -1)] = _case3_sc8_eta_m1
+CASE3_FUNCS[(8, 1)] = _case3_sc8_eta_p1
+CASE4_FUNCS[(1, -1)] = _case4_sc1_eta_m1
+CASE4_FUNCS[(1, 1)] = _case4_sc1_eta_p1
+CASE4_FUNCS[(2, -1)] = _case4_sc2_eta_m1
+CASE4_FUNCS[(2, 1)] = _case4_sc2_eta_p1
+CASE4_FUNCS[(3, -1)] = _case4_sc3_eta_m1
+CASE4_FUNCS[(3, 1)] = _case4_sc3_eta_p1
+CASE4_FUNCS[(4, -1)] = _case4_sc4_eta_m1
+CASE4_FUNCS[(4, 1)] = _case4_sc4_eta_p1
 
 
 def _assemble_case_n(i, j, sw_idx, M_inv_d, M_inv_N, all_offsets,

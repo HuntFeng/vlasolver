@@ -24,6 +24,7 @@ Sec 3.2.2:
 This script derives both equations for all 4 Cartesian directions
 (Right, Left, Top, Bottom).
 """
+
 import sympy as sp
 from sympy import init_printing
 from IPython.display import display, Markdown, Math
@@ -36,9 +37,7 @@ init_printing()
 dx, dy = sp.symbols("Delta_x Delta_y")
 
 th_R, th_L, th_T, th_B = sp.symbols("theta_R theta_L theta_T theta_B")
-th_R2, th_L2, th_T2, th_B2 = sp.symbols(
-    "theta_{R2} theta_{L2} theta_{T2} theta_{B2}"
-)
+th_R2, th_L2, th_T2, th_B2 = sp.symbols("theta_{R2} theta_{L2} theta_{T2} theta_{B2}")
 
 bp = sp.Symbol("beta^+")
 bm = sp.Symbol("beta^-")
@@ -49,13 +48,27 @@ a2 = sp.Symbol("a_r")
 b2 = sp.Symbol("b_r")
 
 uc = sp.Symbol("u_{i,j}")
-u_p1 = sp.Symbol("u_{i+1,j}"); u_p2 = sp.Symbol("u_{i+2,j}"); u_p3 = sp.Symbol("u_{i+3,j}")
-u_m1 = sp.Symbol("u_{i-1,j}"); u_m2 = sp.Symbol("u_{i-2,j}"); u_m3 = sp.Symbol("u_{i-3,j}")
-u_t1 = sp.Symbol("u_{i,j+1}"); u_t2 = sp.Symbol("u_{i,j+2}"); u_t3 = sp.Symbol("u_{i,j+3}")
-u_b1 = sp.Symbol("u_{i,j-1}"); u_b2 = sp.Symbol("u_{i,j-2}"); u_b3 = sp.Symbol("u_{i,j-3}")
+u_p1 = sp.Symbol("u_{i+1,j}")
+u_p2 = sp.Symbol("u_{i+2,j}")
+u_p3 = sp.Symbol("u_{i+3,j}")
+u_m1 = sp.Symbol("u_{i-1,j}")
+u_m2 = sp.Symbol("u_{i-2,j}")
+u_m3 = sp.Symbol("u_{i-3,j}")
+u_t1 = sp.Symbol("u_{i,j+1}")
+u_t2 = sp.Symbol("u_{i,j+2}")
+u_t3 = sp.Symbol("u_{i,j+3}")
+u_b1 = sp.Symbol("u_{i,j-1}")
+u_b2 = sp.Symbol("u_{i,j-2}")
+u_b3 = sp.Symbol("u_{i,j-3}")
 
-uRm = sp.Symbol("u_R^-"); uLm = sp.Symbol("u_L^-"); uTm = sp.Symbol("u_T^-"); uBm = sp.Symbol("u_B^-")
-uRm2 = sp.Symbol("u_{R2}^-"); uLm2 = sp.Symbol("u_{L2}^-"); uTm2 = sp.Symbol("u_{T2}^-"); uBm2 = sp.Symbol("u_{B2}^-")
+uRm = sp.Symbol("u_R^-")
+uLm = sp.Symbol("u_L^-")
+uTm = sp.Symbol("u_T^-")
+uBm = sp.Symbol("u_B^-")
+uRm2 = sp.Symbol("u_{R2}^-")
+uLm2 = sp.Symbol("u_{L2}^-")
+uTm2 = sp.Symbol("u_{T2}^-")
+uBm2 = sp.Symbol("u_{B2}^-")
 
 
 # ===================================================================
@@ -133,7 +146,11 @@ def derive_eq30(
     )
 
     display(Markdown(f"### Direction: {direction_name}"))
-    display(Math(f"\\theta = {sp.latex(th)},\\quad \\theta_{{\\text{{other}}}} = {sp.latex(to)}"))
+    display(
+        Math(
+            f"\\theta = {sp.latex(th)},\\quad \\theta_{{\\text{{other}}}} = {sp.latex(to)}"
+        )
+    )
 
     # FD coefficients
     # fd_plus = sp.Matrix([sp.simplify(cp0 * h), sp.simplify(cp1 * h), sp.simplify(cp2 * h)])
@@ -155,7 +172,6 @@ def derive_eq30(
     display(Markdown("**$a$ coefficient:**"))
     display(c_a)
 
-
     # # Verification
     # all_ok = True
     # all_ok &= (sp.simplify(c_self + beta_hat) == 0)
@@ -170,21 +186,16 @@ def derive_eq30(
     # return B_vec, C_vec, c_a, expr_h
     return B_vec, C_vec, c_a
 
+
 # Direction: Right
 # B_R, C_R, ca_R, expr_R = derive_eq30(
-B_R, C_R, ca_R = derive_eq30(
-    "Right", th_R, th_L, uRm, uLm, u_m1, u_p1, u_p2, dx
-)
+B_R, C_R, ca_R = derive_eq30("Right", th_R, th_L, uRm, uLm, u_m1, u_p1, u_p2, dx)
 
 # Direction: Left
-B_L, C_L, ca_L, expr_L = derive_eq30(
-    "Left", th_L, th_R, uLm, uRm, u_p1, u_m1, u_m2, dx
-)
+B_L, C_L, ca_L, expr_L = derive_eq30("Left", th_L, th_R, uLm, uRm, u_p1, u_m1, u_m2, dx)
 
 # Direction: Top
-B_T, C_T, ca_T, expr_T = derive_eq30(
-    "Top", th_T, th_B, uTm, uBm, u_b1, u_t1, u_t2, dy
-)
+B_T, C_T, ca_T, expr_T = derive_eq30("Top", th_T, th_B, uTm, uBm, u_b1, u_t1, u_t2, dy)
 
 # Direction: Bottom
 B_B, C_B, ca_B, expr_B = derive_eq30(
@@ -253,21 +264,37 @@ def derive_eq33(
     ux_minus_r = crm0 * u_self2_m + crm1 * u_far2_grid + crm2 * u_far3_grid
     jump_r = bp * ux_plus_r - bm * ux_minus_r
 
-    sub_R = sp.expand((jump_R * h).subs({uRp_sym: u_self_m + a, uRp2_sym: u_self2_m + a2}))
-    sub_r = sp.expand((jump_r * h).subs({uRp_sym: u_self_m + a, uRp2_sym: u_self2_m + a2}))
+    sub_R = sp.expand(
+        (jump_R * h).subs({uRp_sym: u_self_m + a, uRp2_sym: u_self2_m + a2})
+    )
+    sub_r = sp.expand(
+        (jump_r * h).subs({uRp_sym: u_self_m + a, uRp2_sym: u_self2_m + a2})
+    )
 
-    B_mat = sp.Matrix([
-        [sp.simplify(sub_R.coeff(u_self_m)), sp.simplify(sub_R.coeff(u_self2_m))],
-        [sp.simplify(sub_r.coeff(u_self_m)), sp.simplify(sub_r.coeff(u_self2_m))],
-    ])
-    C_mat = sp.Matrix([
-        [sp.simplify(sub_R.coeff(u_far_m)), sp.simplify(sub_R.coeff(uc)),
-         sp.simplify(sub_R.coeff(u_near_grid)), sp.simplify(sub_R.coeff(u_far2_grid)),
-         sp.simplify(sub_R.coeff(u_far3_grid))],
-        [sp.simplify(sub_r.coeff(u_far_m)), sp.simplify(sub_r.coeff(uc)),
-         sp.simplify(sub_r.coeff(u_near_grid)), sp.simplify(sub_r.coeff(u_far2_grid)),
-         sp.simplify(sub_r.coeff(u_far3_grid))],
-    ])
+    B_mat = sp.Matrix(
+        [
+            [sp.simplify(sub_R.coeff(u_self_m)), sp.simplify(sub_R.coeff(u_self2_m))],
+            [sp.simplify(sub_r.coeff(u_self_m)), sp.simplify(sub_r.coeff(u_self2_m))],
+        ]
+    )
+    C_mat = sp.Matrix(
+        [
+            [
+                sp.simplify(sub_R.coeff(u_far_m)),
+                sp.simplify(sub_R.coeff(uc)),
+                sp.simplify(sub_R.coeff(u_near_grid)),
+                sp.simplify(sub_R.coeff(u_far2_grid)),
+                sp.simplify(sub_R.coeff(u_far3_grid)),
+            ],
+            [
+                sp.simplify(sub_r.coeff(u_far_m)),
+                sp.simplify(sub_r.coeff(uc)),
+                sp.simplify(sub_r.coeff(u_near_grid)),
+                sp.simplify(sub_r.coeff(u_far2_grid)),
+                sp.simplify(sub_r.coeff(u_far3_grid)),
+            ],
+        ]
+    )
     a_vec = sp.Matrix([[sp.simplify(sub_R.coeff(a))], [sp.simplify(sub_r.coeff(a))]])
     a2_vec = sp.Matrix([[sp.simplify(sub_R.coeff(a2))], [sp.simplify(sub_r.coeff(a2))]])
 
@@ -281,15 +308,27 @@ def derive_eq33(
     )
 
     display(Markdown(f"### Direction: {direction_name}"))
-    display(Math(f"\\theta = {sp.latex(th)},\\; "
-                 f"\\theta_{{\\text{{other}}}} = {sp.latex(to)},\\; "
-                 f"\\theta_{{\\text{{2nd}}}} = {sp.latex(thr)}"))
+    display(
+        Math(
+            f"\\theta = {sp.latex(th)},\\; "
+            f"\\theta_{{\\text{{other}}}} = {sp.latex(to)},\\; "
+            f"\\theta_{{\\text{{2nd}}}} = {sp.latex(thr)}"
+        )
+    )
 
     # FD coefficients
-    fd_plus_atR = sp.Matrix([sp.simplify(cp0_atR*h), sp.simplify(cp1_atR*h), sp.simplify(cp2_atR*h)])
-    fd_minus_atR = sp.Matrix([sp.simplify(cm0_atR*h), sp.simplify(cm1_atR*h), sp.simplify(cm2_atR*h)])
-    fd_plus_atr = sp.Matrix([sp.simplify(cxp0*h), sp.simplify(cxp1*h), sp.simplify(cxp2*h)])
-    fd_minus_atr = sp.Matrix([sp.simplify(crm0*h), sp.simplify(crm1*h), sp.simplify(crm2*h)])
+    fd_plus_atR = sp.Matrix(
+        [sp.simplify(cp0_atR * h), sp.simplify(cp1_atR * h), sp.simplify(cp2_atR * h)]
+    )
+    fd_minus_atR = sp.Matrix(
+        [sp.simplify(cm0_atR * h), sp.simplify(cm1_atR * h), sp.simplify(cm2_atR * h)]
+    )
+    fd_plus_atr = sp.Matrix(
+        [sp.simplify(cxp0 * h), sp.simplify(cxp1 * h), sp.simplify(cxp2 * h)]
+    )
+    fd_minus_atr = sp.Matrix(
+        [sp.simplify(crm0 * h), sp.simplify(crm1 * h), sp.simplify(crm2 * h)]
+    )
 
     display(Markdown("**FD coeffs at first interface —** $\\Omega^+$:"))
     display(fd_plus_atR)
@@ -307,7 +346,11 @@ def derive_eq33(
 
     display(Markdown("**$B$ matrix** $(2\\times 2)$ for $[u^-_D,\\; u^-_{D2}]$:"))
     display(sp.Eq(sp.Symbol("B"), B_mat, evaluate=False))
-    display(Markdown("**$C$ matrix** $(2\\times 5)$ for $[u^-_{far},\\; u_c,\\; u_{near},\\; u_{far2},\\; u_{far3}]$:"))
+    display(
+        Markdown(
+            "**$C$ matrix** $(2\\times 5)$ for $[u^-_{far},\\; u_c,\\; u_{near},\\; u_{far2},\\; u_{far3}]$:"
+        )
+    )
     display(sp.Eq(sp.Symbol("C"), C_mat, evaluate=False))
 
     display(Markdown("**$a$ coefficient** (jump at first interface):"))
@@ -315,15 +358,23 @@ def derive_eq33(
     display(Markdown("**$a_r$ coefficient** (jump at second interface):"))
     display(a2_vec)
 
-    display(Markdown("**Full expression** $[\\text{Eq.(33) at } x_D;\\; \\text{Eq.(33) at } x_{D2}] \\times h$:"))
+    display(
+        Markdown(
+            "**Full expression** $[\\text{Eq.(33) at } x_D;\\; \\text{Eq.(33) at } x_{D2}] \\times h$:"
+        )
+    )
     display(sp.Matrix([sub_R, sub_r]))
 
     # Verify B[0,0] == -beta_hat_R and B[1,1] == -beta_hat_r
     ok_R = sp.simplify(B_mat[0, 0] + beta_hat_R) == 0
     ok_r = sp.simplify(B_mat[1, 1] + beta_hat_r) == 0
     status = "✅" if ok_R and ok_r else "❌"
-    display(Markdown(f"**Verification:** $B_{{00}} = -\\hat\\beta_R$: {ok_R}, "
-                     f"$B_{{11}} = -\\hat\\beta_r$: {ok_r}  {status}"))
+    display(
+        Markdown(
+            f"**Verification:** $B_{{00}} = -\\hat\\beta_R$: {ok_R}, "
+            f"$B_{{11}} = -\\hat\\beta_r$: {ok_r}  {status}"
+        )
+    )
 
     return B_mat, C_mat, a_vec, a2_vec, sp.Matrix([sub_R, sub_r])
 
@@ -354,7 +405,8 @@ B_B2, C_B2, a_B2, a2_B2, expr_B2 = derive_eq33(
 # ===================================================================
 display(Markdown("## Summary"))
 
-display(Markdown(r"""
+display(
+    Markdown(r"""
 **Equation (30) — Case 1** (single interface point per direction):
 
 For each direction $D \in \{R, L, T, B\}$, define $\theta_D$ at the interface
@@ -389,4 +441,5 @@ B_D \begin{bmatrix} u^-_D \\ u^-_{D2} \end{bmatrix}
 = \begin{bmatrix} [\beta u_n]_{x_D} \\ [\beta u_n]_{x_{D2}} \end{bmatrix}
 $$
 where $B_D \in \mathbb{R}^{2\times 2}$, $C_D \in \mathbb{R}^{2\times 5}$.
-"""))
+""")
+)

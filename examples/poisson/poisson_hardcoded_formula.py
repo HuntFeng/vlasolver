@@ -2,6 +2,7 @@
 Poisson solver prototype
 Handles complex shape and piecewise variable permittivity
 """
+
 import enum
 from typing import NamedTuple
 
@@ -9,36 +10,42 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 
-
 # Shared zero function — all constant-zero matrix entries.
 _Z = lambda *_: 0.0
 
 
 # -- Rational-theta helpers (cubic Hermite interpolation coefficients) --
 
+
 def _phi(th):
     """_phi(theta) = (3 - 2*th) / ((1-th)*(2-th)), for th in (0,1)."""
     return (3 - 2 * th) / ((1 - th) * (2 - th))
+
 
 def _psi(th):
     """_psi(theta) = (2*th + 1) / (th*(th+1)), for th in (0,1)."""
     return (2 * th + 1) / (th * (th + 1))
 
+
 def _phi_coupled(th1, th2):
     """Coupled phi: (2*th1 + th2 - 3) / ((th1-1)*(th1+th2-2))."""
     return (2 * th1 + th2 - 3) / ((th1 - 1) * (th1 + th2 - 2))
+
 
 def _phi_mirror(th1, th2):
     """Mirror phi: (th1 + 2*th2 - 3) / ((th2-1)*(th1+th2-2))."""
     return (th1 + 2 * th2 - 3) / ((th2 - 1) * (th1 + th2 - 2))
 
+
 def _couple_off_fwd(th1, th2):
     """Forward off-diagonal coupling: (th1-1) / ((th2-1)*(th1+th2-2))."""
     return (th1 - 1) / ((th2 - 1) * (th1 + th2 - 2))
 
+
 def _couple_off_rev(th1, th2):
     """Reverse off-diagonal coupling: (th2-1) / ((th1-1)*(th1+th2-2))."""
     return (th2 - 1) / ((th1 - 1) * (th1 + th2 - 2))
+
 
 def _couple_avg(th1, th2):
     """Average coupling: (th1+th2-2) / ((th1-1)*(th2-1))."""
@@ -82,22 +89,26 @@ _CASE4_SUB = {}
 
 
 def _build_dispatch_tables():
-    _CASE3_SUB.update({
-        (Direction.R | Direction.T, Direction.R): 1,
-        (Direction.R | Direction.T, Direction.T): 2,
-        (Direction.L | Direction.T, Direction.T): 3,
-        (Direction.L | Direction.T, Direction.L): 4,
-        (Direction.L | Direction.B, Direction.L): 5,
-        (Direction.L | Direction.B, Direction.B): 6,
-        (Direction.R | Direction.B, Direction.B): 7,
-        (Direction.R | Direction.B, Direction.R): 8,
-    })
-    _CASE4_SUB.update({
-        int(Direction.R | Direction.T | Direction.L): 1,
-        int(Direction.R | Direction.T | Direction.B): 2,
-        int(Direction.R | Direction.B | Direction.L): 3,
-        int(Direction.T | Direction.B | Direction.L): 4,
-    })
+    _CASE3_SUB.update(
+        {
+            (Direction.R | Direction.T, Direction.R): 1,
+            (Direction.R | Direction.T, Direction.T): 2,
+            (Direction.L | Direction.T, Direction.T): 3,
+            (Direction.L | Direction.T, Direction.L): 4,
+            (Direction.L | Direction.B, Direction.L): 5,
+            (Direction.L | Direction.B, Direction.B): 6,
+            (Direction.R | Direction.B, Direction.B): 7,
+            (Direction.R | Direction.B, Direction.R): 8,
+        }
+    )
+    _CASE4_SUB.update(
+        {
+            int(Direction.R | Direction.T | Direction.L): 1,
+            int(Direction.R | Direction.T | Direction.B): 2,
+            int(Direction.R | Direction.B | Direction.L): 3,
+            int(Direction.T | Direction.B | Direction.L): 4,
+        }
+    )
 
 
 class Direction(enum.IntFlag):
@@ -114,6 +125,7 @@ _build_dispatch_tables()
 # Direction parameterization — encodes axis / sign to eliminate if/else branches.
 # ---------------------------------------------------------------------------
 
+
 class CutDir:
     """Encodes axis and orientation for a single interface cut direction.
 
@@ -121,12 +133,13 @@ class CutDir:
     forward/backward) and T/B (y-axis, forward/backward) so that downstream
     formulas become a single code path parameterized by these two bits.
     """
+
     __slots__ = ("face", "axis", "sign")
 
     def __init__(self, face: int, axis: int, sign: int):
         self.face = face
-        self.axis = axis      # 0 → x-axis; 1 → y-axis
-        self.sign = sign      # +1 for R/T (forward), -1 for L/B (backward)
+        self.axis = axis  # 0 → x-axis; 1 → y-axis
+        self.sign = sign  # +1 for R/T (forward), -1 for L/B (backward)
 
     @property
     def is_x(self) -> bool:
@@ -279,7 +292,9 @@ def compute_theta(direction: int, i: int, j: int) -> float:
     if np.isclose(dd_eta, 0.0):
         theta = np.abs(eta / d_eta)
     else:
-        theta = (-cd.sign * d_eta - np.sign(eta) * np.sqrt(d_eta**2 - 4 * dd_eta * eta)) / (2 * dd_eta)
+        theta = (
+            -cd.sign * d_eta - np.sign(eta) * np.sqrt(d_eta**2 - 4 * dd_eta * eta)
+        ) / (2 * dd_eta)
     if theta < 1e-6 or theta > 1.0 - 1e-6:
         breakpoint()
     return theta
@@ -299,10 +314,14 @@ def interp(direction: int, theta: float, i: int, j: int, field: np.ndarray) -> f
     cd = _CD[direction]
     if cd.is_x:
         k = i
-        points = field[k - 1 : k + 3, j] if cd.sign > 0 else field[k - 2 : k + 2, j][::-1]
+        points = (
+            field[k - 1 : k + 3, j] if cd.sign > 0 else field[k - 2 : k + 2, j][::-1]
+        )
     else:
         k = j
-        points = field[i, k - 1 : k + 3] if cd.sign > 0 else field[i, k - 2 : k + 2][::-1]
+        points = (
+            field[i, k - 1 : k + 3] if cd.sign > 0 else field[i, k - 2 : k + 2][::-1]
+        )
     return 0.5 * t_matrix @ c_matrix @ points
 
 
@@ -384,19 +403,24 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
 
     # d-vector entry (RHS contribution)
     d_self = dx if cd.is_x else dy
-    d = (
-        (-1 if cd.is_x else 1) * a_tau_I * eps_p * n_t * d_self
-        + b_I * n_n * d_self
-        + cd.sign * a_I * eps_p * _phi(theta)
-    )
+    a_tau_term = (-1 if cd.is_x else 1) * a_tau_I * eps_p * n_t * d_self
+    b_term = b_I * n_n * d_self
+    a_term = -cd.sign * a_I * eps_p * _phi(theta)
+    # d = (
+    #     (-1 if cd.is_x else 1) * a_tau_I * eps_p * n_t * d_self
+    #     + b_I * n_n * d_self
+    #     + cd.sign * a_I * eps_p * _phi(theta)
+    # )
+    d = a_tau_term + b_term - a_term
 
     if eta > 0:
         eps_p, eps_m = -_eps_m, -_eps_p
 
     # scalar M (1x1 mass matrix)
-    M = -cd.sign * (
-        eps_p * _phi(theta) + eps_m * _psi(theta) + eps_jump * n_t**2 * _psi(theta)
-    )
+    # M = -cd.sign * (eps_p * _phi(theta) + eps_m * _psi(theta) + eps_jump * n_t**2 * _psi(theta))
+    B = -cd.sign * (eps_p * _phi(theta) + eps_m * _psi(theta))
+    grad_coeff_dir = cd.sign * eps_jump * n_t**2 * _psi(theta)
+    M = B - grad_coeff_dir
 
     # 7-element N vector (couplings to stencil neighbours)
     d_other = dy if cd.is_x else dx
@@ -413,10 +437,10 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
     ]
 
     # --- Shortley-Weller assembly ---
-    _eps = {'r': eps_r, 'l': eps_l, 't': eps_t, 'b': eps_b}
-    _theta = {'r': theta_r, 'l': theta_l, 't': theta_t, 'b': theta_b}
-    _bot = {'r': bot_x, 'l': bot_x, 't': bot_y, 'b': bot_y}
-    slot_names = ['l', 'r', 't', 'b']
+    _eps = {"r": eps_r, "l": eps_l, "t": eps_t, "b": eps_b}
+    _theta = {"r": theta_r, "l": theta_l, "t": theta_t, "b": theta_b}
+    _bot = {"r": bot_x, "l": bot_x, "t": bot_y, "b": bot_y}
+    slot_names = ["l", "r", "t", "b"]
     active = slot_names[cd.slot]
     eps_a = _eps[active]
     theta_a = _theta[active]
@@ -433,8 +457,10 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
 
     # Shortley-Weller diagonal: negative sum of all four flux terms
     sw_diag = -(
-        eps_r / theta_r / bot_x + eps_l / theta_l / bot_x
-        + eps_t / theta_t / bot_y + eps_b / theta_b / bot_y
+        eps_r / theta_r / bot_x
+        + eps_l / theta_l / bot_x
+        + eps_t / theta_t / bot_y
+        + eps_b / theta_b / bot_y
     )
 
     row_idx = index(i, j)
@@ -514,7 +540,9 @@ def _solve_case2_local(direction: int, i: int, j: int):
 
     def _M_diag(cd, theta, n1_v, n2_v, eps_p, eps_m, eps_jump):
         n_t = [n1_v, n2_v][cd.n_tang]
-        return -cd.sign * (eps_p * _phi(theta) + eps_m * _psi(theta) + eps_jump * n_t**2 * _psi(theta))
+        return -cd.sign * (
+            eps_p * _phi(theta) + eps_m * _psi(theta) + eps_jump * n_t**2 * _psi(theta)
+        )
 
     M = np.zeros((2, 2))
     M[0, 0] = _M_diag(cd_x, theta_x, n1_x, n2_x, eps_p_x, eps_m_x, eps_jump_x)
@@ -529,7 +557,9 @@ def _solve_case2_local(direction: int, i: int, j: int):
     def _col(ox, oy):
         return (ox + 2) * 5 + (oy + 2)
 
-    def _fill_N_row(r, cd_p, cd_o, theta_p, theta_o, n1_v, n2_v, eps_p, eps_m, eps_jump):
+    def _fill_N_row(
+        r, cd_p, cd_o, theta_p, theta_o, n1_v, n2_v, eps_p, eps_m, eps_jump
+    ):
         n_t = [n1_v, n2_v][cd_p.n_tang]
         d_self = dx if cd_p.is_x else dy
         d_other = dy if cd_p.is_x else dx
@@ -538,8 +568,14 @@ def _solve_case2_local(direction: int, i: int, j: int):
         # k=0 : self
         N[r, _col(*off[0])] = (
             -cd_p.sign * (eps_jump * n_t**2 + eps_m) * (1 + theta_p) / theta_p
-            - cd_o.sign * eps_jump * n1_v * n2_v * d_self / d_other
-            * (theta_o * theta_p + theta_o - 1) / theta_o
+            - cd_o.sign
+            * eps_jump
+            * n1_v
+            * n2_v
+            * d_self
+            / d_other
+            * (theta_o * theta_p + theta_o - 1)
+            / theta_o
         )
         # k=1 : forward 1
         N[r, _col(*off[1])] = -cd_p.sign * eps_p * (theta_p - 2) / (theta_p - 1)
@@ -553,7 +589,12 @@ def _solve_case2_local(direction: int, i: int, j: int):
         # k=4/5 : combined cross-term — k=4 when cd_o.sign > 0, else k=5.
         k_comb = 4 if cd_o.sign > 0 else 5
         N[r, _col(*off[k_comb])] = (
-            cd_o.sign * eps_jump * n1_v * n2_v * d_self / d_other
+            cd_o.sign
+            * eps_jump
+            * n1_v
+            * n2_v
+            * d_self
+            / d_other
             * (theta_o / (theta_o + 1) + theta_p)
         )
         # k=6 : corner — offset component along cd_o's axis scaled by cd_o.sign.
@@ -566,15 +607,22 @@ def _solve_case2_local(direction: int, i: int, j: int):
             -cd_o.sign * eps_jump * n1_v * n2_v * theta_p * d_self / d_other
         )
 
-    _fill_N_row(0, cd_x, cd_y, theta_x, theta_y, n1_x, n2_x, eps_p_x, eps_m_x, eps_jump_x)
-    _fill_N_row(1, cd_y, cd_x, theta_y, theta_x, n1_y, n2_y, eps_p_y, eps_m_y, eps_jump_y)
+    _fill_N_row(
+        0, cd_x, cd_y, theta_x, theta_y, n1_x, n2_x, eps_p_x, eps_m_x, eps_jump_x
+    )
+    _fill_N_row(
+        1, cd_y, cd_x, theta_y, theta_x, n1_y, n2_y, eps_p_y, eps_m_y, eps_jump_y
+    )
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
 
     sw_idx = {_FACE_NAME[cd_x.face]: 0, _FACE_NAME[cd_y.face]: 1}
     geom = {
-        "theta_R": theta_r, "theta_T": theta_t, "theta_L": theta_l, "theta_B": theta_b,
+        "theta_R": theta_r,
+        "theta_T": theta_t,
+        "theta_L": theta_l,
+        "theta_B": theta_b,
         "eps_r": permittivity(x_ + theta_r * dx / 2, y_),
         "eps_l": permittivity(x_ - theta_l * dx / 2, y_),
         "eps_t": permittivity(x_, y_ + theta_t * dy / 2),
@@ -582,6 +630,7 @@ def _solve_case2_local(direction: int, i: int, j: int):
         "bot_x": (theta_r + theta_l) / 2 * dx**2,
         "bot_y": (theta_t + theta_b) / 2 * dy**2,
     }
+
     return M_inv_d, M_inv_N, all_offsets, sw_idx, geom
 
 
@@ -589,10 +638,22 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
     """coeff of u_ij and its neighbors for a case 2 cell"""
     M_inv_d, M_inv_N, all_offsets, sw_idx, geom = _solve_case2_local(direction, i, j)
     _assemble_case_n(
-        i, j, sw_idx, M_inv_d, M_inv_N, all_offsets,
-        geom["eps_r"], geom["eps_l"], geom["eps_t"], geom["eps_b"],
-        geom["theta_R"], geom["theta_T"], geom["theta_L"], geom["theta_B"],
-        geom["bot_x"], geom["bot_y"],
+        i,
+        j,
+        sw_idx,
+        M_inv_d,
+        M_inv_N,
+        all_offsets,
+        geom["eps_r"],
+        geom["eps_l"],
+        geom["eps_t"],
+        geom["eps_b"],
+        geom["theta_R"],
+        geom["theta_T"],
+        geom["theta_L"],
+        geom["theta_B"],
+        geom["bot_x"],
+        geom["bot_y"],
     )
 
 
@@ -713,8 +774,10 @@ def _case3_geometry(direction: int, extra: int, i: int, j: int):
         )
 
     geom = {
-        "theta_R": theta_R, "theta_T": theta_T,
-        "theta_L": theta_L, "theta_B": theta_B,
+        "theta_R": theta_R,
+        "theta_T": theta_T,
+        "theta_L": theta_L,
+        "theta_B": theta_B,
         # Paper convention: theta_r/t/l/b is measured from the OUTER end of
         # the outer segment ([x_{i+2}, x_{i+1}] etc.), but `compute_theta`
         # always returns the forward fraction from the inner end. Convert.
@@ -796,6 +859,7 @@ def _case3_geometry(direction: int, extra: int, i: int, j: int):
     geom["eta"] = eta
     return geom
 
+
 def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     """Add the case-3 row contributions for grid point (i,j).
 
@@ -858,9 +922,22 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
 
     sw_idx = _CASE3_SW_INDEX[sub_case]
     _assemble_case_n(
-        i, j, sw_idx, M_inv_d, M_inv_N, all_offsets,
-        eps_r, eps_l, eps_t, eps_b,
-        theta_R, theta_T, theta_L, theta_B, bot_x, bot_y,
+        i,
+        j,
+        sw_idx,
+        M_inv_d,
+        M_inv_N,
+        all_offsets,
+        eps_r,
+        eps_l,
+        eps_t,
+        eps_b,
+        theta_R,
+        theta_T,
+        theta_L,
+        theta_B,
+        bot_x,
+        bot_y,
     )
 
 
@@ -905,8 +982,10 @@ def _case4_geometry(direction: int, i: int, j: int):
         )
 
     geom = {
-        "theta_R": theta_R, "theta_T": theta_T,
-        "theta_L": theta_L, "theta_B": theta_B,
+        "theta_R": theta_R,
+        "theta_T": theta_T,
+        "theta_L": theta_L,
+        "theta_B": theta_B,
     }
     if direction & Direction.R:
         geom["n1_R"], geom["n2_R"], geom["a_R"], geom["b_R"], geom["a_tau_R"] = _at(
@@ -934,7 +1013,7 @@ def _case4_geometry(direction: int, i: int, j: int):
     # in the opposite region from (i,j). For case 4 we pick a Ω^+ corner
     # adjacent to two of the three cut sides.
     if direction == (Direction.R | Direction.T | Direction.L):
-        diag = (x_ + dx, y_ + dy)        # any +x or +y neighbour is in Omega^+
+        diag = (x_ + dx, y_ + dy)  # any +x or +y neighbour is in Omega^+
     elif direction == (Direction.R | Direction.T | Direction.B):
         diag = (x_ + dx, y_ + dy)
     elif direction == (Direction.R | Direction.B | Direction.L):
@@ -1001,15 +1080,26 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
     eps_t = permittivity(x_, y_ + theta_T * dy / 2)
     eps_b = permittivity(x_, y_ - theta_B * dy / 2)
 
-    M_inv_d, M_inv_N, all_offsets = _solve_case4_local(
-        sub_case, eta, direction, geom
-    )
+    M_inv_d, M_inv_N, all_offsets = _solve_case4_local(sub_case, eta, direction, geom)
 
     sw_idx = _CASE4_SW_INDEX[sub_case]
     _assemble_case_n(
-        i, j, sw_idx, M_inv_d, M_inv_N, all_offsets,
-        eps_r, eps_l, eps_t, eps_b,
-        theta_R, theta_T, theta_L, theta_B, bot_x, bot_y,
+        i,
+        j,
+        sw_idx,
+        M_inv_d,
+        M_inv_N,
+        all_offsets,
+        eps_r,
+        eps_l,
+        eps_t,
+        eps_b,
+        theta_R,
+        theta_T,
+        theta_L,
+        theta_B,
+        bot_x,
+        bot_y,
     )
 
 
@@ -1017,13 +1107,18 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
 # Local 3x3 solve and Shortley-Weller assembly (shared by case 3 and case 4)
 # ---------------------------------------------------------------------------
 
+
 def _row_geom_data(geom, iface):
     """Return (n1, n2, a, b, a_tau) for one row's interface label."""
     if iface == "extra":
-        return (geom["n1_x"], geom["n2_x"], geom["a_x"],
-                geom["b_x"], geom["a_tau_x"])
-    return (geom[f"n1_{iface}"], geom[f"n2_{iface}"], geom[f"a_{iface}"],
-            geom[f"b_{iface}"], geom[f"a_tau_{iface}"])
+        return (geom["n1_x"], geom["n2_x"], geom["a_x"], geom["b_x"], geom["a_tau_x"])
+    return (
+        geom[f"n1_{iface}"],
+        geom[f"n2_{iface}"],
+        geom[f"a_{iface}"],
+        geom[f"b_{iface}"],
+        geom[f"a_tau_{iface}"],
+    )
 
 
 def _sample_beta_legacy(x_loc, y_loc, axis, eta):
@@ -1089,7 +1184,6 @@ def _iface_axis(label, extra):
     return _AXIS_OF_FACE[label]
 
 
-
 def _row_betas(geom, row_ifaces, extra=None):
     """Build a list of per-row (bp, bm, bj) by sampling beta at each
     row's own interface point."""
@@ -1109,9 +1203,14 @@ def _solve_case3_local(sub_case, eta, direction, extra, geom):
     func = CASE3_FUNCS[(sub_case, eta_sign)]
 
     theta_inputs = {
-        "R": geom["theta_R"], "T": geom["theta_T"],
-        "L": geom["theta_L"], "B": geom["theta_B"],
-        "r": 1.0, "t": 1.0, "l": 1.0, "b": 1.0,
+        "R": geom["theta_R"],
+        "T": geom["theta_T"],
+        "L": geom["theta_L"],
+        "B": geom["theta_B"],
+        "r": 1.0,
+        "t": 1.0,
+        "l": 1.0,
+        "b": 1.0,
     }
     if extra == Direction.R:
         theta_inputs["r"] = geom["theta_extra"]
@@ -1122,7 +1221,9 @@ def _solve_case3_local(sub_case, eta, direction, extra, geom):
     elif extra == Direction.B:
         theta_inputs["b"] = geom["theta_extra"]
 
-    betas_per_row = _row_betas(geom, CASE3_ROW_IFACES[(sub_case, eta_sign)], extra=extra)
+    betas_per_row = _row_betas(
+        geom, CASE3_ROW_IFACES[(sub_case, eta_sign)], extra=extra
+    )
     return func(geom, theta_inputs, betas_per_row)
 
 
@@ -1131,9 +1232,14 @@ def _solve_case4_local(sub_case, eta, direction, geom):
     func = CASE4_FUNCS[(sub_case, eta_sign)]
 
     theta_inputs = {
-        "R": geom["theta_R"], "T": geom["theta_T"],
-        "L": geom["theta_L"], "B": geom["theta_B"],
-        "r": 1.0, "t": 1.0, "l": 1.0, "b": 1.0,
+        "R": geom["theta_R"],
+        "T": geom["theta_T"],
+        "L": geom["theta_L"],
+        "B": geom["theta_B"],
+        "r": 1.0,
+        "t": 1.0,
+        "l": 1.0,
+        "b": 1.0,
     }
     betas_per_row = _row_betas(geom, CASE4_ROW_IFACES[(sub_case, eta_sign)])
     return func(geom, theta_inputs, betas_per_row)
@@ -1141,52 +1247,129 @@ def _solve_case4_local(sub_case, eta, direction, geom):
 
 # Generated case functions
 
+
 def _case3_sc1_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 1, eta < 0.  Row 1 is extra (R,T corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'extra')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'T')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "extra")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "T")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+    offsets = [
+        (-1, -1),
+        (-1, +0),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+1, +0),
+        (+2, -1),
+        (+2, +0),
+        (+2, +1),
+        (+3, -1),
+        (+3, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bp_0*_phi_coupled(R, r) - _psi(R) * (bj_0*n2_0**2 + bm_0)
-    M[0, 1] = bp_0*_couple_off_fwd(R, r)
-    M[0, 2] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
-    M[1, 0] = -bp_1*_couple_off_rev(R, r)
-    M[1, 1] = -bp_1*_phi_mirror(R, r) + _psi(r) * (bj_1*n2_1**2 + bm_1)
-    M[2, 0] = bj_2*dy*n1_2*n2_2/(dx*R*(R + 1))
-    M[2, 2] = bp_2*-_phi(T) - _psi(T) * (bj_2*n1_2**2 + bm_2)
+    M[0, 0] = bp_0 * _phi_coupled(R, r) - _psi(R) * (bj_0 * n2_0**2 + bm_0)
+    M[0, 1] = bp_0 * _couple_off_fwd(R, r)
+    M[0, 2] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
+    M[1, 0] = -bp_1 * _couple_off_rev(R, r)
+    M[1, 1] = -bp_1 * _phi_mirror(R, r) + _psi(r) * (bj_1 * n2_1**2 + bm_1)
+    M[2, 0] = bj_2 * dy * n1_2 * n2_2 / (dx * R * (R + 1))
+    M[2, 2] = bp_2 * -_phi(T) - _psi(T) * (bj_2 * n1_2**2 + bm_2)
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bp_0*dx*n2_0 - a_0*bp_0*_couple_avg(R, r) + b_0*dx*n1_0
-    d[1] = -a_tau_1*bp_1*dx*n2_1 + a_1*bp_1*_couple_avg(R, r) + b_1*dx*n1_1
-    d[2] = a_tau_2*bp_2*dy*n1_2 - a_2*bp_2*-_phi(T) + b_2*dy*n2_2
+    d[0] = (
+        -a_tau_0 * bp_0 * dx * n2_0 - a_0 * bp_0 * _couple_avg(R, r) + b_0 * dx * n1_0
+    )
+    d[1] = (
+        -a_tau_1 * bp_1 * dx * n2_1 + a_1 * bp_1 * _couple_avg(R, r) + b_1 * dx * n1_1
+    )
+    d[2] = a_tau_2 * bp_2 * dy * n1_2 - a_2 * bp_2 * -_phi(T) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 0] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
-    N[0, 1] = R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 + bm_0*dy)/(dy*(R + 1))  # (-1, +0)
-    N[0, 2] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
-    N[0, 3] = -(bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R*T - bj_0*dx*n1_0*n2_0*R + bj_0*dy*n2_0**2*R*T + bj_0*dy*n2_0**2*T + bm_0*dy*R*T + bm_0*dy*T)/(dy*R*T)  # (+0, +0)
-    N[0, 6] = bp_0*_couple_avg(R, r)  # (+1, +0)
-    N[1, 6] = -bp_1*_couple_avg(R, r)  # (+1, +0)
-    N[1, 7] = (1/2)*bj_1*dx*n1_1*n2_1*(2*r + 1)/dy  # (+2, -1)
-    N[1, 8] = -(bj_1*dx*n1_1*n2_1*r**2 - bj_1*dy*n2_1**2*r - bj_1*dy*n2_1**2 - bm_1*dy*r - bm_1*dy)/(dy*r)  # (+2, +0)
-    N[1, 9] = -1/2*bj_1*dx*n1_1*n2_1/dy  # (+2, +1)
-    N[1, 10] = -bj_1*dx*n1_1*n2_1*r/dy  # (+3, -1)
-    N[1, 11] = r*(bj_1*dx*n1_1*n2_1*r + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 - bm_1*dy)/(dy*(r + 1))  # (+3, +0)
-    N[2, 0] = -bj_2*dy*n1_2*n2_2*T/dx  # (-1, -1)
-    N[2, 1] = bj_2*dy*n1_2*n2_2*(R*T + R + T)/(dx*(R + 1))  # (-1, +0)
-    N[2, 2] = T*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*T + bj_2*dy*n1_2*n2_2 + bm_2*dx)/(dx*(T + 1))  # (+0, -1)
-    N[2, 3] = -(bj_2*dx*n1_2**2*R*T + bj_2*dx*n1_2**2*R + bj_2*dy*n1_2*n2_2*R*T**2 + bj_2*dy*n1_2*n2_2*R*T - bj_2*dy*n1_2*n2_2*T + bm_2*dx*R*T + bm_2*dx*R)/(dx*R*T)  # (+0, +0)
-    N[2, 4] = -bp_2*(T - 2)/(T - 1)  # (+0, +1)
-    N[2, 5] = bp_2*(T - 1)/(T - 2)  # (+0, +2)
+    N[0, 0] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
+    N[0, 1] = (
+        R
+        * (
+            bj_0 * dx * n1_0 * n2_0 * R
+            + bj_0 * dx * n1_0 * n2_0
+            + bj_0 * dy * n2_0**2
+            + bm_0 * dy
+        )
+        / (dy * (R + 1))
+    )  # (-1, +0)
+    N[0, 2] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
+    N[0, 3] = -(
+        bj_0 * dx * n1_0 * n2_0 * R**2 * T
+        + bj_0 * dx * n1_0 * n2_0 * R * T
+        - bj_0 * dx * n1_0 * n2_0 * R
+        + bj_0 * dy * n2_0**2 * R * T
+        + bj_0 * dy * n2_0**2 * T
+        + bm_0 * dy * R * T
+        + bm_0 * dy * T
+    ) / (dy * R * T)  # (+0, +0)
+    N[0, 6] = bp_0 * _couple_avg(R, r)  # (+1, +0)
+    N[1, 6] = -bp_1 * _couple_avg(R, r)  # (+1, +0)
+    N[1, 7] = (1 / 2) * bj_1 * dx * n1_1 * n2_1 * (2 * r + 1) / dy  # (+2, -1)
+    N[1, 8] = -(
+        bj_1 * dx * n1_1 * n2_1 * r**2
+        - bj_1 * dy * n2_1**2 * r
+        - bj_1 * dy * n2_1**2
+        - bm_1 * dy * r
+        - bm_1 * dy
+    ) / (dy * r)  # (+2, +0)
+    N[1, 9] = -1 / 2 * bj_1 * dx * n1_1 * n2_1 / dy  # (+2, +1)
+    N[1, 10] = -bj_1 * dx * n1_1 * n2_1 * r / dy  # (+3, -1)
+    N[1, 11] = (
+        r
+        * (
+            bj_1 * dx * n1_1 * n2_1 * r
+            + bj_1 * dx * n1_1 * n2_1
+            - bj_1 * dy * n2_1**2
+            - bm_1 * dy
+        )
+        / (dy * (r + 1))
+    )  # (+3, +0)
+    N[2, 0] = -bj_2 * dy * n1_2 * n2_2 * T / dx  # (-1, -1)
+    N[2, 1] = bj_2 * dy * n1_2 * n2_2 * (R * T + R + T) / (dx * (R + 1))  # (-1, +0)
+    N[2, 2] = (
+        T
+        * (
+            bj_2 * dx * n1_2**2
+            + bj_2 * dy * n1_2 * n2_2 * T
+            + bj_2 * dy * n1_2 * n2_2
+            + bm_2 * dx
+        )
+        / (dx * (T + 1))
+    )  # (+0, -1)
+    N[2, 3] = -(
+        bj_2 * dx * n1_2**2 * R * T
+        + bj_2 * dx * n1_2**2 * R
+        + bj_2 * dy * n1_2 * n2_2 * R * T**2
+        + bj_2 * dy * n1_2 * n2_2 * R * T
+        - bj_2 * dy * n1_2 * n2_2 * T
+        + bm_2 * dx * R * T
+        + bm_2 * dx * R
+    ) / (dx * R * T)  # (+0, +0)
+    N[2, 4] = -bp_2 * (T - 2) / (T - 1)  # (+0, +1)
+    N[2, 5] = bp_2 * (T - 1) / (T - 2)  # (+0, +2)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1195,50 +1378,126 @@ def _case3_sc1_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc1_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 1, eta > 0.  Row 1 is extra (R,T corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'extra')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'T')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "extra")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "T")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+    offsets = [
+        (-1, -1),
+        (-1, +0),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+1, +0),
+        (+2, -1),
+        (+2, +0),
+        (+2, +1),
+        (+3, -1),
+        (+3, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bm_0*_phi_coupled(R, r) - _psi(R) * (bj_0*n2_0**2 - bp_0)
-    M[0, 1] = -bm_0*_couple_off_fwd(R, r)
-    M[0, 2] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
-    M[1, 0] = bm_1*_couple_off_rev(R, r)
-    M[1, 1] = bm_1*_phi_mirror(R, r) + _psi(r) * (bj_1*n2_1**2 - bp_1)
-    M[2, 0] = bj_2*dy*n1_2*n2_2/(dx*R*(R + 1))
-    M[2, 2] = -bm_2*-_phi(T) - _psi(T) * (bj_2*n1_2**2 - bp_2)
+    M[0, 0] = -bm_0 * _phi_coupled(R, r) - _psi(R) * (bj_0 * n2_0**2 - bp_0)
+    M[0, 1] = -bm_0 * _couple_off_fwd(R, r)
+    M[0, 2] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
+    M[1, 0] = bm_1 * _couple_off_rev(R, r)
+    M[1, 1] = bm_1 * _phi_mirror(R, r) + _psi(r) * (bj_1 * n2_1**2 - bp_1)
+    M[2, 0] = bj_2 * dy * n1_2 * n2_2 / (dx * R * (R + 1))
+    M[2, 2] = -bm_2 * -_phi(T) - _psi(T) * (bj_2 * n1_2**2 - bp_2)
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bm_0*dx*n2_0 - a_0*bm_0*_couple_avg(R, r) + b_0*dx*n1_0
-    d[1] = -a_tau_1*bm_1*dx*n2_1 + a_1*bm_1*_couple_avg(R, r) + b_1*dx*n1_1
-    d[2] = a_tau_2*bm_2*dy*n1_2 - a_2*bm_2*-_phi(T) + b_2*dy*n2_2
+    d[0] = (
+        -a_tau_0 * bm_0 * dx * n2_0 - a_0 * bm_0 * _couple_avg(R, r) + b_0 * dx * n1_0
+    )
+    d[1] = (
+        -a_tau_1 * bm_1 * dx * n2_1 + a_1 * bm_1 * _couple_avg(R, r) + b_1 * dx * n1_1
+    )
+    d[2] = a_tau_2 * bm_2 * dy * n1_2 - a_2 * bm_2 * -_phi(T) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 0] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
-    N[0, 1] = R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 - bp_0*dy)/(dy*(R + 1))  # (-1, +0)
-    N[0, 2] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
-    N[0, 3] = -(bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R*T - bj_0*dx*n1_0*n2_0*R + bj_0*dy*n2_0**2*R*T + bj_0*dy*n2_0**2*T - bp_0*dy*R*T - bp_0*dy*T)/(dy*R*T)  # (+0, +0)
-    N[0, 6] = -bm_0*_couple_avg(R, r)  # (+1, +0)
-    N[1, 6] = bm_1*_couple_avg(R, r)  # (+1, +0)
-    N[1, 7] = (1/2)*bj_1*dx*n1_1*n2_1*(2*r + 1)/dy  # (+2, -1)
-    N[1, 8] = -(bj_1*dx*n1_1*n2_1*r**2 - bj_1*dy*n2_1**2*r - bj_1*dy*n2_1**2 + bp_1*dy*r + bp_1*dy)/(dy*r)  # (+2, +0)
-    N[1, 9] = -1/2*bj_1*dx*n1_1*n2_1/dy  # (+2, +1)
-    N[1, 10] = -bj_1*dx*n1_1*n2_1*r/dy  # (+3, -1)
-    N[1, 11] = r*(bj_1*dx*n1_1*n2_1*r + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 + bp_1*dy)/(dy*(r + 1))  # (+3, +0)
-    N[2, 0] = -bj_2*dy*n1_2*n2_2*T/dx  # (-1, -1)
-    N[2, 1] = bj_2*dy*n1_2*n2_2*(R*T + R + T)/(dx*(R + 1))  # (-1, +0)
-    N[2, 2] = T*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*T + bj_2*dy*n1_2*n2_2 - bp_2*dx)/(dx*(T + 1))  # (+0, -1)
-    N[2, 3] = -(bj_2*dx*n1_2**2*R*T + bj_2*dx*n1_2**2*R + bj_2*dy*n1_2*n2_2*R*T**2 + bj_2*dy*n1_2*n2_2*R*T - bj_2*dy*n1_2*n2_2*T - bp_2*dx*R*T - bp_2*dx*R)/(dx*R*T)  # (+0, +0)
-    N[2, 4] = bm_2*(T - 2)/(T - 1)  # (+0, +1)
-    N[2, 5] = -bm_2*(T - 1)/(T - 2)  # (+0, +2)
+    N[0, 0] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
+    N[0, 1] = (
+        R
+        * (
+            bj_0 * dx * n1_0 * n2_0 * R
+            + bj_0 * dx * n1_0 * n2_0
+            + bj_0 * dy * n2_0**2
+            - bp_0 * dy
+        )
+        / (dy * (R + 1))
+    )  # (-1, +0)
+    N[0, 2] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
+    N[0, 3] = -(
+        bj_0 * dx * n1_0 * n2_0 * R**2 * T
+        + bj_0 * dx * n1_0 * n2_0 * R * T
+        - bj_0 * dx * n1_0 * n2_0 * R
+        + bj_0 * dy * n2_0**2 * R * T
+        + bj_0 * dy * n2_0**2 * T
+        - bp_0 * dy * R * T
+        - bp_0 * dy * T
+    ) / (dy * R * T)  # (+0, +0)
+    N[0, 6] = -bm_0 * _couple_avg(R, r)  # (+1, +0)
+    N[1, 6] = bm_1 * _couple_avg(R, r)  # (+1, +0)
+    N[1, 7] = (1 / 2) * bj_1 * dx * n1_1 * n2_1 * (2 * r + 1) / dy  # (+2, -1)
+    N[1, 8] = -(
+        bj_1 * dx * n1_1 * n2_1 * r**2
+        - bj_1 * dy * n2_1**2 * r
+        - bj_1 * dy * n2_1**2
+        + bp_1 * dy * r
+        + bp_1 * dy
+    ) / (dy * r)  # (+2, +0)
+    N[1, 9] = -1 / 2 * bj_1 * dx * n1_1 * n2_1 / dy  # (+2, +1)
+    N[1, 10] = -bj_1 * dx * n1_1 * n2_1 * r / dy  # (+3, -1)
+    N[1, 11] = (
+        r
+        * (
+            bj_1 * dx * n1_1 * n2_1 * r
+            + bj_1 * dx * n1_1 * n2_1
+            - bj_1 * dy * n2_1**2
+            + bp_1 * dy
+        )
+        / (dy * (r + 1))
+    )  # (+3, +0)
+    N[2, 0] = -bj_2 * dy * n1_2 * n2_2 * T / dx  # (-1, -1)
+    N[2, 1] = bj_2 * dy * n1_2 * n2_2 * (R * T + R + T) / (dx * (R + 1))  # (-1, +0)
+    N[2, 2] = (
+        T
+        * (
+            bj_2 * dx * n1_2**2
+            + bj_2 * dy * n1_2 * n2_2 * T
+            + bj_2 * dy * n1_2 * n2_2
+            - bp_2 * dx
+        )
+        / (dx * (T + 1))
+    )  # (+0, -1)
+    N[2, 3] = -(
+        bj_2 * dx * n1_2**2 * R * T
+        + bj_2 * dx * n1_2**2 * R
+        + bj_2 * dy * n1_2 * n2_2 * R * T**2
+        + bj_2 * dy * n1_2 * n2_2 * R * T
+        - bj_2 * dy * n1_2 * n2_2 * T
+        - bp_2 * dx * R * T
+        - bp_2 * dx * R
+    ) / (dx * R * T)  # (+0, +0)
+    N[2, 4] = bm_2 * (T - 2) / (T - 1)  # (+0, +1)
+    N[2, 5] = -bm_2 * (T - 1) / (T - 2)  # (+0, +2)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1247,49 +1506,121 @@ def _case3_sc1_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc2_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 2, eta < 0.  Row 2 is extra (R,T corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-1, -1), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, +0), (+1, +2), (+2, +0)]
+    offsets = [
+        (-1, -1),
+        (-1, +0),
+        (-1, +2),
+        (-1, +3),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+0, +3),
+        (+1, +0),
+        (+1, +2),
+        (+2, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bp_0*-_phi(R) - _psi(R) * (bj_0*n2_0**2 + bm_0)
-    M[0, 1] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
-    M[1, 0] = bj_1*dy*n1_1*n2_1/(dx*R*(R + 1))
-    M[1, 1] = bp_1*_phi_coupled(T, t) - _psi(T) * (bj_1*n1_1**2 + bm_1)
-    M[1, 2] = bp_1*_couple_off_fwd(T, t)
-    M[2, 2] = -bp_2*_couple_off_rev(T, t)
+    M[0, 0] = bp_0 * -_phi(R) - _psi(R) * (bj_0 * n2_0**2 + bm_0)
+    M[0, 1] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
+    M[1, 0] = bj_1 * dy * n1_1 * n2_1 / (dx * R * (R + 1))
+    M[1, 1] = bp_1 * _phi_coupled(T, t) - _psi(T) * (bj_1 * n1_1**2 + bm_1)
+    M[1, 2] = bp_1 * _couple_off_fwd(T, t)
+    M[2, 2] = -bp_2 * _couple_off_rev(T, t)
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bp_0*dx*n2_0 - a_0*bp_0*-_phi(R) + b_0*dx*n1_0
-    d[1] = a_tau_1*bp_1*dy*n1_1 - a_1*bp_1*_couple_avg(T, t) + b_1*dy*n2_1
-    d[2] = a_tau_2*bp_2*dy*n1_2 + a_2*bp_2*_couple_avg(T, t) + b_2*dy*n2_2
+    d[0] = -a_tau_0 * bp_0 * dx * n2_0 - a_0 * bp_0 * -_phi(R) + b_0 * dx * n1_0
+    d[1] = a_tau_1 * bp_1 * dy * n1_1 - a_1 * bp_1 * _couple_avg(T, t) + b_1 * dy * n2_1
+    d[2] = a_tau_2 * bp_2 * dy * n1_2 + a_2 * bp_2 * _couple_avg(T, t) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 0] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
-    N[0, 1] = R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 + bm_0*dy)/(dy*(R + 1))  # (-1, +0)
-    N[0, 4] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
-    N[0, 5] = -(bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R*T - bj_0*dx*n1_0*n2_0*R + bj_0*dy*n2_0**2*R*T + bj_0*dy*n2_0**2*T + bm_0*dy*R*T + bm_0*dy*T)/(dy*R*T)  # (+0, +0)
-    N[0, 9] = -bp_0*(R - 2)/(R - 1)  # (+1, +0)
-    N[0, 11] = bp_0*(R - 1)/(R - 2)  # (+2, +0)
-    N[1, 0] = -bj_1*dy*n1_1*n2_1*T/dx  # (-1, -1)
-    N[1, 1] = bj_1*dy*n1_1*n2_1*(R*T + R + T)/(dx*(R + 1))  # (-1, +0)
-    N[1, 4] = T*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*T + bj_1*dy*n1_1*n2_1 + bm_1*dx)/(dx*(T + 1))  # (+0, -1)
-    N[1, 5] = -(bj_1*dx*n1_1**2*R*T + bj_1*dx*n1_1**2*R + bj_1*dy*n1_1*n2_1*R*T**2 + bj_1*dy*n1_1*n2_1*R*T - bj_1*dy*n1_1*n2_1*T + bm_1*dx*R*T + bm_1*dx*R)/(dx*R*T)  # (+0, +0)
-    N[1, 6] = bp_1*_couple_avg(T, t)  # (+0, +1)
-    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*t + 1)/dx  # (-1, +2)
-    N[2, 3] = -bj_2*dy*n1_2*n2_2*t/dx  # (-1, +3)
-    N[2, 6] = -bp_2*_couple_avg(T, t)  # (+0, +1)
-    N[2, 7] = (bj_2*dx*n1_2**2*t + bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t**2 + bm_2*dx*t + bm_2*dx)/(dx*t)  # (+0, +2)
-    N[2, 8] = -t*(bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t - bj_2*dy*n1_2*n2_2 + bm_2*dx)/(dx*(t + 1))  # (+0, +3)
-    N[2, 10] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, +2)
+    N[0, 0] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
+    N[0, 1] = (
+        R
+        * (
+            bj_0 * dx * n1_0 * n2_0 * R
+            + bj_0 * dx * n1_0 * n2_0
+            + bj_0 * dy * n2_0**2
+            + bm_0 * dy
+        )
+        / (dy * (R + 1))
+    )  # (-1, +0)
+    N[0, 4] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
+    N[0, 5] = -(
+        bj_0 * dx * n1_0 * n2_0 * R**2 * T
+        + bj_0 * dx * n1_0 * n2_0 * R * T
+        - bj_0 * dx * n1_0 * n2_0 * R
+        + bj_0 * dy * n2_0**2 * R * T
+        + bj_0 * dy * n2_0**2 * T
+        + bm_0 * dy * R * T
+        + bm_0 * dy * T
+    ) / (dy * R * T)  # (+0, +0)
+    N[0, 9] = -bp_0 * (R - 2) / (R - 1)  # (+1, +0)
+    N[0, 11] = bp_0 * (R - 1) / (R - 2)  # (+2, +0)
+    N[1, 0] = -bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, -1)
+    N[1, 1] = bj_1 * dy * n1_1 * n2_1 * (R * T + R + T) / (dx * (R + 1))  # (-1, +0)
+    N[1, 4] = (
+        T
+        * (
+            bj_1 * dx * n1_1**2
+            + bj_1 * dy * n1_1 * n2_1 * T
+            + bj_1 * dy * n1_1 * n2_1
+            + bm_1 * dx
+        )
+        / (dx * (T + 1))
+    )  # (+0, -1)
+    N[1, 5] = -(
+        bj_1 * dx * n1_1**2 * R * T
+        + bj_1 * dx * n1_1**2 * R
+        + bj_1 * dy * n1_1 * n2_1 * R * T**2
+        + bj_1 * dy * n1_1 * n2_1 * R * T
+        - bj_1 * dy * n1_1 * n2_1 * T
+        + bm_1 * dx * R * T
+        + bm_1 * dx * R
+    ) / (dx * R * T)  # (+0, +0)
+    N[1, 6] = bp_1 * _couple_avg(T, t)  # (+0, +1)
+    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * t + 1) / dx  # (-1, +2)
+    N[2, 3] = -bj_2 * dy * n1_2 * n2_2 * t / dx  # (-1, +3)
+    N[2, 6] = -bp_2 * _couple_avg(T, t)  # (+0, +1)
+    N[2, 7] = (
+        bj_2 * dx * n1_2**2 * t
+        + bj_2 * dx * n1_2**2
+        - bj_2 * dy * n1_2 * n2_2 * t**2
+        + bm_2 * dx * t
+        + bm_2 * dx
+    ) / (dx * t)  # (+0, +2)
+    N[2, 8] = (
+        -t
+        * (
+            bj_2 * dx * n1_2**2
+            - bj_2 * dy * n1_2 * n2_2 * t
+            - bj_2 * dy * n1_2 * n2_2
+            + bm_2 * dx
+        )
+        / (dx * (t + 1))
+    )  # (+0, +3)
+    N[2, 10] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, +2)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1298,49 +1629,121 @@ def _case3_sc2_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc2_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 2, eta > 0.  Row 2 is extra (R,T corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-1, -1), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, +0), (+1, +2), (+2, +0)]
+    offsets = [
+        (-1, -1),
+        (-1, +0),
+        (-1, +2),
+        (-1, +3),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+0, +3),
+        (+1, +0),
+        (+1, +2),
+        (+2, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bm_0*-_phi(R) - _psi(R) * (bj_0*n2_0**2 - bp_0)
-    M[0, 1] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
-    M[1, 0] = bj_1*dy*n1_1*n2_1/(dx*R*(R + 1))
-    M[1, 1] = -bm_1*_phi_coupled(T, t) - _psi(T) * (bj_1*n1_1**2 - bp_1)
-    M[1, 2] = -bm_1*_couple_off_fwd(T, t)
-    M[2, 2] = bm_2*_couple_off_rev(T, t)
+    M[0, 0] = -bm_0 * -_phi(R) - _psi(R) * (bj_0 * n2_0**2 - bp_0)
+    M[0, 1] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
+    M[1, 0] = bj_1 * dy * n1_1 * n2_1 / (dx * R * (R + 1))
+    M[1, 1] = -bm_1 * _phi_coupled(T, t) - _psi(T) * (bj_1 * n1_1**2 - bp_1)
+    M[1, 2] = -bm_1 * _couple_off_fwd(T, t)
+    M[2, 2] = bm_2 * _couple_off_rev(T, t)
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bm_0*dx*n2_0 - a_0*bm_0*-_phi(R) + b_0*dx*n1_0
-    d[1] = a_tau_1*bm_1*dy*n1_1 - a_1*bm_1*_couple_avg(T, t) + b_1*dy*n2_1
-    d[2] = a_tau_2*bm_2*dy*n1_2 + a_2*bm_2*_couple_avg(T, t) + b_2*dy*n2_2
+    d[0] = -a_tau_0 * bm_0 * dx * n2_0 - a_0 * bm_0 * -_phi(R) + b_0 * dx * n1_0
+    d[1] = a_tau_1 * bm_1 * dy * n1_1 - a_1 * bm_1 * _couple_avg(T, t) + b_1 * dy * n2_1
+    d[2] = a_tau_2 * bm_2 * dy * n1_2 + a_2 * bm_2 * _couple_avg(T, t) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 0] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
-    N[0, 1] = R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 - bp_0*dy)/(dy*(R + 1))  # (-1, +0)
-    N[0, 4] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
-    N[0, 5] = -(bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R*T - bj_0*dx*n1_0*n2_0*R + bj_0*dy*n2_0**2*R*T + bj_0*dy*n2_0**2*T - bp_0*dy*R*T - bp_0*dy*T)/(dy*R*T)  # (+0, +0)
-    N[0, 9] = bm_0*(R - 2)/(R - 1)  # (+1, +0)
-    N[0, 11] = -bm_0*(R - 1)/(R - 2)  # (+2, +0)
-    N[1, 0] = -bj_1*dy*n1_1*n2_1*T/dx  # (-1, -1)
-    N[1, 1] = bj_1*dy*n1_1*n2_1*(R*T + R + T)/(dx*(R + 1))  # (-1, +0)
-    N[1, 4] = T*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*T + bj_1*dy*n1_1*n2_1 - bp_1*dx)/(dx*(T + 1))  # (+0, -1)
-    N[1, 5] = -(bj_1*dx*n1_1**2*R*T + bj_1*dx*n1_1**2*R + bj_1*dy*n1_1*n2_1*R*T**2 + bj_1*dy*n1_1*n2_1*R*T - bj_1*dy*n1_1*n2_1*T - bp_1*dx*R*T - bp_1*dx*R)/(dx*R*T)  # (+0, +0)
-    N[1, 6] = -bm_1*_couple_avg(T, t)  # (+0, +1)
-    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*t + 1)/dx  # (-1, +2)
-    N[2, 3] = -bj_2*dy*n1_2*n2_2*t/dx  # (-1, +3)
-    N[2, 6] = bm_2*_couple_avg(T, t)  # (+0, +1)
-    N[2, 7] = (bj_2*dx*n1_2**2*t + bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t**2 - bp_2*dx*t - bp_2*dx)/(dx*t)  # (+0, +2)
-    N[2, 8] = -t*(bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t - bj_2*dy*n1_2*n2_2 - bp_2*dx)/(dx*(t + 1))  # (+0, +3)
-    N[2, 10] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, +2)
+    N[0, 0] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
+    N[0, 1] = (
+        R
+        * (
+            bj_0 * dx * n1_0 * n2_0 * R
+            + bj_0 * dx * n1_0 * n2_0
+            + bj_0 * dy * n2_0**2
+            - bp_0 * dy
+        )
+        / (dy * (R + 1))
+    )  # (-1, +0)
+    N[0, 4] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
+    N[0, 5] = -(
+        bj_0 * dx * n1_0 * n2_0 * R**2 * T
+        + bj_0 * dx * n1_0 * n2_0 * R * T
+        - bj_0 * dx * n1_0 * n2_0 * R
+        + bj_0 * dy * n2_0**2 * R * T
+        + bj_0 * dy * n2_0**2 * T
+        - bp_0 * dy * R * T
+        - bp_0 * dy * T
+    ) / (dy * R * T)  # (+0, +0)
+    N[0, 9] = bm_0 * (R - 2) / (R - 1)  # (+1, +0)
+    N[0, 11] = -bm_0 * (R - 1) / (R - 2)  # (+2, +0)
+    N[1, 0] = -bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, -1)
+    N[1, 1] = bj_1 * dy * n1_1 * n2_1 * (R * T + R + T) / (dx * (R + 1))  # (-1, +0)
+    N[1, 4] = (
+        T
+        * (
+            bj_1 * dx * n1_1**2
+            + bj_1 * dy * n1_1 * n2_1 * T
+            + bj_1 * dy * n1_1 * n2_1
+            - bp_1 * dx
+        )
+        / (dx * (T + 1))
+    )  # (+0, -1)
+    N[1, 5] = -(
+        bj_1 * dx * n1_1**2 * R * T
+        + bj_1 * dx * n1_1**2 * R
+        + bj_1 * dy * n1_1 * n2_1 * R * T**2
+        + bj_1 * dy * n1_1 * n2_1 * R * T
+        - bj_1 * dy * n1_1 * n2_1 * T
+        - bp_1 * dx * R * T
+        - bp_1 * dx * R
+    ) / (dx * R * T)  # (+0, +0)
+    N[1, 6] = -bm_1 * _couple_avg(T, t)  # (+0, +1)
+    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * t + 1) / dx  # (-1, +2)
+    N[2, 3] = -bj_2 * dy * n1_2 * n2_2 * t / dx  # (-1, +3)
+    N[2, 6] = bm_2 * _couple_avg(T, t)  # (+0, +1)
+    N[2, 7] = (
+        bj_2 * dx * n1_2**2 * t
+        + bj_2 * dx * n1_2**2
+        - bj_2 * dy * n1_2 * n2_2 * t**2
+        - bp_2 * dx * t
+        - bp_2 * dx
+    ) / (dx * t)  # (+0, +2)
+    N[2, 8] = (
+        -t
+        * (
+            bj_2 * dx * n1_2**2
+            - bj_2 * dy * n1_2 * n2_2 * t
+            - bj_2 * dy * n1_2 * n2_2
+            - bp_2 * dx
+        )
+        / (dx * (t + 1))
+    )  # (+0, +3)
+    N[2, 10] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, +2)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1349,50 +1752,122 @@ def _case3_sc2_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc3_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 3, eta < 0.  Row 2 is extra (T,L corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'L')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "L")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-2, +0), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, -1), (+1, +0), (+1, +2)]
+    offsets = [
+        (-2, +0),
+        (-1, +0),
+        (-1, +2),
+        (-1, +3),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+0, +3),
+        (+1, -1),
+        (+1, +0),
+        (+1, +2),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bp_0*_phi_coupled(T, t) - _psi(T) * (bj_0*n1_0**2 + bm_0)
-    M[0, 1] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
-    M[0, 2] = bp_0*_couple_off_fwd(T, t)
-    M[1, 0] = bj_1*dx*n1_1*n2_1/(dy*T*(T + 1))
-    M[1, 1] = -bp_1*-_phi(L) + _psi(L) * (bj_1*n2_1**2 + bm_1)
-    M[2, 0] = -bp_2*_couple_off_rev(T, t)
-    M[2, 2] = -bp_2*_phi_mirror(T, t) + _psi(t) * (bj_2*n1_2**2 + bm_2)
+    M[0, 0] = bp_0 * _phi_coupled(T, t) - _psi(T) * (bj_0 * n1_0**2 + bm_0)
+    M[0, 1] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
+    M[0, 2] = bp_0 * _couple_off_fwd(T, t)
+    M[1, 0] = bj_1 * dx * n1_1 * n2_1 / (dy * T * (T + 1))
+    M[1, 1] = -bp_1 * -_phi(L) + _psi(L) * (bj_1 * n2_1**2 + bm_1)
+    M[2, 0] = -bp_2 * _couple_off_rev(T, t)
+    M[2, 2] = -bp_2 * _phi_mirror(T, t) + _psi(t) * (bj_2 * n1_2**2 + bm_2)
 
     d = np.zeros(3)
-    d[0] = a_tau_0*bp_0*dy*n1_0 - a_0*bp_0*_couple_avg(T, t) + b_0*dy*n2_0
-    d[1] = -a_tau_1*bp_1*dx*n2_1 + a_1*bp_1*-_phi(L) + b_1*dx*n1_1
-    d[2] = a_tau_2*bp_2*dy*n1_2 + a_2*bp_2*_couple_avg(T, t) + b_2*dy*n2_2
+    d[0] = a_tau_0 * bp_0 * dy * n1_0 - a_0 * bp_0 * _couple_avg(T, t) + b_0 * dy * n2_0
+    d[1] = -a_tau_1 * bp_1 * dx * n2_1 + a_1 * bp_1 * -_phi(L) + b_1 * dx * n1_1
+    d[2] = a_tau_2 * bp_2 * dy * n1_2 + a_2 * bp_2 * _couple_avg(T, t) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 4] = T*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*T - bj_0*dy*n1_0*n2_0 + bm_0*dx)/(dx*(T + 1))  # (+0, -1)
-    N[0, 5] = -(bj_0*dx*n1_0**2*L*T + bj_0*dx*n1_0**2*L - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T + bj_0*dy*n1_0*n2_0*T + bm_0*dx*L*T + bm_0*dx*L)/(dx*L*T)  # (+0, +0)
-    N[0, 6] = bp_0*_couple_avg(T, t)  # (+0, +1)
-    N[0, 9] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
-    N[0, 10] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
-    N[1, 0] = -bp_1*(L - 1)/(L - 2)  # (-2, +0)
-    N[1, 1] = bp_1*(L - 2)/(L - 1)  # (-1, +0)
-    N[1, 4] = bj_1*dx*n1_1*n2_1*(L*T + L + T)/(dy*(T + 1))  # (+0, -1)
-    N[1, 5] = -(bj_1*dx*n1_1*n2_1*L**2*T + bj_1*dx*n1_1*n2_1*L*T - bj_1*dx*n1_1*n2_1*L - bj_1*dy*n2_1**2*L*T - bj_1*dy*n2_1**2*T - bm_1*dy*L*T - bm_1*dy*T)/(dy*L*T)  # (+0, +0)
-    N[1, 9] = -bj_1*dx*n1_1*n2_1*L/dy  # (+1, -1)
-    N[1, 10] = L*(bj_1*dx*n1_1*n2_1*L + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 - bm_1*dy)/(dy*(L + 1))  # (+1, +0)
-    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*t + 1)/dx  # (-1, +2)
-    N[2, 3] = -bj_2*dy*n1_2*n2_2*t/dx  # (-1, +3)
-    N[2, 6] = -bp_2*_couple_avg(T, t)  # (+0, +1)
-    N[2, 7] = (bj_2*dx*n1_2**2*t + bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t**2 + bm_2*dx*t + bm_2*dx)/(dx*t)  # (+0, +2)
-    N[2, 8] = -t*(bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t - bj_2*dy*n1_2*n2_2 + bm_2*dx)/(dx*(t + 1))  # (+0, +3)
-    N[2, 11] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, +2)
+    N[0, 4] = (
+        T
+        * (
+            bj_0 * dx * n1_0**2
+            - bj_0 * dy * n1_0 * n2_0 * T
+            - bj_0 * dy * n1_0 * n2_0
+            + bm_0 * dx
+        )
+        / (dx * (T + 1))
+    )  # (+0, -1)
+    N[0, 5] = -(
+        bj_0 * dx * n1_0**2 * L * T
+        + bj_0 * dx * n1_0**2 * L
+        - bj_0 * dy * n1_0 * n2_0 * L * T**2
+        - bj_0 * dy * n1_0 * n2_0 * L * T
+        + bj_0 * dy * n1_0 * n2_0 * T
+        + bm_0 * dx * L * T
+        + bm_0 * dx * L
+    ) / (dx * L * T)  # (+0, +0)
+    N[0, 6] = bp_0 * _couple_avg(T, t)  # (+0, +1)
+    N[0, 9] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
+    N[0, 10] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
+    N[1, 0] = -bp_1 * (L - 1) / (L - 2)  # (-2, +0)
+    N[1, 1] = bp_1 * (L - 2) / (L - 1)  # (-1, +0)
+    N[1, 4] = bj_1 * dx * n1_1 * n2_1 * (L * T + L + T) / (dy * (T + 1))  # (+0, -1)
+    N[1, 5] = -(
+        bj_1 * dx * n1_1 * n2_1 * L**2 * T
+        + bj_1 * dx * n1_1 * n2_1 * L * T
+        - bj_1 * dx * n1_1 * n2_1 * L
+        - bj_1 * dy * n2_1**2 * L * T
+        - bj_1 * dy * n2_1**2 * T
+        - bm_1 * dy * L * T
+        - bm_1 * dy * T
+    ) / (dy * L * T)  # (+0, +0)
+    N[1, 9] = -bj_1 * dx * n1_1 * n2_1 * L / dy  # (+1, -1)
+    N[1, 10] = (
+        L
+        * (
+            bj_1 * dx * n1_1 * n2_1 * L
+            + bj_1 * dx * n1_1 * n2_1
+            - bj_1 * dy * n2_1**2
+            - bm_1 * dy
+        )
+        / (dy * (L + 1))
+    )  # (+1, +0)
+    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * t + 1) / dx  # (-1, +2)
+    N[2, 3] = -bj_2 * dy * n1_2 * n2_2 * t / dx  # (-1, +3)
+    N[2, 6] = -bp_2 * _couple_avg(T, t)  # (+0, +1)
+    N[2, 7] = (
+        bj_2 * dx * n1_2**2 * t
+        + bj_2 * dx * n1_2**2
+        - bj_2 * dy * n1_2 * n2_2 * t**2
+        + bm_2 * dx * t
+        + bm_2 * dx
+    ) / (dx * t)  # (+0, +2)
+    N[2, 8] = (
+        -t
+        * (
+            bj_2 * dx * n1_2**2
+            - bj_2 * dy * n1_2 * n2_2 * t
+            - bj_2 * dy * n1_2 * n2_2
+            + bm_2 * dx
+        )
+        / (dx * (t + 1))
+    )  # (+0, +3)
+    N[2, 11] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, +2)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1401,50 +1876,122 @@ def _case3_sc3_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc3_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 3, eta > 0.  Row 2 is extra (T,L corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'L')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "L")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-2, +0), (-1, +0), (-1, +2), (-1, +3), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+0, +3), (+1, -1), (+1, +0), (+1, +2)]
+    offsets = [
+        (-2, +0),
+        (-1, +0),
+        (-1, +2),
+        (-1, +3),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+0, +3),
+        (+1, -1),
+        (+1, +0),
+        (+1, +2),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bm_0*_phi_coupled(T, t) - _psi(T) * (bj_0*n1_0**2 - bp_0)
-    M[0, 1] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
-    M[0, 2] = -bm_0*_couple_off_fwd(T, t)
-    M[1, 0] = bj_1*dx*n1_1*n2_1/(dy*T*(T + 1))
-    M[1, 1] = bm_1*-_phi(L) + _psi(L) * (bj_1*n2_1**2 - bp_1)
-    M[2, 0] = bm_2*_couple_off_rev(T, t)
-    M[2, 2] = bm_2*_phi_mirror(T, t) + _psi(t) * (bj_2*n1_2**2 - bp_2)
+    M[0, 0] = -bm_0 * _phi_coupled(T, t) - _psi(T) * (bj_0 * n1_0**2 - bp_0)
+    M[0, 1] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
+    M[0, 2] = -bm_0 * _couple_off_fwd(T, t)
+    M[1, 0] = bj_1 * dx * n1_1 * n2_1 / (dy * T * (T + 1))
+    M[1, 1] = bm_1 * -_phi(L) + _psi(L) * (bj_1 * n2_1**2 - bp_1)
+    M[2, 0] = bm_2 * _couple_off_rev(T, t)
+    M[2, 2] = bm_2 * _phi_mirror(T, t) + _psi(t) * (bj_2 * n1_2**2 - bp_2)
 
     d = np.zeros(3)
-    d[0] = a_tau_0*bm_0*dy*n1_0 - a_0*bm_0*_couple_avg(T, t) + b_0*dy*n2_0
-    d[1] = -a_tau_1*bm_1*dx*n2_1 + a_1*bm_1*-_phi(L) + b_1*dx*n1_1
-    d[2] = a_tau_2*bm_2*dy*n1_2 + a_2*bm_2*_couple_avg(T, t) + b_2*dy*n2_2
+    d[0] = a_tau_0 * bm_0 * dy * n1_0 - a_0 * bm_0 * _couple_avg(T, t) + b_0 * dy * n2_0
+    d[1] = -a_tau_1 * bm_1 * dx * n2_1 + a_1 * bm_1 * -_phi(L) + b_1 * dx * n1_1
+    d[2] = a_tau_2 * bm_2 * dy * n1_2 + a_2 * bm_2 * _couple_avg(T, t) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 4] = T*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*T - bj_0*dy*n1_0*n2_0 - bp_0*dx)/(dx*(T + 1))  # (+0, -1)
-    N[0, 5] = -(bj_0*dx*n1_0**2*L*T + bj_0*dx*n1_0**2*L - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T + bj_0*dy*n1_0*n2_0*T - bp_0*dx*L*T - bp_0*dx*L)/(dx*L*T)  # (+0, +0)
-    N[0, 6] = -bm_0*_couple_avg(T, t)  # (+0, +1)
-    N[0, 9] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
-    N[0, 10] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
-    N[1, 0] = bm_1*(L - 1)/(L - 2)  # (-2, +0)
-    N[1, 1] = -bm_1*(L - 2)/(L - 1)  # (-1, +0)
-    N[1, 4] = bj_1*dx*n1_1*n2_1*(L*T + L + T)/(dy*(T + 1))  # (+0, -1)
-    N[1, 5] = -(bj_1*dx*n1_1*n2_1*L**2*T + bj_1*dx*n1_1*n2_1*L*T - bj_1*dx*n1_1*n2_1*L - bj_1*dy*n2_1**2*L*T - bj_1*dy*n2_1**2*T + bp_1*dy*L*T + bp_1*dy*T)/(dy*L*T)  # (+0, +0)
-    N[1, 9] = -bj_1*dx*n1_1*n2_1*L/dy  # (+1, -1)
-    N[1, 10] = L*(bj_1*dx*n1_1*n2_1*L + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 + bp_1*dy)/(dy*(L + 1))  # (+1, +0)
-    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*t + 1)/dx  # (-1, +2)
-    N[2, 3] = -bj_2*dy*n1_2*n2_2*t/dx  # (-1, +3)
-    N[2, 6] = bm_2*_couple_avg(T, t)  # (+0, +1)
-    N[2, 7] = (bj_2*dx*n1_2**2*t + bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t**2 - bp_2*dx*t - bp_2*dx)/(dx*t)  # (+0, +2)
-    N[2, 8] = -t*(bj_2*dx*n1_2**2 - bj_2*dy*n1_2*n2_2*t - bj_2*dy*n1_2*n2_2 - bp_2*dx)/(dx*(t + 1))  # (+0, +3)
-    N[2, 11] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, +2)
+    N[0, 4] = (
+        T
+        * (
+            bj_0 * dx * n1_0**2
+            - bj_0 * dy * n1_0 * n2_0 * T
+            - bj_0 * dy * n1_0 * n2_0
+            - bp_0 * dx
+        )
+        / (dx * (T + 1))
+    )  # (+0, -1)
+    N[0, 5] = -(
+        bj_0 * dx * n1_0**2 * L * T
+        + bj_0 * dx * n1_0**2 * L
+        - bj_0 * dy * n1_0 * n2_0 * L * T**2
+        - bj_0 * dy * n1_0 * n2_0 * L * T
+        + bj_0 * dy * n1_0 * n2_0 * T
+        - bp_0 * dx * L * T
+        - bp_0 * dx * L
+    ) / (dx * L * T)  # (+0, +0)
+    N[0, 6] = -bm_0 * _couple_avg(T, t)  # (+0, +1)
+    N[0, 9] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
+    N[0, 10] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
+    N[1, 0] = bm_1 * (L - 1) / (L - 2)  # (-2, +0)
+    N[1, 1] = -bm_1 * (L - 2) / (L - 1)  # (-1, +0)
+    N[1, 4] = bj_1 * dx * n1_1 * n2_1 * (L * T + L + T) / (dy * (T + 1))  # (+0, -1)
+    N[1, 5] = -(
+        bj_1 * dx * n1_1 * n2_1 * L**2 * T
+        + bj_1 * dx * n1_1 * n2_1 * L * T
+        - bj_1 * dx * n1_1 * n2_1 * L
+        - bj_1 * dy * n2_1**2 * L * T
+        - bj_1 * dy * n2_1**2 * T
+        + bp_1 * dy * L * T
+        + bp_1 * dy * T
+    ) / (dy * L * T)  # (+0, +0)
+    N[1, 9] = -bj_1 * dx * n1_1 * n2_1 * L / dy  # (+1, -1)
+    N[1, 10] = (
+        L
+        * (
+            bj_1 * dx * n1_1 * n2_1 * L
+            + bj_1 * dx * n1_1 * n2_1
+            - bj_1 * dy * n2_1**2
+            + bp_1 * dy
+        )
+        / (dy * (L + 1))
+    )  # (+1, +0)
+    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * t + 1) / dx  # (-1, +2)
+    N[2, 3] = -bj_2 * dy * n1_2 * n2_2 * t / dx  # (-1, +3)
+    N[2, 6] = bm_2 * _couple_avg(T, t)  # (+0, +1)
+    N[2, 7] = (
+        bj_2 * dx * n1_2**2 * t
+        + bj_2 * dx * n1_2**2
+        - bj_2 * dy * n1_2 * n2_2 * t**2
+        - bp_2 * dx * t
+        - bp_2 * dx
+    ) / (dx * t)  # (+0, +2)
+    N[2, 8] = (
+        -t
+        * (
+            bj_2 * dx * n1_2**2
+            - bj_2 * dy * n1_2 * n2_2 * t
+            - bj_2 * dy * n1_2 * n2_2
+            - bp_2 * dx
+        )
+        / (dx * (t + 1))
+    )  # (+0, +3)
+    N[2, 11] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, +2)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1453,49 +2000,125 @@ def _case3_sc3_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc4_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 4, eta < 0.  Row 2 is extra (T,L corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'L')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "L")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+    offsets = [
+        (-3, -1),
+        (-3, +0),
+        (-2, -1),
+        (-2, +0),
+        (-2, +1),
+        (-1, +0),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+1, -1),
+        (+1, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bp_0*-_phi(T) - _psi(T) * (bj_0*n1_0**2 + bm_0)
-    M[0, 1] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
-    M[1, 0] = bj_1*dx*n1_1*n2_1/(dy*T*(T + 1))
-    M[1, 1] = -bp_1*_phi_coupled(L, l) + _psi(L) * (bj_1*n2_1**2 + bm_1)
-    M[1, 2] = -bp_1*_couple_off_fwd(L, l)
-    M[2, 2] = bp_2*_couple_off_rev(L, l)
+    M[0, 0] = bp_0 * -_phi(T) - _psi(T) * (bj_0 * n1_0**2 + bm_0)
+    M[0, 1] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
+    M[1, 0] = bj_1 * dx * n1_1 * n2_1 / (dy * T * (T + 1))
+    M[1, 1] = -bp_1 * _phi_coupled(L, l) + _psi(L) * (bj_1 * n2_1**2 + bm_1)
+    M[1, 2] = -bp_1 * _couple_off_fwd(L, l)
+    M[2, 2] = bp_2 * _couple_off_rev(L, l)
 
     d = np.zeros(3)
-    d[0] = a_tau_0*bp_0*dy*n1_0 - a_0*bp_0*-_phi(T) + b_0*dy*n2_0
-    d[1] = -a_tau_1*bp_1*dx*n2_1 + a_1*bp_1*_couple_avg(L, l) + b_1*dx*n1_1
-    d[2] = -a_tau_2*bp_2*dx*n2_2 - a_2*bp_2*_couple_avg(L, l) + b_2*dx*n1_2
+    d[0] = a_tau_0 * bp_0 * dy * n1_0 - a_0 * bp_0 * -_phi(T) + b_0 * dy * n2_0
+    d[1] = (
+        -a_tau_1 * bp_1 * dx * n2_1 + a_1 * bp_1 * _couple_avg(L, l) + b_1 * dx * n1_1
+    )
+    d[2] = (
+        -a_tau_2 * bp_2 * dx * n2_2 - a_2 * bp_2 * _couple_avg(L, l) + b_2 * dx * n1_2
+    )
 
     N = np.zeros((3, len(offsets)))
-    N[0, 6] = T*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*T - bj_0*dy*n1_0*n2_0 + bm_0*dx)/(dx*(T + 1))  # (+0, -1)
-    N[0, 7] = -(bj_0*dx*n1_0**2*L*T + bj_0*dx*n1_0**2*L - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T + bj_0*dy*n1_0*n2_0*T + bm_0*dx*L*T + bm_0*dx*L)/(dx*L*T)  # (+0, +0)
-    N[0, 8] = -bp_0*(T - 2)/(T - 1)  # (+0, +1)
-    N[0, 9] = bp_0*(T - 1)/(T - 2)  # (+0, +2)
-    N[0, 10] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
-    N[0, 11] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
-    N[1, 5] = -bp_1*_couple_avg(L, l)  # (-1, +0)
-    N[1, 6] = bj_1*dx*n1_1*n2_1*(L*T + L + T)/(dy*(T + 1))  # (+0, -1)
-    N[1, 7] = -(bj_1*dx*n1_1*n2_1*L**2*T + bj_1*dx*n1_1*n2_1*L*T - bj_1*dx*n1_1*n2_1*L - bj_1*dy*n2_1**2*L*T - bj_1*dy*n2_1**2*T - bm_1*dy*L*T - bm_1*dy*T)/(dy*L*T)  # (+0, +0)
-    N[1, 10] = -bj_1*dx*n1_1*n2_1*L/dy  # (+1, -1)
-    N[1, 11] = L*(bj_1*dx*n1_1*n2_1*L + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 - bm_1*dy)/(dy*(L + 1))  # (+1, +0)
-    N[2, 0] = -bj_2*dx*n1_2*n2_2*l/dy  # (-3, -1)
-    N[2, 1] = l*(bj_2*dx*n1_2*n2_2*l + bj_2*dx*n1_2*n2_2 + bj_2*dy*n2_2**2 + bm_2*dy)/(dy*(l + 1))  # (-3, +0)
-    N[2, 2] = (1/2)*bj_2*dx*n1_2*n2_2*(2*l + 1)/dy  # (-2, -1)
-    N[2, 3] = -(bj_2*dx*n1_2*n2_2*l**2 + bj_2*dy*n2_2**2*l + bj_2*dy*n2_2**2 + bm_2*dy*l + bm_2*dy)/(dy*l)  # (-2, +0)
-    N[2, 4] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (-2, +1)
-    N[2, 5] = bp_2*_couple_avg(L, l)  # (-1, +0)
+    N[0, 6] = (
+        T
+        * (
+            bj_0 * dx * n1_0**2
+            - bj_0 * dy * n1_0 * n2_0 * T
+            - bj_0 * dy * n1_0 * n2_0
+            + bm_0 * dx
+        )
+        / (dx * (T + 1))
+    )  # (+0, -1)
+    N[0, 7] = -(
+        bj_0 * dx * n1_0**2 * L * T
+        + bj_0 * dx * n1_0**2 * L
+        - bj_0 * dy * n1_0 * n2_0 * L * T**2
+        - bj_0 * dy * n1_0 * n2_0 * L * T
+        + bj_0 * dy * n1_0 * n2_0 * T
+        + bm_0 * dx * L * T
+        + bm_0 * dx * L
+    ) / (dx * L * T)  # (+0, +0)
+    N[0, 8] = -bp_0 * (T - 2) / (T - 1)  # (+0, +1)
+    N[0, 9] = bp_0 * (T - 1) / (T - 2)  # (+0, +2)
+    N[0, 10] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
+    N[0, 11] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
+    N[1, 5] = -bp_1 * _couple_avg(L, l)  # (-1, +0)
+    N[1, 6] = bj_1 * dx * n1_1 * n2_1 * (L * T + L + T) / (dy * (T + 1))  # (+0, -1)
+    N[1, 7] = -(
+        bj_1 * dx * n1_1 * n2_1 * L**2 * T
+        + bj_1 * dx * n1_1 * n2_1 * L * T
+        - bj_1 * dx * n1_1 * n2_1 * L
+        - bj_1 * dy * n2_1**2 * L * T
+        - bj_1 * dy * n2_1**2 * T
+        - bm_1 * dy * L * T
+        - bm_1 * dy * T
+    ) / (dy * L * T)  # (+0, +0)
+    N[1, 10] = -bj_1 * dx * n1_1 * n2_1 * L / dy  # (+1, -1)
+    N[1, 11] = (
+        L
+        * (
+            bj_1 * dx * n1_1 * n2_1 * L
+            + bj_1 * dx * n1_1 * n2_1
+            - bj_1 * dy * n2_1**2
+            - bm_1 * dy
+        )
+        / (dy * (L + 1))
+    )  # (+1, +0)
+    N[2, 0] = -bj_2 * dx * n1_2 * n2_2 * l / dy  # (-3, -1)
+    N[2, 1] = (
+        l
+        * (
+            bj_2 * dx * n1_2 * n2_2 * l
+            + bj_2 * dx * n1_2 * n2_2
+            + bj_2 * dy * n2_2**2
+            + bm_2 * dy
+        )
+        / (dy * (l + 1))
+    )  # (-3, +0)
+    N[2, 2] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * l + 1) / dy  # (-2, -1)
+    N[2, 3] = -(
+        bj_2 * dx * n1_2 * n2_2 * l**2
+        + bj_2 * dy * n2_2**2 * l
+        + bj_2 * dy * n2_2**2
+        + bm_2 * dy * l
+        + bm_2 * dy
+    ) / (dy * l)  # (-2, +0)
+    N[2, 4] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (-2, +1)
+    N[2, 5] = bp_2 * _couple_avg(L, l)  # (-1, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1504,49 +2127,125 @@ def _case3_sc4_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc4_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 4, eta > 0.  Row 2 is extra (T,L corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'L')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "L")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+    offsets = [
+        (-3, -1),
+        (-3, +0),
+        (-2, -1),
+        (-2, +0),
+        (-2, +1),
+        (-1, +0),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+1, -1),
+        (+1, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bm_0*-_phi(T) - _psi(T) * (bj_0*n1_0**2 - bp_0)
-    M[0, 1] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
-    M[1, 0] = bj_1*dx*n1_1*n2_1/(dy*T*(T + 1))
-    M[1, 1] = bm_1*_phi_coupled(L, l) + _psi(L) * (bj_1*n2_1**2 - bp_1)
-    M[1, 2] = bm_1*_couple_off_fwd(L, l)
-    M[2, 2] = -bm_2*_couple_off_rev(L, l)
+    M[0, 0] = -bm_0 * -_phi(T) - _psi(T) * (bj_0 * n1_0**2 - bp_0)
+    M[0, 1] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
+    M[1, 0] = bj_1 * dx * n1_1 * n2_1 / (dy * T * (T + 1))
+    M[1, 1] = bm_1 * _phi_coupled(L, l) + _psi(L) * (bj_1 * n2_1**2 - bp_1)
+    M[1, 2] = bm_1 * _couple_off_fwd(L, l)
+    M[2, 2] = -bm_2 * _couple_off_rev(L, l)
 
     d = np.zeros(3)
-    d[0] = a_tau_0*bm_0*dy*n1_0 - a_0*bm_0*-_phi(T) + b_0*dy*n2_0
-    d[1] = -a_tau_1*bm_1*dx*n2_1 + a_1*bm_1*_couple_avg(L, l) + b_1*dx*n1_1
-    d[2] = -a_tau_2*bm_2*dx*n2_2 - a_2*bm_2*_couple_avg(L, l) + b_2*dx*n1_2
+    d[0] = a_tau_0 * bm_0 * dy * n1_0 - a_0 * bm_0 * -_phi(T) + b_0 * dy * n2_0
+    d[1] = (
+        -a_tau_1 * bm_1 * dx * n2_1 + a_1 * bm_1 * _couple_avg(L, l) + b_1 * dx * n1_1
+    )
+    d[2] = (
+        -a_tau_2 * bm_2 * dx * n2_2 - a_2 * bm_2 * _couple_avg(L, l) + b_2 * dx * n1_2
+    )
 
     N = np.zeros((3, len(offsets)))
-    N[0, 6] = T*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*T - bj_0*dy*n1_0*n2_0 - bp_0*dx)/(dx*(T + 1))  # (+0, -1)
-    N[0, 7] = -(bj_0*dx*n1_0**2*L*T + bj_0*dx*n1_0**2*L - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T + bj_0*dy*n1_0*n2_0*T - bp_0*dx*L*T - bp_0*dx*L)/(dx*L*T)  # (+0, +0)
-    N[0, 8] = bm_0*(T - 2)/(T - 1)  # (+0, +1)
-    N[0, 9] = -bm_0*(T - 1)/(T - 2)  # (+0, +2)
-    N[0, 10] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
-    N[0, 11] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
-    N[1, 5] = bm_1*_couple_avg(L, l)  # (-1, +0)
-    N[1, 6] = bj_1*dx*n1_1*n2_1*(L*T + L + T)/(dy*(T + 1))  # (+0, -1)
-    N[1, 7] = -(bj_1*dx*n1_1*n2_1*L**2*T + bj_1*dx*n1_1*n2_1*L*T - bj_1*dx*n1_1*n2_1*L - bj_1*dy*n2_1**2*L*T - bj_1*dy*n2_1**2*T + bp_1*dy*L*T + bp_1*dy*T)/(dy*L*T)  # (+0, +0)
-    N[1, 10] = -bj_1*dx*n1_1*n2_1*L/dy  # (+1, -1)
-    N[1, 11] = L*(bj_1*dx*n1_1*n2_1*L + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 + bp_1*dy)/(dy*(L + 1))  # (+1, +0)
-    N[2, 0] = -bj_2*dx*n1_2*n2_2*l/dy  # (-3, -1)
-    N[2, 1] = l*(bj_2*dx*n1_2*n2_2*l + bj_2*dx*n1_2*n2_2 + bj_2*dy*n2_2**2 - bp_2*dy)/(dy*(l + 1))  # (-3, +0)
-    N[2, 2] = (1/2)*bj_2*dx*n1_2*n2_2*(2*l + 1)/dy  # (-2, -1)
-    N[2, 3] = -(bj_2*dx*n1_2*n2_2*l**2 + bj_2*dy*n2_2**2*l + bj_2*dy*n2_2**2 - bp_2*dy*l - bp_2*dy)/(dy*l)  # (-2, +0)
-    N[2, 4] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (-2, +1)
-    N[2, 5] = -bm_2*_couple_avg(L, l)  # (-1, +0)
+    N[0, 6] = (
+        T
+        * (
+            bj_0 * dx * n1_0**2
+            - bj_0 * dy * n1_0 * n2_0 * T
+            - bj_0 * dy * n1_0 * n2_0
+            - bp_0 * dx
+        )
+        / (dx * (T + 1))
+    )  # (+0, -1)
+    N[0, 7] = -(
+        bj_0 * dx * n1_0**2 * L * T
+        + bj_0 * dx * n1_0**2 * L
+        - bj_0 * dy * n1_0 * n2_0 * L * T**2
+        - bj_0 * dy * n1_0 * n2_0 * L * T
+        + bj_0 * dy * n1_0 * n2_0 * T
+        - bp_0 * dx * L * T
+        - bp_0 * dx * L
+    ) / (dx * L * T)  # (+0, +0)
+    N[0, 8] = bm_0 * (T - 2) / (T - 1)  # (+0, +1)
+    N[0, 9] = -bm_0 * (T - 1) / (T - 2)  # (+0, +2)
+    N[0, 10] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
+    N[0, 11] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
+    N[1, 5] = bm_1 * _couple_avg(L, l)  # (-1, +0)
+    N[1, 6] = bj_1 * dx * n1_1 * n2_1 * (L * T + L + T) / (dy * (T + 1))  # (+0, -1)
+    N[1, 7] = -(
+        bj_1 * dx * n1_1 * n2_1 * L**2 * T
+        + bj_1 * dx * n1_1 * n2_1 * L * T
+        - bj_1 * dx * n1_1 * n2_1 * L
+        - bj_1 * dy * n2_1**2 * L * T
+        - bj_1 * dy * n2_1**2 * T
+        + bp_1 * dy * L * T
+        + bp_1 * dy * T
+    ) / (dy * L * T)  # (+0, +0)
+    N[1, 10] = -bj_1 * dx * n1_1 * n2_1 * L / dy  # (+1, -1)
+    N[1, 11] = (
+        L
+        * (
+            bj_1 * dx * n1_1 * n2_1 * L
+            + bj_1 * dx * n1_1 * n2_1
+            - bj_1 * dy * n2_1**2
+            + bp_1 * dy
+        )
+        / (dy * (L + 1))
+    )  # (+1, +0)
+    N[2, 0] = -bj_2 * dx * n1_2 * n2_2 * l / dy  # (-3, -1)
+    N[2, 1] = (
+        l
+        * (
+            bj_2 * dx * n1_2 * n2_2 * l
+            + bj_2 * dx * n1_2 * n2_2
+            + bj_2 * dy * n2_2**2
+            - bp_2 * dy
+        )
+        / (dy * (l + 1))
+    )  # (-3, +0)
+    N[2, 2] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * l + 1) / dy  # (-2, -1)
+    N[2, 3] = -(
+        bj_2 * dx * n1_2 * n2_2 * l**2
+        + bj_2 * dy * n2_2**2 * l
+        + bj_2 * dy * n2_2**2
+        - bp_2 * dy * l
+        - bp_2 * dy
+    ) / (dy * l)  # (-2, +0)
+    N[2, 4] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (-2, +1)
+    N[2, 5] = -bm_2 * _couple_avg(L, l)  # (-1, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1555,50 +2254,126 @@ def _case3_sc4_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc5_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 5, eta < 0.  Row 2 is extra (L,B corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'L')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "L")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+1, +1)]
+    offsets = [
+        (-3, -1),
+        (-3, +0),
+        (-2, -1),
+        (-2, +0),
+        (-2, +1),
+        (-1, +0),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+1, +0),
+        (+1, +1),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bp_0*_phi_coupled(L, l) + _psi(L) * (bj_0*n2_0**2 + bm_0)
-    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
-    M[0, 2] = -bp_0*_couple_off_fwd(L, l)
-    M[1, 0] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
-    M[1, 1] = -bp_1*-_phi(B) + _psi(B) * (bj_1*n1_1**2 + bm_1)
-    M[2, 0] = bp_2*_couple_off_rev(L, l)
-    M[2, 2] = bp_2*_phi_mirror(L, l) - _psi(l) * (bj_2*n2_2**2 + bm_2)
+    M[0, 0] = -bp_0 * _phi_coupled(L, l) + _psi(L) * (bj_0 * n2_0**2 + bm_0)
+    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
+    M[0, 2] = -bp_0 * _couple_off_fwd(L, l)
+    M[1, 0] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
+    M[1, 1] = -bp_1 * -_phi(B) + _psi(B) * (bj_1 * n1_1**2 + bm_1)
+    M[2, 0] = bp_2 * _couple_off_rev(L, l)
+    M[2, 2] = bp_2 * _phi_mirror(L, l) - _psi(l) * (bj_2 * n2_2**2 + bm_2)
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bp_0*dx*n2_0 + a_0*bp_0*_couple_avg(L, l) + b_0*dx*n1_0
-    d[1] = a_tau_1*bp_1*dy*n1_1 + a_1*bp_1*-_phi(B) + b_1*dy*n2_1
-    d[2] = -a_tau_2*bp_2*dx*n2_2 - a_2*bp_2*_couple_avg(L, l) + b_2*dx*n1_2
+    d[0] = (
+        -a_tau_0 * bp_0 * dx * n2_0 + a_0 * bp_0 * _couple_avg(L, l) + b_0 * dx * n1_0
+    )
+    d[1] = a_tau_1 * bp_1 * dy * n1_1 + a_1 * bp_1 * -_phi(B) + b_1 * dy * n2_1
+    d[2] = (
+        -a_tau_2 * bp_2 * dx * n2_2 - a_2 * bp_2 * _couple_avg(L, l) + b_2 * dx * n1_2
+    )
 
     N = np.zeros((3, len(offsets)))
-    N[0, 5] = -bp_0*_couple_avg(L, l)  # (-1, +0)
-    N[0, 8] = (bj_0*dx*n1_0*n2_0*B*L**2 + bj_0*dx*n1_0*n2_0*B*L - bj_0*dx*n1_0*n2_0*L + bj_0*dy*n2_0**2*B*L + bj_0*dy*n2_0**2*B + bm_0*dy*B*L + bm_0*dy*B)/(dy*B*L)  # (+0, +0)
-    N[0, 9] = -bj_0*dx*n1_0*n2_0*(B*L + B + L)/(dy*(B + 1))  # (+0, +1)
-    N[0, 10] = -L*(bj_0*dx*n1_0*n2_0*L + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 + bm_0*dy)/(dy*(L + 1))  # (+1, +0)
-    N[0, 11] = bj_0*dx*n1_0*n2_0*L/dy  # (+1, +1)
-    N[1, 6] = -bp_1*(B - 1)/(B - 2)  # (+0, -2)
-    N[1, 7] = bp_1*(B - 2)/(B - 1)  # (+0, -1)
-    N[1, 8] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L + bj_1*dy*n1_1*n2_1*B**2*L + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B + bm_1*dx*B*L + bm_1*dx*L)/(dx*B*L)  # (+0, +0)
-    N[1, 9] = -B*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*B + bj_1*dy*n1_1*n2_1 + bm_1*dx)/(dx*(B + 1))  # (+0, +1)
-    N[1, 10] = -bj_1*dy*n1_1*n2_1*(B*L + B + L)/(dx*(L + 1))  # (+1, +0)
-    N[1, 11] = bj_1*dy*n1_1*n2_1*B/dx  # (+1, +1)
-    N[2, 0] = -bj_2*dx*n1_2*n2_2*l/dy  # (-3, -1)
-    N[2, 1] = l*(bj_2*dx*n1_2*n2_2*l + bj_2*dx*n1_2*n2_2 + bj_2*dy*n2_2**2 + bm_2*dy)/(dy*(l + 1))  # (-3, +0)
-    N[2, 2] = (1/2)*bj_2*dx*n1_2*n2_2*(2*l + 1)/dy  # (-2, -1)
-    N[2, 3] = -(bj_2*dx*n1_2*n2_2*l**2 + bj_2*dy*n2_2**2*l + bj_2*dy*n2_2**2 + bm_2*dy*l + bm_2*dy)/(dy*l)  # (-2, +0)
-    N[2, 4] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (-2, +1)
-    N[2, 5] = bp_2*_couple_avg(L, l)  # (-1, +0)
+    N[0, 5] = -bp_0 * _couple_avg(L, l)  # (-1, +0)
+    N[0, 8] = (
+        bj_0 * dx * n1_0 * n2_0 * B * L**2
+        + bj_0 * dx * n1_0 * n2_0 * B * L
+        - bj_0 * dx * n1_0 * n2_0 * L
+        + bj_0 * dy * n2_0**2 * B * L
+        + bj_0 * dy * n2_0**2 * B
+        + bm_0 * dy * B * L
+        + bm_0 * dy * B
+    ) / (dy * B * L)  # (+0, +0)
+    N[0, 9] = -bj_0 * dx * n1_0 * n2_0 * (B * L + B + L) / (dy * (B + 1))  # (+0, +1)
+    N[0, 10] = (
+        -L
+        * (
+            bj_0 * dx * n1_0 * n2_0 * L
+            + bj_0 * dx * n1_0 * n2_0
+            + bj_0 * dy * n2_0**2
+            + bm_0 * dy
+        )
+        / (dy * (L + 1))
+    )  # (+1, +0)
+    N[0, 11] = bj_0 * dx * n1_0 * n2_0 * L / dy  # (+1, +1)
+    N[1, 6] = -bp_1 * (B - 1) / (B - 2)  # (+0, -2)
+    N[1, 7] = bp_1 * (B - 2) / (B - 1)  # (+0, -1)
+    N[1, 8] = (
+        bj_1 * dx * n1_1**2 * B * L
+        + bj_1 * dx * n1_1**2 * L
+        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
+        + bj_1 * dy * n1_1 * n2_1 * B * L
+        - bj_1 * dy * n1_1 * n2_1 * B
+        + bm_1 * dx * B * L
+        + bm_1 * dx * L
+    ) / (dx * B * L)  # (+0, +0)
+    N[1, 9] = (
+        -B
+        * (
+            bj_1 * dx * n1_1**2
+            + bj_1 * dy * n1_1 * n2_1 * B
+            + bj_1 * dy * n1_1 * n2_1
+            + bm_1 * dx
+        )
+        / (dx * (B + 1))
+    )  # (+0, +1)
+    N[1, 10] = -bj_1 * dy * n1_1 * n2_1 * (B * L + B + L) / (dx * (L + 1))  # (+1, +0)
+    N[1, 11] = bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, +1)
+    N[2, 0] = -bj_2 * dx * n1_2 * n2_2 * l / dy  # (-3, -1)
+    N[2, 1] = (
+        l
+        * (
+            bj_2 * dx * n1_2 * n2_2 * l
+            + bj_2 * dx * n1_2 * n2_2
+            + bj_2 * dy * n2_2**2
+            + bm_2 * dy
+        )
+        / (dy * (l + 1))
+    )  # (-3, +0)
+    N[2, 2] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * l + 1) / dy  # (-2, -1)
+    N[2, 3] = -(
+        bj_2 * dx * n1_2 * n2_2 * l**2
+        + bj_2 * dy * n2_2**2 * l
+        + bj_2 * dy * n2_2**2
+        + bm_2 * dy * l
+        + bm_2 * dy
+    ) / (dy * l)  # (-2, +0)
+    N[2, 4] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (-2, +1)
+    N[2, 5] = bp_2 * _couple_avg(L, l)  # (-1, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1607,50 +2382,126 @@ def _case3_sc5_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc5_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 5, eta > 0.  Row 2 is extra (L,B corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'L')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "L")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-3, -1), (-3, +0), (-2, -1), (-2, +0), (-2, +1), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+1, +1)]
+    offsets = [
+        (-3, -1),
+        (-3, +0),
+        (-2, -1),
+        (-2, +0),
+        (-2, +1),
+        (-1, +0),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+1, +0),
+        (+1, +1),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bm_0*_phi_coupled(L, l) + _psi(L) * (bj_0*n2_0**2 - bp_0)
-    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
-    M[0, 2] = bm_0*_couple_off_fwd(L, l)
-    M[1, 0] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
-    M[1, 1] = bm_1*-_phi(B) + _psi(B) * (bj_1*n1_1**2 - bp_1)
-    M[2, 0] = -bm_2*_couple_off_rev(L, l)
-    M[2, 2] = -bm_2*_phi_mirror(L, l) - _psi(l) * (bj_2*n2_2**2 - bp_2)
+    M[0, 0] = bm_0 * _phi_coupled(L, l) + _psi(L) * (bj_0 * n2_0**2 - bp_0)
+    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
+    M[0, 2] = bm_0 * _couple_off_fwd(L, l)
+    M[1, 0] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
+    M[1, 1] = bm_1 * -_phi(B) + _psi(B) * (bj_1 * n1_1**2 - bp_1)
+    M[2, 0] = -bm_2 * _couple_off_rev(L, l)
+    M[2, 2] = -bm_2 * _phi_mirror(L, l) - _psi(l) * (bj_2 * n2_2**2 - bp_2)
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bm_0*dx*n2_0 + a_0*bm_0*_couple_avg(L, l) + b_0*dx*n1_0
-    d[1] = a_tau_1*bm_1*dy*n1_1 + a_1*bm_1*-_phi(B) + b_1*dy*n2_1
-    d[2] = -a_tau_2*bm_2*dx*n2_2 - a_2*bm_2*_couple_avg(L, l) + b_2*dx*n1_2
+    d[0] = (
+        -a_tau_0 * bm_0 * dx * n2_0 + a_0 * bm_0 * _couple_avg(L, l) + b_0 * dx * n1_0
+    )
+    d[1] = a_tau_1 * bm_1 * dy * n1_1 + a_1 * bm_1 * -_phi(B) + b_1 * dy * n2_1
+    d[2] = (
+        -a_tau_2 * bm_2 * dx * n2_2 - a_2 * bm_2 * _couple_avg(L, l) + b_2 * dx * n1_2
+    )
 
     N = np.zeros((3, len(offsets)))
-    N[0, 5] = bm_0*_couple_avg(L, l)  # (-1, +0)
-    N[0, 8] = (bj_0*dx*n1_0*n2_0*B*L**2 + bj_0*dx*n1_0*n2_0*B*L - bj_0*dx*n1_0*n2_0*L + bj_0*dy*n2_0**2*B*L + bj_0*dy*n2_0**2*B - bp_0*dy*B*L - bp_0*dy*B)/(dy*B*L)  # (+0, +0)
-    N[0, 9] = -bj_0*dx*n1_0*n2_0*(B*L + B + L)/(dy*(B + 1))  # (+0, +1)
-    N[0, 10] = -L*(bj_0*dx*n1_0*n2_0*L + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 - bp_0*dy)/(dy*(L + 1))  # (+1, +0)
-    N[0, 11] = bj_0*dx*n1_0*n2_0*L/dy  # (+1, +1)
-    N[1, 6] = bm_1*(B - 1)/(B - 2)  # (+0, -2)
-    N[1, 7] = -bm_1*(B - 2)/(B - 1)  # (+0, -1)
-    N[1, 8] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L + bj_1*dy*n1_1*n2_1*B**2*L + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B - bp_1*dx*B*L - bp_1*dx*L)/(dx*B*L)  # (+0, +0)
-    N[1, 9] = -B*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*B + bj_1*dy*n1_1*n2_1 - bp_1*dx)/(dx*(B + 1))  # (+0, +1)
-    N[1, 10] = -bj_1*dy*n1_1*n2_1*(B*L + B + L)/(dx*(L + 1))  # (+1, +0)
-    N[1, 11] = bj_1*dy*n1_1*n2_1*B/dx  # (+1, +1)
-    N[2, 0] = -bj_2*dx*n1_2*n2_2*l/dy  # (-3, -1)
-    N[2, 1] = l*(bj_2*dx*n1_2*n2_2*l + bj_2*dx*n1_2*n2_2 + bj_2*dy*n2_2**2 - bp_2*dy)/(dy*(l + 1))  # (-3, +0)
-    N[2, 2] = (1/2)*bj_2*dx*n1_2*n2_2*(2*l + 1)/dy  # (-2, -1)
-    N[2, 3] = -(bj_2*dx*n1_2*n2_2*l**2 + bj_2*dy*n2_2**2*l + bj_2*dy*n2_2**2 - bp_2*dy*l - bp_2*dy)/(dy*l)  # (-2, +0)
-    N[2, 4] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (-2, +1)
-    N[2, 5] = -bm_2*_couple_avg(L, l)  # (-1, +0)
+    N[0, 5] = bm_0 * _couple_avg(L, l)  # (-1, +0)
+    N[0, 8] = (
+        bj_0 * dx * n1_0 * n2_0 * B * L**2
+        + bj_0 * dx * n1_0 * n2_0 * B * L
+        - bj_0 * dx * n1_0 * n2_0 * L
+        + bj_0 * dy * n2_0**2 * B * L
+        + bj_0 * dy * n2_0**2 * B
+        - bp_0 * dy * B * L
+        - bp_0 * dy * B
+    ) / (dy * B * L)  # (+0, +0)
+    N[0, 9] = -bj_0 * dx * n1_0 * n2_0 * (B * L + B + L) / (dy * (B + 1))  # (+0, +1)
+    N[0, 10] = (
+        -L
+        * (
+            bj_0 * dx * n1_0 * n2_0 * L
+            + bj_0 * dx * n1_0 * n2_0
+            + bj_0 * dy * n2_0**2
+            - bp_0 * dy
+        )
+        / (dy * (L + 1))
+    )  # (+1, +0)
+    N[0, 11] = bj_0 * dx * n1_0 * n2_0 * L / dy  # (+1, +1)
+    N[1, 6] = bm_1 * (B - 1) / (B - 2)  # (+0, -2)
+    N[1, 7] = -bm_1 * (B - 2) / (B - 1)  # (+0, -1)
+    N[1, 8] = (
+        bj_1 * dx * n1_1**2 * B * L
+        + bj_1 * dx * n1_1**2 * L
+        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
+        + bj_1 * dy * n1_1 * n2_1 * B * L
+        - bj_1 * dy * n1_1 * n2_1 * B
+        - bp_1 * dx * B * L
+        - bp_1 * dx * L
+    ) / (dx * B * L)  # (+0, +0)
+    N[1, 9] = (
+        -B
+        * (
+            bj_1 * dx * n1_1**2
+            + bj_1 * dy * n1_1 * n2_1 * B
+            + bj_1 * dy * n1_1 * n2_1
+            - bp_1 * dx
+        )
+        / (dx * (B + 1))
+    )  # (+0, +1)
+    N[1, 10] = -bj_1 * dy * n1_1 * n2_1 * (B * L + B + L) / (dx * (L + 1))  # (+1, +0)
+    N[1, 11] = bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, +1)
+    N[2, 0] = -bj_2 * dx * n1_2 * n2_2 * l / dy  # (-3, -1)
+    N[2, 1] = (
+        l
+        * (
+            bj_2 * dx * n1_2 * n2_2 * l
+            + bj_2 * dx * n1_2 * n2_2
+            + bj_2 * dy * n2_2**2
+            - bp_2 * dy
+        )
+        / (dy * (l + 1))
+    )  # (-3, +0)
+    N[2, 2] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * l + 1) / dy  # (-2, -1)
+    N[2, 3] = -(
+        bj_2 * dx * n1_2 * n2_2 * l**2
+        + bj_2 * dy * n2_2**2 * l
+        + bj_2 * dy * n2_2**2
+        - bp_2 * dy * l
+        - bp_2 * dy
+    ) / (dy * l)  # (-2, +0)
+    N[2, 4] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (-2, +1)
+    N[2, 5] = -bm_2 * _couple_avg(L, l)  # (-1, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1659,49 +2510,121 @@ def _case3_sc5_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc6_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 6, eta < 0.  Row 2 is extra (L,B corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'L')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "L")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-2, +0), (-1, -3), (-1, -2), (-1, +0), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+1, +1)]
+    offsets = [
+        (-2, +0),
+        (-1, -3),
+        (-1, -2),
+        (-1, +0),
+        (+0, -3),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+1, -2),
+        (+1, +0),
+        (+1, +1),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bp_0*-_phi(L) + _psi(L) * (bj_0*n2_0**2 + bm_0)
-    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
-    M[1, 0] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
-    M[1, 1] = -bp_1*_phi_coupled(B, b) + _psi(B) * (bj_1*n1_1**2 + bm_1)
-    M[1, 2] = -bp_1*_couple_off_fwd(B, b)
-    M[2, 2] = bp_2*_couple_off_rev(B, b)
+    M[0, 0] = -bp_0 * -_phi(L) + _psi(L) * (bj_0 * n2_0**2 + bm_0)
+    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
+    M[1, 0] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
+    M[1, 1] = -bp_1 * _phi_coupled(B, b) + _psi(B) * (bj_1 * n1_1**2 + bm_1)
+    M[1, 2] = -bp_1 * _couple_off_fwd(B, b)
+    M[2, 2] = bp_2 * _couple_off_rev(B, b)
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bp_0*dx*n2_0 + a_0*bp_0*-_phi(L) + b_0*dx*n1_0
-    d[1] = a_tau_1*bp_1*dy*n1_1 + a_1*bp_1*_couple_avg(B, b) + b_1*dy*n2_1
-    d[2] = a_tau_2*bp_2*dy*n1_2 - a_2*bp_2*_couple_avg(B, b) + b_2*dy*n2_2
+    d[0] = -a_tau_0 * bp_0 * dx * n2_0 + a_0 * bp_0 * -_phi(L) + b_0 * dx * n1_0
+    d[1] = a_tau_1 * bp_1 * dy * n1_1 + a_1 * bp_1 * _couple_avg(B, b) + b_1 * dy * n2_1
+    d[2] = a_tau_2 * bp_2 * dy * n1_2 - a_2 * bp_2 * _couple_avg(B, b) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 0] = -bp_0*(L - 1)/(L - 2)  # (-2, +0)
-    N[0, 3] = bp_0*(L - 2)/(L - 1)  # (-1, +0)
-    N[0, 7] = (bj_0*dx*n1_0*n2_0*B*L**2 + bj_0*dx*n1_0*n2_0*B*L - bj_0*dx*n1_0*n2_0*L + bj_0*dy*n2_0**2*B*L + bj_0*dy*n2_0**2*B + bm_0*dy*B*L + bm_0*dy*B)/(dy*B*L)  # (+0, +0)
-    N[0, 8] = -bj_0*dx*n1_0*n2_0*(B*L + B + L)/(dy*(B + 1))  # (+0, +1)
-    N[0, 10] = -L*(bj_0*dx*n1_0*n2_0*L + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 + bm_0*dy)/(dy*(L + 1))  # (+1, +0)
-    N[0, 11] = bj_0*dx*n1_0*n2_0*L/dy  # (+1, +1)
-    N[1, 6] = -bp_1*_couple_avg(B, b)  # (+0, -1)
-    N[1, 7] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L + bj_1*dy*n1_1*n2_1*B**2*L + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B + bm_1*dx*B*L + bm_1*dx*L)/(dx*B*L)  # (+0, +0)
-    N[1, 8] = -B*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*B + bj_1*dy*n1_1*n2_1 + bm_1*dx)/(dx*(B + 1))  # (+0, +1)
-    N[1, 10] = -bj_1*dy*n1_1*n2_1*(B*L + B + L)/(dx*(L + 1))  # (+1, +0)
-    N[1, 11] = bj_1*dy*n1_1*n2_1*B/dx  # (+1, +1)
-    N[2, 1] = -bj_2*dy*n1_2*n2_2*b/dx  # (-1, -3)
-    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*b + 1)/dx  # (-1, -2)
-    N[2, 4] = b*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b + bj_2*dy*n1_2*n2_2 + bm_2*dx)/(dx*(b + 1))  # (+0, -3)
-    N[2, 5] = -(bj_2*dx*n1_2**2*b + bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b**2 + bm_2*dx*b + bm_2*dx)/(dx*b)  # (+0, -2)
-    N[2, 6] = bp_2*_couple_avg(B, b)  # (+0, -1)
-    N[2, 9] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, -2)
+    N[0, 0] = -bp_0 * (L - 1) / (L - 2)  # (-2, +0)
+    N[0, 3] = bp_0 * (L - 2) / (L - 1)  # (-1, +0)
+    N[0, 7] = (
+        bj_0 * dx * n1_0 * n2_0 * B * L**2
+        + bj_0 * dx * n1_0 * n2_0 * B * L
+        - bj_0 * dx * n1_0 * n2_0 * L
+        + bj_0 * dy * n2_0**2 * B * L
+        + bj_0 * dy * n2_0**2 * B
+        + bm_0 * dy * B * L
+        + bm_0 * dy * B
+    ) / (dy * B * L)  # (+0, +0)
+    N[0, 8] = -bj_0 * dx * n1_0 * n2_0 * (B * L + B + L) / (dy * (B + 1))  # (+0, +1)
+    N[0, 10] = (
+        -L
+        * (
+            bj_0 * dx * n1_0 * n2_0 * L
+            + bj_0 * dx * n1_0 * n2_0
+            + bj_0 * dy * n2_0**2
+            + bm_0 * dy
+        )
+        / (dy * (L + 1))
+    )  # (+1, +0)
+    N[0, 11] = bj_0 * dx * n1_0 * n2_0 * L / dy  # (+1, +1)
+    N[1, 6] = -bp_1 * _couple_avg(B, b)  # (+0, -1)
+    N[1, 7] = (
+        bj_1 * dx * n1_1**2 * B * L
+        + bj_1 * dx * n1_1**2 * L
+        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
+        + bj_1 * dy * n1_1 * n2_1 * B * L
+        - bj_1 * dy * n1_1 * n2_1 * B
+        + bm_1 * dx * B * L
+        + bm_1 * dx * L
+    ) / (dx * B * L)  # (+0, +0)
+    N[1, 8] = (
+        -B
+        * (
+            bj_1 * dx * n1_1**2
+            + bj_1 * dy * n1_1 * n2_1 * B
+            + bj_1 * dy * n1_1 * n2_1
+            + bm_1 * dx
+        )
+        / (dx * (B + 1))
+    )  # (+0, +1)
+    N[1, 10] = -bj_1 * dy * n1_1 * n2_1 * (B * L + B + L) / (dx * (L + 1))  # (+1, +0)
+    N[1, 11] = bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, +1)
+    N[2, 1] = -bj_2 * dy * n1_2 * n2_2 * b / dx  # (-1, -3)
+    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * b + 1) / dx  # (-1, -2)
+    N[2, 4] = (
+        b
+        * (
+            bj_2 * dx * n1_2**2
+            + bj_2 * dy * n1_2 * n2_2 * b
+            + bj_2 * dy * n1_2 * n2_2
+            + bm_2 * dx
+        )
+        / (dx * (b + 1))
+    )  # (+0, -3)
+    N[2, 5] = -(
+        bj_2 * dx * n1_2**2 * b
+        + bj_2 * dx * n1_2**2
+        + bj_2 * dy * n1_2 * n2_2 * b**2
+        + bm_2 * dx * b
+        + bm_2 * dx
+    ) / (dx * b)  # (+0, -2)
+    N[2, 6] = bp_2 * _couple_avg(B, b)  # (+0, -1)
+    N[2, 9] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, -2)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1710,49 +2633,121 @@ def _case3_sc6_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc6_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 6, eta > 0.  Row 2 is extra (L,B corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'L')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "L")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-2, +0), (-1, -3), (-1, -2), (-1, +0), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+1, +1)]
+    offsets = [
+        (-2, +0),
+        (-1, -3),
+        (-1, -2),
+        (-1, +0),
+        (+0, -3),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+1, -2),
+        (+1, +0),
+        (+1, +1),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bm_0*-_phi(L) + _psi(L) * (bj_0*n2_0**2 - bp_0)
-    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
-    M[1, 0] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
-    M[1, 1] = bm_1*_phi_coupled(B, b) + _psi(B) * (bj_1*n1_1**2 - bp_1)
-    M[1, 2] = bm_1*_couple_off_fwd(B, b)
-    M[2, 2] = -bm_2*_couple_off_rev(B, b)
+    M[0, 0] = bm_0 * -_phi(L) + _psi(L) * (bj_0 * n2_0**2 - bp_0)
+    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
+    M[1, 0] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
+    M[1, 1] = bm_1 * _phi_coupled(B, b) + _psi(B) * (bj_1 * n1_1**2 - bp_1)
+    M[1, 2] = bm_1 * _couple_off_fwd(B, b)
+    M[2, 2] = -bm_2 * _couple_off_rev(B, b)
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bm_0*dx*n2_0 + a_0*bm_0*-_phi(L) + b_0*dx*n1_0
-    d[1] = a_tau_1*bm_1*dy*n1_1 + a_1*bm_1*_couple_avg(B, b) + b_1*dy*n2_1
-    d[2] = a_tau_2*bm_2*dy*n1_2 - a_2*bm_2*_couple_avg(B, b) + b_2*dy*n2_2
+    d[0] = -a_tau_0 * bm_0 * dx * n2_0 + a_0 * bm_0 * -_phi(L) + b_0 * dx * n1_0
+    d[1] = a_tau_1 * bm_1 * dy * n1_1 + a_1 * bm_1 * _couple_avg(B, b) + b_1 * dy * n2_1
+    d[2] = a_tau_2 * bm_2 * dy * n1_2 - a_2 * bm_2 * _couple_avg(B, b) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 0] = bm_0*(L - 1)/(L - 2)  # (-2, +0)
-    N[0, 3] = -bm_0*(L - 2)/(L - 1)  # (-1, +0)
-    N[0, 7] = (bj_0*dx*n1_0*n2_0*B*L**2 + bj_0*dx*n1_0*n2_0*B*L - bj_0*dx*n1_0*n2_0*L + bj_0*dy*n2_0**2*B*L + bj_0*dy*n2_0**2*B - bp_0*dy*B*L - bp_0*dy*B)/(dy*B*L)  # (+0, +0)
-    N[0, 8] = -bj_0*dx*n1_0*n2_0*(B*L + B + L)/(dy*(B + 1))  # (+0, +1)
-    N[0, 10] = -L*(bj_0*dx*n1_0*n2_0*L + bj_0*dx*n1_0*n2_0 + bj_0*dy*n2_0**2 - bp_0*dy)/(dy*(L + 1))  # (+1, +0)
-    N[0, 11] = bj_0*dx*n1_0*n2_0*L/dy  # (+1, +1)
-    N[1, 6] = bm_1*_couple_avg(B, b)  # (+0, -1)
-    N[1, 7] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L + bj_1*dy*n1_1*n2_1*B**2*L + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B - bp_1*dx*B*L - bp_1*dx*L)/(dx*B*L)  # (+0, +0)
-    N[1, 8] = -B*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*B + bj_1*dy*n1_1*n2_1 - bp_1*dx)/(dx*(B + 1))  # (+0, +1)
-    N[1, 10] = -bj_1*dy*n1_1*n2_1*(B*L + B + L)/(dx*(L + 1))  # (+1, +0)
-    N[1, 11] = bj_1*dy*n1_1*n2_1*B/dx  # (+1, +1)
-    N[2, 1] = -bj_2*dy*n1_2*n2_2*b/dx  # (-1, -3)
-    N[2, 2] = (1/2)*bj_2*dy*n1_2*n2_2*(2*b + 1)/dx  # (-1, -2)
-    N[2, 4] = b*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b + bj_2*dy*n1_2*n2_2 - bp_2*dx)/(dx*(b + 1))  # (+0, -3)
-    N[2, 5] = -(bj_2*dx*n1_2**2*b + bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b**2 - bp_2*dx*b - bp_2*dx)/(dx*b)  # (+0, -2)
-    N[2, 6] = -bm_2*_couple_avg(B, b)  # (+0, -1)
-    N[2, 9] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, -2)
+    N[0, 0] = bm_0 * (L - 1) / (L - 2)  # (-2, +0)
+    N[0, 3] = -bm_0 * (L - 2) / (L - 1)  # (-1, +0)
+    N[0, 7] = (
+        bj_0 * dx * n1_0 * n2_0 * B * L**2
+        + bj_0 * dx * n1_0 * n2_0 * B * L
+        - bj_0 * dx * n1_0 * n2_0 * L
+        + bj_0 * dy * n2_0**2 * B * L
+        + bj_0 * dy * n2_0**2 * B
+        - bp_0 * dy * B * L
+        - bp_0 * dy * B
+    ) / (dy * B * L)  # (+0, +0)
+    N[0, 8] = -bj_0 * dx * n1_0 * n2_0 * (B * L + B + L) / (dy * (B + 1))  # (+0, +1)
+    N[0, 10] = (
+        -L
+        * (
+            bj_0 * dx * n1_0 * n2_0 * L
+            + bj_0 * dx * n1_0 * n2_0
+            + bj_0 * dy * n2_0**2
+            - bp_0 * dy
+        )
+        / (dy * (L + 1))
+    )  # (+1, +0)
+    N[0, 11] = bj_0 * dx * n1_0 * n2_0 * L / dy  # (+1, +1)
+    N[1, 6] = bm_1 * _couple_avg(B, b)  # (+0, -1)
+    N[1, 7] = (
+        bj_1 * dx * n1_1**2 * B * L
+        + bj_1 * dx * n1_1**2 * L
+        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
+        + bj_1 * dy * n1_1 * n2_1 * B * L
+        - bj_1 * dy * n1_1 * n2_1 * B
+        - bp_1 * dx * B * L
+        - bp_1 * dx * L
+    ) / (dx * B * L)  # (+0, +0)
+    N[1, 8] = (
+        -B
+        * (
+            bj_1 * dx * n1_1**2
+            + bj_1 * dy * n1_1 * n2_1 * B
+            + bj_1 * dy * n1_1 * n2_1
+            - bp_1 * dx
+        )
+        / (dx * (B + 1))
+    )  # (+0, +1)
+    N[1, 10] = -bj_1 * dy * n1_1 * n2_1 * (B * L + B + L) / (dx * (L + 1))  # (+1, +0)
+    N[1, 11] = bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, +1)
+    N[2, 1] = -bj_2 * dy * n1_2 * n2_2 * b / dx  # (-1, -3)
+    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * b + 1) / dx  # (-1, -2)
+    N[2, 4] = (
+        b
+        * (
+            bj_2 * dx * n1_2**2
+            + bj_2 * dy * n1_2 * n2_2 * b
+            + bj_2 * dy * n1_2 * n2_2
+            - bp_2 * dx
+        )
+        / (dx * (b + 1))
+    )  # (+0, -3)
+    N[2, 5] = -(
+        bj_2 * dx * n1_2**2 * b
+        + bj_2 * dx * n1_2**2
+        + bj_2 * dy * n1_2 * n2_2 * b**2
+        - bp_2 * dx * b
+        - bp_2 * dx
+    ) / (dx * b)  # (+0, -2)
+    N[2, 6] = -bm_2 * _couple_avg(B, b)  # (+0, -1)
+    N[2, 9] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, -2)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1761,50 +2756,122 @@ def _case3_sc6_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc7_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 7, eta < 0.  Row 2 is extra (B,R corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'B')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'R')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "B")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "R")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-1, -3), (-1, -2), (-1, +0), (-1, +1), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+2, +0)]
+    offsets = [
+        (-1, -3),
+        (-1, -2),
+        (-1, +0),
+        (-1, +1),
+        (+0, -3),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+1, -2),
+        (+1, +0),
+        (+2, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bp_0*_phi_coupled(B, b) + _psi(B) * (bj_0*n1_0**2 + bm_0)
-    M[0, 1] = bj_0*dy*n1_0*n2_0/(dx*R*(R + 1))
-    M[0, 2] = -bp_0*_couple_off_fwd(B, b)
-    M[1, 0] = -bj_1*dx*n1_1*n2_1/(dy*B*(B + 1))
-    M[1, 1] = bp_1*-_phi(R) - _psi(R) * (bj_1*n2_1**2 + bm_1)
-    M[2, 0] = bp_2*_couple_off_rev(B, b)
-    M[2, 2] = bp_2*_phi_mirror(B, b) - _psi(b) * (bj_2*n1_2**2 + bm_2)
+    M[0, 0] = -bp_0 * _phi_coupled(B, b) + _psi(B) * (bj_0 * n1_0**2 + bm_0)
+    M[0, 1] = bj_0 * dy * n1_0 * n2_0 / (dx * R * (R + 1))
+    M[0, 2] = -bp_0 * _couple_off_fwd(B, b)
+    M[1, 0] = -bj_1 * dx * n1_1 * n2_1 / (dy * B * (B + 1))
+    M[1, 1] = bp_1 * -_phi(R) - _psi(R) * (bj_1 * n2_1**2 + bm_1)
+    M[2, 0] = bp_2 * _couple_off_rev(B, b)
+    M[2, 2] = bp_2 * _phi_mirror(B, b) - _psi(b) * (bj_2 * n1_2**2 + bm_2)
 
     d = np.zeros(3)
-    d[0] = a_tau_0*bp_0*dy*n1_0 + a_0*bp_0*_couple_avg(B, b) + b_0*dy*n2_0
-    d[1] = -a_tau_1*bp_1*dx*n2_1 - a_1*bp_1*-_phi(R) + b_1*dx*n1_1
-    d[2] = a_tau_2*bp_2*dy*n1_2 - a_2*bp_2*_couple_avg(B, b) + b_2*dy*n2_2
+    d[0] = a_tau_0 * bp_0 * dy * n1_0 + a_0 * bp_0 * _couple_avg(B, b) + b_0 * dy * n2_0
+    d[1] = -a_tau_1 * bp_1 * dx * n2_1 - a_1 * bp_1 * -_phi(R) + b_1 * dx * n1_1
+    d[2] = a_tau_2 * bp_2 * dy * n1_2 - a_2 * bp_2 * _couple_avg(B, b) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 2] = bj_0*dy*n1_0*n2_0*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
-    N[0, 3] = -bj_0*dy*n1_0*n2_0*B/dx  # (-1, +1)
-    N[0, 6] = -bp_0*_couple_avg(B, b)  # (+0, -1)
-    N[0, 7] = (bj_0*dx*n1_0**2*B*R + bj_0*dx*n1_0**2*R - bj_0*dy*n1_0*n2_0*B**2*R - bj_0*dy*n1_0*n2_0*B*R + bj_0*dy*n1_0*n2_0*B + bm_0*dx*B*R + bm_0*dx*R)/(dx*B*R)  # (+0, +0)
-    N[0, 8] = -B*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*B - bj_0*dy*n1_0*n2_0 + bm_0*dx)/(dx*(B + 1))  # (+0, +1)
-    N[1, 2] = -R*(bj_1*dx*n1_1*n2_1*R + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 - bm_1*dy)/(dy*(R + 1))  # (-1, +0)
-    N[1, 3] = bj_1*dx*n1_1*n2_1*R/dy  # (-1, +1)
-    N[1, 7] = (bj_1*dx*n1_1*n2_1*B*R**2 + bj_1*dx*n1_1*n2_1*B*R - bj_1*dx*n1_1*n2_1*R - bj_1*dy*n2_1**2*B*R - bj_1*dy*n2_1**2*B - bm_1*dy*B*R - bm_1*dy*B)/(dy*B*R)  # (+0, +0)
-    N[1, 8] = -bj_1*dx*n1_1*n2_1*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
-    N[1, 10] = -bp_1*(R - 2)/(R - 1)  # (+1, +0)
-    N[1, 11] = bp_1*(R - 1)/(R - 2)  # (+2, +0)
-    N[2, 0] = -bj_2*dy*n1_2*n2_2*b/dx  # (-1, -3)
-    N[2, 1] = (1/2)*bj_2*dy*n1_2*n2_2*(2*b + 1)/dx  # (-1, -2)
-    N[2, 4] = b*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b + bj_2*dy*n1_2*n2_2 + bm_2*dx)/(dx*(b + 1))  # (+0, -3)
-    N[2, 5] = -(bj_2*dx*n1_2**2*b + bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b**2 + bm_2*dx*b + bm_2*dx)/(dx*b)  # (+0, -2)
-    N[2, 6] = bp_2*_couple_avg(B, b)  # (+0, -1)
-    N[2, 9] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, -2)
+    N[0, 2] = bj_0 * dy * n1_0 * n2_0 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
+    N[0, 3] = -bj_0 * dy * n1_0 * n2_0 * B / dx  # (-1, +1)
+    N[0, 6] = -bp_0 * _couple_avg(B, b)  # (+0, -1)
+    N[0, 7] = (
+        bj_0 * dx * n1_0**2 * B * R
+        + bj_0 * dx * n1_0**2 * R
+        - bj_0 * dy * n1_0 * n2_0 * B**2 * R
+        - bj_0 * dy * n1_0 * n2_0 * B * R
+        + bj_0 * dy * n1_0 * n2_0 * B
+        + bm_0 * dx * B * R
+        + bm_0 * dx * R
+    ) / (dx * B * R)  # (+0, +0)
+    N[0, 8] = (
+        -B
+        * (
+            bj_0 * dx * n1_0**2
+            - bj_0 * dy * n1_0 * n2_0 * B
+            - bj_0 * dy * n1_0 * n2_0
+            + bm_0 * dx
+        )
+        / (dx * (B + 1))
+    )  # (+0, +1)
+    N[1, 2] = (
+        -R
+        * (
+            bj_1 * dx * n1_1 * n2_1 * R
+            + bj_1 * dx * n1_1 * n2_1
+            - bj_1 * dy * n2_1**2
+            - bm_1 * dy
+        )
+        / (dy * (R + 1))
+    )  # (-1, +0)
+    N[1, 3] = bj_1 * dx * n1_1 * n2_1 * R / dy  # (-1, +1)
+    N[1, 7] = (
+        bj_1 * dx * n1_1 * n2_1 * B * R**2
+        + bj_1 * dx * n1_1 * n2_1 * B * R
+        - bj_1 * dx * n1_1 * n2_1 * R
+        - bj_1 * dy * n2_1**2 * B * R
+        - bj_1 * dy * n2_1**2 * B
+        - bm_1 * dy * B * R
+        - bm_1 * dy * B
+    ) / (dy * B * R)  # (+0, +0)
+    N[1, 8] = -bj_1 * dx * n1_1 * n2_1 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
+    N[1, 10] = -bp_1 * (R - 2) / (R - 1)  # (+1, +0)
+    N[1, 11] = bp_1 * (R - 1) / (R - 2)  # (+2, +0)
+    N[2, 0] = -bj_2 * dy * n1_2 * n2_2 * b / dx  # (-1, -3)
+    N[2, 1] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * b + 1) / dx  # (-1, -2)
+    N[2, 4] = (
+        b
+        * (
+            bj_2 * dx * n1_2**2
+            + bj_2 * dy * n1_2 * n2_2 * b
+            + bj_2 * dy * n1_2 * n2_2
+            + bm_2 * dx
+        )
+        / (dx * (b + 1))
+    )  # (+0, -3)
+    N[2, 5] = -(
+        bj_2 * dx * n1_2**2 * b
+        + bj_2 * dx * n1_2**2
+        + bj_2 * dy * n1_2 * n2_2 * b**2
+        + bm_2 * dx * b
+        + bm_2 * dx
+    ) / (dx * b)  # (+0, -2)
+    N[2, 6] = bp_2 * _couple_avg(B, b)  # (+0, -1)
+    N[2, 9] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, -2)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1813,50 +2880,122 @@ def _case3_sc7_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc7_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 7, eta > 0.  Row 2 is extra (B,R corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'B')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'R')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "B")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "R")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-1, -3), (-1, -2), (-1, +0), (-1, +1), (+0, -3), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, -2), (+1, +0), (+2, +0)]
+    offsets = [
+        (-1, -3),
+        (-1, -2),
+        (-1, +0),
+        (-1, +1),
+        (+0, -3),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+1, -2),
+        (+1, +0),
+        (+2, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bm_0*_phi_coupled(B, b) + _psi(B) * (bj_0*n1_0**2 - bp_0)
-    M[0, 1] = bj_0*dy*n1_0*n2_0/(dx*R*(R + 1))
-    M[0, 2] = bm_0*_couple_off_fwd(B, b)
-    M[1, 0] = -bj_1*dx*n1_1*n2_1/(dy*B*(B + 1))
-    M[1, 1] = -bm_1*-_phi(R) - _psi(R) * (bj_1*n2_1**2 - bp_1)
-    M[2, 0] = -bm_2*_couple_off_rev(B, b)
-    M[2, 2] = -bm_2*_phi_mirror(B, b) - _psi(b) * (bj_2*n1_2**2 - bp_2)
+    M[0, 0] = bm_0 * _phi_coupled(B, b) + _psi(B) * (bj_0 * n1_0**2 - bp_0)
+    M[0, 1] = bj_0 * dy * n1_0 * n2_0 / (dx * R * (R + 1))
+    M[0, 2] = bm_0 * _couple_off_fwd(B, b)
+    M[1, 0] = -bj_1 * dx * n1_1 * n2_1 / (dy * B * (B + 1))
+    M[1, 1] = -bm_1 * -_phi(R) - _psi(R) * (bj_1 * n2_1**2 - bp_1)
+    M[2, 0] = -bm_2 * _couple_off_rev(B, b)
+    M[2, 2] = -bm_2 * _phi_mirror(B, b) - _psi(b) * (bj_2 * n1_2**2 - bp_2)
 
     d = np.zeros(3)
-    d[0] = a_tau_0*bm_0*dy*n1_0 + a_0*bm_0*_couple_avg(B, b) + b_0*dy*n2_0
-    d[1] = -a_tau_1*bm_1*dx*n2_1 - a_1*bm_1*-_phi(R) + b_1*dx*n1_1
-    d[2] = a_tau_2*bm_2*dy*n1_2 - a_2*bm_2*_couple_avg(B, b) + b_2*dy*n2_2
+    d[0] = a_tau_0 * bm_0 * dy * n1_0 + a_0 * bm_0 * _couple_avg(B, b) + b_0 * dy * n2_0
+    d[1] = -a_tau_1 * bm_1 * dx * n2_1 - a_1 * bm_1 * -_phi(R) + b_1 * dx * n1_1
+    d[2] = a_tau_2 * bm_2 * dy * n1_2 - a_2 * bm_2 * _couple_avg(B, b) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 2] = bj_0*dy*n1_0*n2_0*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
-    N[0, 3] = -bj_0*dy*n1_0*n2_0*B/dx  # (-1, +1)
-    N[0, 6] = bm_0*_couple_avg(B, b)  # (+0, -1)
-    N[0, 7] = (bj_0*dx*n1_0**2*B*R + bj_0*dx*n1_0**2*R - bj_0*dy*n1_0*n2_0*B**2*R - bj_0*dy*n1_0*n2_0*B*R + bj_0*dy*n1_0*n2_0*B - bp_0*dx*B*R - bp_0*dx*R)/(dx*B*R)  # (+0, +0)
-    N[0, 8] = -B*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*B - bj_0*dy*n1_0*n2_0 - bp_0*dx)/(dx*(B + 1))  # (+0, +1)
-    N[1, 2] = -R*(bj_1*dx*n1_1*n2_1*R + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 + bp_1*dy)/(dy*(R + 1))  # (-1, +0)
-    N[1, 3] = bj_1*dx*n1_1*n2_1*R/dy  # (-1, +1)
-    N[1, 7] = (bj_1*dx*n1_1*n2_1*B*R**2 + bj_1*dx*n1_1*n2_1*B*R - bj_1*dx*n1_1*n2_1*R - bj_1*dy*n2_1**2*B*R - bj_1*dy*n2_1**2*B + bp_1*dy*B*R + bp_1*dy*B)/(dy*B*R)  # (+0, +0)
-    N[1, 8] = -bj_1*dx*n1_1*n2_1*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
-    N[1, 10] = bm_1*(R - 2)/(R - 1)  # (+1, +0)
-    N[1, 11] = -bm_1*(R - 1)/(R - 2)  # (+2, +0)
-    N[2, 0] = -bj_2*dy*n1_2*n2_2*b/dx  # (-1, -3)
-    N[2, 1] = (1/2)*bj_2*dy*n1_2*n2_2*(2*b + 1)/dx  # (-1, -2)
-    N[2, 4] = b*(bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b + bj_2*dy*n1_2*n2_2 - bp_2*dx)/(dx*(b + 1))  # (+0, -3)
-    N[2, 5] = -(bj_2*dx*n1_2**2*b + bj_2*dx*n1_2**2 + bj_2*dy*n1_2*n2_2*b**2 - bp_2*dx*b - bp_2*dx)/(dx*b)  # (+0, -2)
-    N[2, 6] = -bm_2*_couple_avg(B, b)  # (+0, -1)
-    N[2, 9] = -1/2*bj_2*dy*n1_2*n2_2/dx  # (+1, -2)
+    N[0, 2] = bj_0 * dy * n1_0 * n2_0 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
+    N[0, 3] = -bj_0 * dy * n1_0 * n2_0 * B / dx  # (-1, +1)
+    N[0, 6] = bm_0 * _couple_avg(B, b)  # (+0, -1)
+    N[0, 7] = (
+        bj_0 * dx * n1_0**2 * B * R
+        + bj_0 * dx * n1_0**2 * R
+        - bj_0 * dy * n1_0 * n2_0 * B**2 * R
+        - bj_0 * dy * n1_0 * n2_0 * B * R
+        + bj_0 * dy * n1_0 * n2_0 * B
+        - bp_0 * dx * B * R
+        - bp_0 * dx * R
+    ) / (dx * B * R)  # (+0, +0)
+    N[0, 8] = (
+        -B
+        * (
+            bj_0 * dx * n1_0**2
+            - bj_0 * dy * n1_0 * n2_0 * B
+            - bj_0 * dy * n1_0 * n2_0
+            - bp_0 * dx
+        )
+        / (dx * (B + 1))
+    )  # (+0, +1)
+    N[1, 2] = (
+        -R
+        * (
+            bj_1 * dx * n1_1 * n2_1 * R
+            + bj_1 * dx * n1_1 * n2_1
+            - bj_1 * dy * n2_1**2
+            + bp_1 * dy
+        )
+        / (dy * (R + 1))
+    )  # (-1, +0)
+    N[1, 3] = bj_1 * dx * n1_1 * n2_1 * R / dy  # (-1, +1)
+    N[1, 7] = (
+        bj_1 * dx * n1_1 * n2_1 * B * R**2
+        + bj_1 * dx * n1_1 * n2_1 * B * R
+        - bj_1 * dx * n1_1 * n2_1 * R
+        - bj_1 * dy * n2_1**2 * B * R
+        - bj_1 * dy * n2_1**2 * B
+        + bp_1 * dy * B * R
+        + bp_1 * dy * B
+    ) / (dy * B * R)  # (+0, +0)
+    N[1, 8] = -bj_1 * dx * n1_1 * n2_1 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
+    N[1, 10] = bm_1 * (R - 2) / (R - 1)  # (+1, +0)
+    N[1, 11] = -bm_1 * (R - 1) / (R - 2)  # (+2, +0)
+    N[2, 0] = -bj_2 * dy * n1_2 * n2_2 * b / dx  # (-1, -3)
+    N[2, 1] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * b + 1) / dx  # (-1, -2)
+    N[2, 4] = (
+        b
+        * (
+            bj_2 * dx * n1_2**2
+            + bj_2 * dy * n1_2 * n2_2 * b
+            + bj_2 * dy * n1_2 * n2_2
+            - bp_2 * dx
+        )
+        / (dx * (b + 1))
+    )  # (+0, -3)
+    N[2, 5] = -(
+        bj_2 * dx * n1_2**2 * b
+        + bj_2 * dx * n1_2**2
+        + bj_2 * dy * n1_2 * n2_2 * b**2
+        - bp_2 * dx * b
+        - bp_2 * dx
+    ) / (dx * b)  # (+0, -2)
+    N[2, 6] = -bm_2 * _couple_avg(B, b)  # (+0, -1)
+    N[2, 9] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, -2)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1865,49 +3004,125 @@ def _case3_sc7_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc8_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 8, eta < 0.  Row 2 is extra (B,R corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'B')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'R')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "B")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "R")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+    offsets = [
+        (-1, +0),
+        (-1, +1),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+1, +0),
+        (+2, -1),
+        (+2, +0),
+        (+2, +1),
+        (+3, -1),
+        (+3, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bp_0*-_phi(B) + _psi(B) * (bj_0*n1_0**2 + bm_0)
-    M[0, 1] = bj_0*dy*n1_0*n2_0/(dx*R*(R + 1))
-    M[1, 0] = -bj_1*dx*n1_1*n2_1/(dy*B*(B + 1))
-    M[1, 1] = bp_1*_phi_coupled(R, r) - _psi(R) * (bj_1*n2_1**2 + bm_1)
-    M[1, 2] = bp_1*_couple_off_fwd(R, r)
-    M[2, 2] = -bp_2*_couple_off_rev(R, r)
+    M[0, 0] = -bp_0 * -_phi(B) + _psi(B) * (bj_0 * n1_0**2 + bm_0)
+    M[0, 1] = bj_0 * dy * n1_0 * n2_0 / (dx * R * (R + 1))
+    M[1, 0] = -bj_1 * dx * n1_1 * n2_1 / (dy * B * (B + 1))
+    M[1, 1] = bp_1 * _phi_coupled(R, r) - _psi(R) * (bj_1 * n2_1**2 + bm_1)
+    M[1, 2] = bp_1 * _couple_off_fwd(R, r)
+    M[2, 2] = -bp_2 * _couple_off_rev(R, r)
 
     d = np.zeros(3)
-    d[0] = a_tau_0*bp_0*dy*n1_0 + a_0*bp_0*-_phi(B) + b_0*dy*n2_0
-    d[1] = -a_tau_1*bp_1*dx*n2_1 - a_1*bp_1*_couple_avg(R, r) + b_1*dx*n1_1
-    d[2] = -a_tau_2*bp_2*dx*n2_2 + a_2*bp_2*_couple_avg(R, r) + b_2*dx*n1_2
+    d[0] = a_tau_0 * bp_0 * dy * n1_0 + a_0 * bp_0 * -_phi(B) + b_0 * dy * n2_0
+    d[1] = (
+        -a_tau_1 * bp_1 * dx * n2_1 - a_1 * bp_1 * _couple_avg(R, r) + b_1 * dx * n1_1
+    )
+    d[2] = (
+        -a_tau_2 * bp_2 * dx * n2_2 + a_2 * bp_2 * _couple_avg(R, r) + b_2 * dx * n1_2
+    )
 
     N = np.zeros((3, len(offsets)))
-    N[0, 0] = bj_0*dy*n1_0*n2_0*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
-    N[0, 1] = -bj_0*dy*n1_0*n2_0*B/dx  # (-1, +1)
-    N[0, 2] = -bp_0*(B - 1)/(B - 2)  # (+0, -2)
-    N[0, 3] = bp_0*(B - 2)/(B - 1)  # (+0, -1)
-    N[0, 4] = (bj_0*dx*n1_0**2*B*R + bj_0*dx*n1_0**2*R - bj_0*dy*n1_0*n2_0*B**2*R - bj_0*dy*n1_0*n2_0*B*R + bj_0*dy*n1_0*n2_0*B + bm_0*dx*B*R + bm_0*dx*R)/(dx*B*R)  # (+0, +0)
-    N[0, 5] = -B*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*B - bj_0*dy*n1_0*n2_0 + bm_0*dx)/(dx*(B + 1))  # (+0, +1)
-    N[1, 0] = -R*(bj_1*dx*n1_1*n2_1*R + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 - bm_1*dy)/(dy*(R + 1))  # (-1, +0)
-    N[1, 1] = bj_1*dx*n1_1*n2_1*R/dy  # (-1, +1)
-    N[1, 4] = (bj_1*dx*n1_1*n2_1*B*R**2 + bj_1*dx*n1_1*n2_1*B*R - bj_1*dx*n1_1*n2_1*R - bj_1*dy*n2_1**2*B*R - bj_1*dy*n2_1**2*B - bm_1*dy*B*R - bm_1*dy*B)/(dy*B*R)  # (+0, +0)
-    N[1, 5] = -bj_1*dx*n1_1*n2_1*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
-    N[1, 6] = bp_1*_couple_avg(R, r)  # (+1, +0)
-    N[2, 6] = -bp_2*_couple_avg(R, r)  # (+1, +0)
-    N[2, 7] = (1/2)*bj_2*dx*n1_2*n2_2*(2*r + 1)/dy  # (+2, -1)
-    N[2, 8] = -(bj_2*dx*n1_2*n2_2*r**2 - bj_2*dy*n2_2**2*r - bj_2*dy*n2_2**2 - bm_2*dy*r - bm_2*dy)/(dy*r)  # (+2, +0)
-    N[2, 9] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (+2, +1)
-    N[2, 10] = -bj_2*dx*n1_2*n2_2*r/dy  # (+3, -1)
-    N[2, 11] = r*(bj_2*dx*n1_2*n2_2*r + bj_2*dx*n1_2*n2_2 - bj_2*dy*n2_2**2 - bm_2*dy)/(dy*(r + 1))  # (+3, +0)
+    N[0, 0] = bj_0 * dy * n1_0 * n2_0 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
+    N[0, 1] = -bj_0 * dy * n1_0 * n2_0 * B / dx  # (-1, +1)
+    N[0, 2] = -bp_0 * (B - 1) / (B - 2)  # (+0, -2)
+    N[0, 3] = bp_0 * (B - 2) / (B - 1)  # (+0, -1)
+    N[0, 4] = (
+        bj_0 * dx * n1_0**2 * B * R
+        + bj_0 * dx * n1_0**2 * R
+        - bj_0 * dy * n1_0 * n2_0 * B**2 * R
+        - bj_0 * dy * n1_0 * n2_0 * B * R
+        + bj_0 * dy * n1_0 * n2_0 * B
+        + bm_0 * dx * B * R
+        + bm_0 * dx * R
+    ) / (dx * B * R)  # (+0, +0)
+    N[0, 5] = (
+        -B
+        * (
+            bj_0 * dx * n1_0**2
+            - bj_0 * dy * n1_0 * n2_0 * B
+            - bj_0 * dy * n1_0 * n2_0
+            + bm_0 * dx
+        )
+        / (dx * (B + 1))
+    )  # (+0, +1)
+    N[1, 0] = (
+        -R
+        * (
+            bj_1 * dx * n1_1 * n2_1 * R
+            + bj_1 * dx * n1_1 * n2_1
+            - bj_1 * dy * n2_1**2
+            - bm_1 * dy
+        )
+        / (dy * (R + 1))
+    )  # (-1, +0)
+    N[1, 1] = bj_1 * dx * n1_1 * n2_1 * R / dy  # (-1, +1)
+    N[1, 4] = (
+        bj_1 * dx * n1_1 * n2_1 * B * R**2
+        + bj_1 * dx * n1_1 * n2_1 * B * R
+        - bj_1 * dx * n1_1 * n2_1 * R
+        - bj_1 * dy * n2_1**2 * B * R
+        - bj_1 * dy * n2_1**2 * B
+        - bm_1 * dy * B * R
+        - bm_1 * dy * B
+    ) / (dy * B * R)  # (+0, +0)
+    N[1, 5] = -bj_1 * dx * n1_1 * n2_1 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
+    N[1, 6] = bp_1 * _couple_avg(R, r)  # (+1, +0)
+    N[2, 6] = -bp_2 * _couple_avg(R, r)  # (+1, +0)
+    N[2, 7] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * r + 1) / dy  # (+2, -1)
+    N[2, 8] = -(
+        bj_2 * dx * n1_2 * n2_2 * r**2
+        - bj_2 * dy * n2_2**2 * r
+        - bj_2 * dy * n2_2**2
+        - bm_2 * dy * r
+        - bm_2 * dy
+    ) / (dy * r)  # (+2, +0)
+    N[2, 9] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (+2, +1)
+    N[2, 10] = -bj_2 * dx * n1_2 * n2_2 * r / dy  # (+3, -1)
+    N[2, 11] = (
+        r
+        * (
+            bj_2 * dx * n1_2 * n2_2 * r
+            + bj_2 * dx * n1_2 * n2_2
+            - bj_2 * dy * n2_2**2
+            - bm_2 * dy
+        )
+        / (dy * (r + 1))
+    )  # (+3, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1916,49 +3131,125 @@ def _case3_sc8_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case3_sc8_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 3 sub-case 8, eta > 0.  Row 2 is extra (B,R corner)."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'B')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'R')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'extra')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "B")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "R")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, -1), (+2, +0), (+2, +1), (+3, -1), (+3, +0)]
+    offsets = [
+        (-1, +0),
+        (-1, +1),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+1, +0),
+        (+2, -1),
+        (+2, +0),
+        (+2, +1),
+        (+3, -1),
+        (+3, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bm_0*-_phi(B) + _psi(B) * (bj_0*n1_0**2 - bp_0)
-    M[0, 1] = bj_0*dy*n1_0*n2_0/(dx*R*(R + 1))
-    M[1, 0] = -bj_1*dx*n1_1*n2_1/(dy*B*(B + 1))
-    M[1, 1] = -bm_1*_phi_coupled(R, r) - _psi(R) * (bj_1*n2_1**2 - bp_1)
-    M[1, 2] = -bm_1*_couple_off_fwd(R, r)
-    M[2, 2] = bm_2*_couple_off_rev(R, r)
+    M[0, 0] = bm_0 * -_phi(B) + _psi(B) * (bj_0 * n1_0**2 - bp_0)
+    M[0, 1] = bj_0 * dy * n1_0 * n2_0 / (dx * R * (R + 1))
+    M[1, 0] = -bj_1 * dx * n1_1 * n2_1 / (dy * B * (B + 1))
+    M[1, 1] = -bm_1 * _phi_coupled(R, r) - _psi(R) * (bj_1 * n2_1**2 - bp_1)
+    M[1, 2] = -bm_1 * _couple_off_fwd(R, r)
+    M[2, 2] = bm_2 * _couple_off_rev(R, r)
 
     d = np.zeros(3)
-    d[0] = a_tau_0*bm_0*dy*n1_0 + a_0*bm_0*-_phi(B) + b_0*dy*n2_0
-    d[1] = -a_tau_1*bm_1*dx*n2_1 - a_1*bm_1*_couple_avg(R, r) + b_1*dx*n1_1
-    d[2] = -a_tau_2*bm_2*dx*n2_2 + a_2*bm_2*_couple_avg(R, r) + b_2*dx*n1_2
+    d[0] = a_tau_0 * bm_0 * dy * n1_0 + a_0 * bm_0 * -_phi(B) + b_0 * dy * n2_0
+    d[1] = (
+        -a_tau_1 * bm_1 * dx * n2_1 - a_1 * bm_1 * _couple_avg(R, r) + b_1 * dx * n1_1
+    )
+    d[2] = (
+        -a_tau_2 * bm_2 * dx * n2_2 + a_2 * bm_2 * _couple_avg(R, r) + b_2 * dx * n1_2
+    )
 
     N = np.zeros((3, len(offsets)))
-    N[0, 0] = bj_0*dy*n1_0*n2_0*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
-    N[0, 1] = -bj_0*dy*n1_0*n2_0*B/dx  # (-1, +1)
-    N[0, 2] = bm_0*(B - 1)/(B - 2)  # (+0, -2)
-    N[0, 3] = -bm_0*(B - 2)/(B - 1)  # (+0, -1)
-    N[0, 4] = (bj_0*dx*n1_0**2*B*R + bj_0*dx*n1_0**2*R - bj_0*dy*n1_0*n2_0*B**2*R - bj_0*dy*n1_0*n2_0*B*R + bj_0*dy*n1_0*n2_0*B - bp_0*dx*B*R - bp_0*dx*R)/(dx*B*R)  # (+0, +0)
-    N[0, 5] = -B*(bj_0*dx*n1_0**2 - bj_0*dy*n1_0*n2_0*B - bj_0*dy*n1_0*n2_0 - bp_0*dx)/(dx*(B + 1))  # (+0, +1)
-    N[1, 0] = -R*(bj_1*dx*n1_1*n2_1*R + bj_1*dx*n1_1*n2_1 - bj_1*dy*n2_1**2 + bp_1*dy)/(dy*(R + 1))  # (-1, +0)
-    N[1, 1] = bj_1*dx*n1_1*n2_1*R/dy  # (-1, +1)
-    N[1, 4] = (bj_1*dx*n1_1*n2_1*B*R**2 + bj_1*dx*n1_1*n2_1*B*R - bj_1*dx*n1_1*n2_1*R - bj_1*dy*n2_1**2*B*R - bj_1*dy*n2_1**2*B + bp_1*dy*B*R + bp_1*dy*B)/(dy*B*R)  # (+0, +0)
-    N[1, 5] = -bj_1*dx*n1_1*n2_1*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
-    N[1, 6] = -bm_1*_couple_avg(R, r)  # (+1, +0)
-    N[2, 6] = bm_2*_couple_avg(R, r)  # (+1, +0)
-    N[2, 7] = (1/2)*bj_2*dx*n1_2*n2_2*(2*r + 1)/dy  # (+2, -1)
-    N[2, 8] = -(bj_2*dx*n1_2*n2_2*r**2 - bj_2*dy*n2_2**2*r - bj_2*dy*n2_2**2 + bp_2*dy*r + bp_2*dy)/(dy*r)  # (+2, +0)
-    N[2, 9] = -1/2*bj_2*dx*n1_2*n2_2/dy  # (+2, +1)
-    N[2, 10] = -bj_2*dx*n1_2*n2_2*r/dy  # (+3, -1)
-    N[2, 11] = r*(bj_2*dx*n1_2*n2_2*r + bj_2*dx*n1_2*n2_2 - bj_2*dy*n2_2**2 + bp_2*dy)/(dy*(r + 1))  # (+3, +0)
+    N[0, 0] = bj_0 * dy * n1_0 * n2_0 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
+    N[0, 1] = -bj_0 * dy * n1_0 * n2_0 * B / dx  # (-1, +1)
+    N[0, 2] = bm_0 * (B - 1) / (B - 2)  # (+0, -2)
+    N[0, 3] = -bm_0 * (B - 2) / (B - 1)  # (+0, -1)
+    N[0, 4] = (
+        bj_0 * dx * n1_0**2 * B * R
+        + bj_0 * dx * n1_0**2 * R
+        - bj_0 * dy * n1_0 * n2_0 * B**2 * R
+        - bj_0 * dy * n1_0 * n2_0 * B * R
+        + bj_0 * dy * n1_0 * n2_0 * B
+        - bp_0 * dx * B * R
+        - bp_0 * dx * R
+    ) / (dx * B * R)  # (+0, +0)
+    N[0, 5] = (
+        -B
+        * (
+            bj_0 * dx * n1_0**2
+            - bj_0 * dy * n1_0 * n2_0 * B
+            - bj_0 * dy * n1_0 * n2_0
+            - bp_0 * dx
+        )
+        / (dx * (B + 1))
+    )  # (+0, +1)
+    N[1, 0] = (
+        -R
+        * (
+            bj_1 * dx * n1_1 * n2_1 * R
+            + bj_1 * dx * n1_1 * n2_1
+            - bj_1 * dy * n2_1**2
+            + bp_1 * dy
+        )
+        / (dy * (R + 1))
+    )  # (-1, +0)
+    N[1, 1] = bj_1 * dx * n1_1 * n2_1 * R / dy  # (-1, +1)
+    N[1, 4] = (
+        bj_1 * dx * n1_1 * n2_1 * B * R**2
+        + bj_1 * dx * n1_1 * n2_1 * B * R
+        - bj_1 * dx * n1_1 * n2_1 * R
+        - bj_1 * dy * n2_1**2 * B * R
+        - bj_1 * dy * n2_1**2 * B
+        + bp_1 * dy * B * R
+        + bp_1 * dy * B
+    ) / (dy * B * R)  # (+0, +0)
+    N[1, 5] = -bj_1 * dx * n1_1 * n2_1 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
+    N[1, 6] = -bm_1 * _couple_avg(R, r)  # (+1, +0)
+    N[2, 6] = bm_2 * _couple_avg(R, r)  # (+1, +0)
+    N[2, 7] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * r + 1) / dy  # (+2, -1)
+    N[2, 8] = -(
+        bj_2 * dx * n1_2 * n2_2 * r**2
+        - bj_2 * dy * n2_2**2 * r
+        - bj_2 * dy * n2_2**2
+        + bp_2 * dy * r
+        + bp_2 * dy
+    ) / (dy * r)  # (+2, +0)
+    N[2, 9] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (+2, +1)
+    N[2, 10] = -bj_2 * dx * n1_2 * n2_2 * r / dy  # (+3, -1)
+    N[2, 11] = (
+        r
+        * (
+            bj_2 * dx * n1_2 * n2_2 * r
+            + bj_2 * dx * n1_2 * n2_2
+            - bj_2 * dy * n2_2**2
+            + bp_2 * dy
+        )
+        / (dy * (r + 1))
+    )  # (+3, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -1967,50 +3258,123 @@ def _case3_sc8_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case4_sc1_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 4 sub-case 1, eta < 0."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-2, +0), (-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+    offsets = [
+        (-2, +0),
+        (-1, -1),
+        (-1, +0),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+1, +0),
+        (+2, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bj_0*n2_0*(dx*n1_0*L*R - dx*n1_0*R - dy*n2_0*L - 2*dy*n2_0*R)/(dy*R*(L + R)) - bm_0*(L + 2*R)/(R*(L + R)) + bp_0*-_phi(R)
-    M[0, 1] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
-    M[0, 2] = -bj_0*n2_0*R*(dx*n1_0*R + dx*n1_0 + dy*n2_0)/(dy*L*(L + R)) - bm_0*R/(L*(L + R))
-    M[1, 0] = bj_1*dy*n1_1*n2_1*(L*T + L - T)/(dx*R*(L + R))
-    M[1, 1] = bp_1*-_phi(T) - _psi(T) * (bj_1*n1_1**2 + bm_1)
-    M[1, 2] = -bj_1*dy*n1_1*n2_1*(R*T + R + T)/(dx*L*(L + R))
-    M[2, 0] = -bj_2*n2_2*L*(dx*n1_2*L - dx*n1_2 - dy*n2_2)/(dy*R*(L + R)) + bm_2*L/(R*(L + R))
-    M[2, 1] = bj_2*dx*n1_2*n2_2/(dy*T*(T + 1))
-    M[2, 2] = bj_2*n2_2*(dx*n1_2*L*R + dx*n1_2*L + 2*dy*n2_2*L + dy*n2_2*R)/(dy*L*(L + R)) + bm_2*(2*L + R)/(L*(L + R)) - bp_2*-_phi(L)
+    M[0, 0] = (
+        bj_0
+        * n2_0
+        * (dx * n1_0 * L * R - dx * n1_0 * R - dy * n2_0 * L - 2 * dy * n2_0 * R)
+        / (dy * R * (L + R))
+        - bm_0 * (L + 2 * R) / (R * (L + R))
+        + bp_0 * -_phi(R)
+    )
+    M[0, 1] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
+    M[0, 2] = -bj_0 * n2_0 * R * (dx * n1_0 * R + dx * n1_0 + dy * n2_0) / (
+        dy * L * (L + R)
+    ) - bm_0 * R / (L * (L + R))
+    M[1, 0] = bj_1 * dy * n1_1 * n2_1 * (L * T + L - T) / (dx * R * (L + R))
+    M[1, 1] = bp_1 * -_phi(T) - _psi(T) * (bj_1 * n1_1**2 + bm_1)
+    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 * (R * T + R + T) / (dx * L * (L + R))
+    M[2, 0] = -bj_2 * n2_2 * L * (dx * n1_2 * L - dx * n1_2 - dy * n2_2) / (
+        dy * R * (L + R)
+    ) + bm_2 * L / (R * (L + R))
+    M[2, 1] = bj_2 * dx * n1_2 * n2_2 / (dy * T * (T + 1))
+    M[2, 2] = (
+        bj_2
+        * n2_2
+        * (dx * n1_2 * L * R + dx * n1_2 * L + 2 * dy * n2_2 * L + dy * n2_2 * R)
+        / (dy * L * (L + R))
+        + bm_2 * (2 * L + R) / (L * (L + R))
+        - bp_2 * -_phi(L)
+    )
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bp_0*dx*n2_0 - a_0*bp_0*-_phi(R) + b_0*dx*n1_0
-    d[1] = a_tau_1*bp_1*dy*n1_1 - a_1*bp_1*-_phi(T) + b_1*dy*n2_1
-    d[2] = -a_tau_2*bp_2*dx*n2_2 + a_2*bp_2*-_phi(L) + b_2*dx*n1_2
+    d[0] = -a_tau_0 * bp_0 * dx * n2_0 - a_0 * bp_0 * -_phi(R) + b_0 * dx * n1_0
+    d[1] = a_tau_1 * bp_1 * dy * n1_1 - a_1 * bp_1 * -_phi(T) + b_1 * dy * n2_1
+    d[2] = -a_tau_2 * bp_2 * dx * n2_2 + a_2 * bp_2 * -_phi(L) + b_2 * dx * n1_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 1] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
-    N[0, 3] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
-    N[0, 4] = (bj_0*dx*n1_0*n2_0*L*R - bj_0*dx*n1_0*n2_0*R**2*T - bj_0*dx*n1_0*n2_0*R*T - bj_0*dy*n2_0**2*L*T - bj_0*dy*n2_0**2*R*T - bm_0*dy*L*T - bm_0*dy*R*T)/(dy*L*R*T)  # (+0, +0)
-    N[0, 7] = -bp_0*(R - 2)/(R - 1)  # (+1, +0)
-    N[0, 8] = bp_0*(R - 1)/(R - 2)  # (+2, +0)
-    N[1, 1] = -bj_1*dy*n1_1*n2_1*T/dx  # (-1, -1)
-    N[1, 3] = T*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*T + bj_1*dy*n1_1*n2_1 + bm_1*dx)/(dx*(T + 1))  # (+0, -1)
-    N[1, 4] = -(bj_1*dx*n1_1**2*L*R*T + bj_1*dx*n1_1**2*L*R - bj_1*dy*n1_1*n2_1*L*T**2 - bj_1*dy*n1_1*n2_1*L*T + bj_1*dy*n1_1*n2_1*R*T**2 + bj_1*dy*n1_1*n2_1*R*T + bj_1*dy*n1_1*n2_1*T**2 + bm_1*dx*L*R*T + bm_1*dx*L*R)/(dx*L*R*T)  # (+0, +0)
-    N[1, 5] = -bp_1*(T - 2)/(T - 1)  # (+0, +1)
-    N[1, 6] = bp_1*(T - 1)/(T - 2)  # (+0, +2)
-    N[2, 0] = -bp_2*(L - 1)/(L - 2)  # (-2, +0)
-    N[2, 1] = bj_2*dx*n1_2*n2_2*L/dy  # (-1, -1)
-    N[2, 2] = bp_2*(L - 2)/(L - 1)  # (-1, +0)
-    N[2, 3] = -bj_2*dx*n1_2*n2_2*(L*T + L - T)/(dy*(T + 1))  # (+0, -1)
-    N[2, 4] = -(bj_2*dx*n1_2*n2_2*L**2*T - bj_2*dx*n1_2*n2_2*L*R - bj_2*dx*n1_2*n2_2*L*T - bj_2*dy*n2_2**2*L*T - bj_2*dy*n2_2**2*R*T - bm_2*dy*L*T - bm_2*dy*R*T)/(dy*L*R*T)  # (+0, +0)
+    N[0, 1] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
+    N[0, 3] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
+    N[0, 4] = (
+        bj_0 * dx * n1_0 * n2_0 * L * R
+        - bj_0 * dx * n1_0 * n2_0 * R**2 * T
+        - bj_0 * dx * n1_0 * n2_0 * R * T
+        - bj_0 * dy * n2_0**2 * L * T
+        - bj_0 * dy * n2_0**2 * R * T
+        - bm_0 * dy * L * T
+        - bm_0 * dy * R * T
+    ) / (dy * L * R * T)  # (+0, +0)
+    N[0, 7] = -bp_0 * (R - 2) / (R - 1)  # (+1, +0)
+    N[0, 8] = bp_0 * (R - 1) / (R - 2)  # (+2, +0)
+    N[1, 1] = -bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, -1)
+    N[1, 3] = (
+        T
+        * (
+            bj_1 * dx * n1_1**2
+            + bj_1 * dy * n1_1 * n2_1 * T
+            + bj_1 * dy * n1_1 * n2_1
+            + bm_1 * dx
+        )
+        / (dx * (T + 1))
+    )  # (+0, -1)
+    N[1, 4] = -(
+        bj_1 * dx * n1_1**2 * L * R * T
+        + bj_1 * dx * n1_1**2 * L * R
+        - bj_1 * dy * n1_1 * n2_1 * L * T**2
+        - bj_1 * dy * n1_1 * n2_1 * L * T
+        + bj_1 * dy * n1_1 * n2_1 * R * T**2
+        + bj_1 * dy * n1_1 * n2_1 * R * T
+        + bj_1 * dy * n1_1 * n2_1 * T**2
+        + bm_1 * dx * L * R * T
+        + bm_1 * dx * L * R
+    ) / (dx * L * R * T)  # (+0, +0)
+    N[1, 5] = -bp_1 * (T - 2) / (T - 1)  # (+0, +1)
+    N[1, 6] = bp_1 * (T - 1) / (T - 2)  # (+0, +2)
+    N[2, 0] = -bp_2 * (L - 1) / (L - 2)  # (-2, +0)
+    N[2, 1] = bj_2 * dx * n1_2 * n2_2 * L / dy  # (-1, -1)
+    N[2, 2] = bp_2 * (L - 2) / (L - 1)  # (-1, +0)
+    N[2, 3] = -bj_2 * dx * n1_2 * n2_2 * (L * T + L - T) / (dy * (T + 1))  # (+0, -1)
+    N[2, 4] = -(
+        bj_2 * dx * n1_2 * n2_2 * L**2 * T
+        - bj_2 * dx * n1_2 * n2_2 * L * R
+        - bj_2 * dx * n1_2 * n2_2 * L * T
+        - bj_2 * dy * n2_2**2 * L * T
+        - bj_2 * dy * n2_2**2 * R * T
+        - bm_2 * dy * L * T
+        - bm_2 * dy * R * T
+    ) / (dy * L * R * T)  # (+0, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -2019,50 +3383,123 @@ def _case4_sc1_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case4_sc1_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 4 sub-case 1, eta > 0."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-2, +0), (-1, -1), (-1, +0), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+    offsets = [
+        (-2, +0),
+        (-1, -1),
+        (-1, +0),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+1, +0),
+        (+2, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bj_0*n2_0*(dx*n1_0*L*R - dx*n1_0*R - dy*n2_0*L - 2*dy*n2_0*R)/(dy*R*(L + R)) - bm_0*-_phi(R) + bp_0*(L + 2*R)/(R*(L + R))
-    M[0, 1] = bj_0*dx*n1_0*n2_0/(dy*T*(T + 1))
-    M[0, 2] = -bj_0*n2_0*R*(dx*n1_0*R + dx*n1_0 + dy*n2_0)/(dy*L*(L + R)) + bp_0*R/(L*(L + R))
-    M[1, 0] = bj_1*dy*n1_1*n2_1*(L*T + L - T)/(dx*R*(L + R))
-    M[1, 1] = -bm_1*-_phi(T) - _psi(T) * (bj_1*n1_1**2 - bp_1)
-    M[1, 2] = -bj_1*dy*n1_1*n2_1*(R*T + R + T)/(dx*L*(L + R))
-    M[2, 0] = -bj_2*n2_2*L*(dx*n1_2*L - dx*n1_2 - dy*n2_2)/(dy*R*(L + R)) - bp_2*L/(R*(L + R))
-    M[2, 1] = bj_2*dx*n1_2*n2_2/(dy*T*(T + 1))
-    M[2, 2] = bj_2*n2_2*(dx*n1_2*L*R + dx*n1_2*L + 2*dy*n2_2*L + dy*n2_2*R)/(dy*L*(L + R)) + bm_2*-_phi(L) - bp_2*(2*L + R)/(L*(L + R))
+    M[0, 0] = (
+        bj_0
+        * n2_0
+        * (dx * n1_0 * L * R - dx * n1_0 * R - dy * n2_0 * L - 2 * dy * n2_0 * R)
+        / (dy * R * (L + R))
+        - bm_0 * -_phi(R)
+        + bp_0 * (L + 2 * R) / (R * (L + R))
+    )
+    M[0, 1] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
+    M[0, 2] = -bj_0 * n2_0 * R * (dx * n1_0 * R + dx * n1_0 + dy * n2_0) / (
+        dy * L * (L + R)
+    ) + bp_0 * R / (L * (L + R))
+    M[1, 0] = bj_1 * dy * n1_1 * n2_1 * (L * T + L - T) / (dx * R * (L + R))
+    M[1, 1] = -bm_1 * -_phi(T) - _psi(T) * (bj_1 * n1_1**2 - bp_1)
+    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 * (R * T + R + T) / (dx * L * (L + R))
+    M[2, 0] = -bj_2 * n2_2 * L * (dx * n1_2 * L - dx * n1_2 - dy * n2_2) / (
+        dy * R * (L + R)
+    ) - bp_2 * L / (R * (L + R))
+    M[2, 1] = bj_2 * dx * n1_2 * n2_2 / (dy * T * (T + 1))
+    M[2, 2] = (
+        bj_2
+        * n2_2
+        * (dx * n1_2 * L * R + dx * n1_2 * L + 2 * dy * n2_2 * L + dy * n2_2 * R)
+        / (dy * L * (L + R))
+        + bm_2 * -_phi(L)
+        - bp_2 * (2 * L + R) / (L * (L + R))
+    )
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bm_0*dx*n2_0 - a_0*bm_0*-_phi(R) + b_0*dx*n1_0
-    d[1] = a_tau_1*bm_1*dy*n1_1 - a_1*bm_1*-_phi(T) + b_1*dy*n2_1
-    d[2] = -a_tau_2*bm_2*dx*n2_2 + a_2*bm_2*-_phi(L) + b_2*dx*n1_2
+    d[0] = -a_tau_0 * bm_0 * dx * n2_0 - a_0 * bm_0 * -_phi(R) + b_0 * dx * n1_0
+    d[1] = a_tau_1 * bm_1 * dy * n1_1 - a_1 * bm_1 * -_phi(T) + b_1 * dy * n2_1
+    d[2] = -a_tau_2 * bm_2 * dx * n2_2 + a_2 * bm_2 * -_phi(L) + b_2 * dx * n1_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 1] = -bj_0*dx*n1_0*n2_0*R/dy  # (-1, -1)
-    N[0, 3] = bj_0*dx*n1_0*n2_0*(R*T + R + T)/(dy*(T + 1))  # (+0, -1)
-    N[0, 4] = (bj_0*dx*n1_0*n2_0*L*R - bj_0*dx*n1_0*n2_0*R**2*T - bj_0*dx*n1_0*n2_0*R*T - bj_0*dy*n2_0**2*L*T - bj_0*dy*n2_0**2*R*T + bp_0*dy*L*T + bp_0*dy*R*T)/(dy*L*R*T)  # (+0, +0)
-    N[0, 7] = bm_0*(R - 2)/(R - 1)  # (+1, +0)
-    N[0, 8] = -bm_0*(R - 1)/(R - 2)  # (+2, +0)
-    N[1, 1] = -bj_1*dy*n1_1*n2_1*T/dx  # (-1, -1)
-    N[1, 3] = T*(bj_1*dx*n1_1**2 + bj_1*dy*n1_1*n2_1*T + bj_1*dy*n1_1*n2_1 - bp_1*dx)/(dx*(T + 1))  # (+0, -1)
-    N[1, 4] = -(bj_1*dx*n1_1**2*L*R*T + bj_1*dx*n1_1**2*L*R - bj_1*dy*n1_1*n2_1*L*T**2 - bj_1*dy*n1_1*n2_1*L*T + bj_1*dy*n1_1*n2_1*R*T**2 + bj_1*dy*n1_1*n2_1*R*T + bj_1*dy*n1_1*n2_1*T**2 - bp_1*dx*L*R*T - bp_1*dx*L*R)/(dx*L*R*T)  # (+0, +0)
-    N[1, 5] = bm_1*(T - 2)/(T - 1)  # (+0, +1)
-    N[1, 6] = -bm_1*(T - 1)/(T - 2)  # (+0, +2)
-    N[2, 0] = bm_2*(L - 1)/(L - 2)  # (-2, +0)
-    N[2, 1] = bj_2*dx*n1_2*n2_2*L/dy  # (-1, -1)
-    N[2, 2] = -bm_2*(L - 2)/(L - 1)  # (-1, +0)
-    N[2, 3] = -bj_2*dx*n1_2*n2_2*(L*T + L - T)/(dy*(T + 1))  # (+0, -1)
-    N[2, 4] = -(bj_2*dx*n1_2*n2_2*L**2*T - bj_2*dx*n1_2*n2_2*L*R - bj_2*dx*n1_2*n2_2*L*T - bj_2*dy*n2_2**2*L*T - bj_2*dy*n2_2**2*R*T + bp_2*dy*L*T + bp_2*dy*R*T)/(dy*L*R*T)  # (+0, +0)
+    N[0, 1] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
+    N[0, 3] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
+    N[0, 4] = (
+        bj_0 * dx * n1_0 * n2_0 * L * R
+        - bj_0 * dx * n1_0 * n2_0 * R**2 * T
+        - bj_0 * dx * n1_0 * n2_0 * R * T
+        - bj_0 * dy * n2_0**2 * L * T
+        - bj_0 * dy * n2_0**2 * R * T
+        + bp_0 * dy * L * T
+        + bp_0 * dy * R * T
+    ) / (dy * L * R * T)  # (+0, +0)
+    N[0, 7] = bm_0 * (R - 2) / (R - 1)  # (+1, +0)
+    N[0, 8] = -bm_0 * (R - 1) / (R - 2)  # (+2, +0)
+    N[1, 1] = -bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, -1)
+    N[1, 3] = (
+        T
+        * (
+            bj_1 * dx * n1_1**2
+            + bj_1 * dy * n1_1 * n2_1 * T
+            + bj_1 * dy * n1_1 * n2_1
+            - bp_1 * dx
+        )
+        / (dx * (T + 1))
+    )  # (+0, -1)
+    N[1, 4] = -(
+        bj_1 * dx * n1_1**2 * L * R * T
+        + bj_1 * dx * n1_1**2 * L * R
+        - bj_1 * dy * n1_1 * n2_1 * L * T**2
+        - bj_1 * dy * n1_1 * n2_1 * L * T
+        + bj_1 * dy * n1_1 * n2_1 * R * T**2
+        + bj_1 * dy * n1_1 * n2_1 * R * T
+        + bj_1 * dy * n1_1 * n2_1 * T**2
+        - bp_1 * dx * L * R * T
+        - bp_1 * dx * L * R
+    ) / (dx * L * R * T)  # (+0, +0)
+    N[1, 5] = bm_1 * (T - 2) / (T - 1)  # (+0, +1)
+    N[1, 6] = -bm_1 * (T - 1) / (T - 2)  # (+0, +2)
+    N[2, 0] = bm_2 * (L - 1) / (L - 2)  # (-2, +0)
+    N[2, 1] = bj_2 * dx * n1_2 * n2_2 * L / dy  # (-1, -1)
+    N[2, 2] = -bm_2 * (L - 2) / (L - 1)  # (-1, +0)
+    N[2, 3] = -bj_2 * dx * n1_2 * n2_2 * (L * T + L - T) / (dy * (T + 1))  # (+0, -1)
+    N[2, 4] = -(
+        bj_2 * dx * n1_2 * n2_2 * L**2 * T
+        - bj_2 * dx * n1_2 * n2_2 * L * R
+        - bj_2 * dx * n1_2 * n2_2 * L * T
+        - bj_2 * dy * n2_2**2 * L * T
+        - bj_2 * dy * n2_2**2 * R * T
+        + bp_2 * dy * L * T
+        + bp_2 * dy * R * T
+    ) / (dy * L * R * T)  # (+0, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -2071,50 +3508,123 @@ def _case4_sc1_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case4_sc2_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 4 sub-case 2, eta < 0."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'B')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "B")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+    offsets = [
+        (-1, +0),
+        (-1, +1),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+1, +0),
+        (+2, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = bp_0*-_phi(R) - _psi(R) * (bj_0*n2_0**2 + bm_0)
-    M[0, 1] = bj_0*dx*n1_0*n2_0*(B*R + B + R)/(dy*T*(B + T))
-    M[0, 2] = -bj_0*dx*n1_0*n2_0*(R*T - R + T)/(dy*B*(B + T))
-    M[1, 0] = bj_1*dy*n1_1*n2_1/(dx*R*(R + 1))
-    M[1, 1] = -bj_1*n1_1*(dx*n1_1*B + 2*dx*n1_1*T - dy*n2_1*B*T - dy*n2_1*T)/(dx*T*(B + T)) - bm_1*(B + 2*T)/(T*(B + T)) + bp_1*-_phi(T)
-    M[1, 2] = -bj_1*n1_1*T*(dx*n1_1 + dy*n2_1*T - dy*n2_1)/(dx*B*(B + T)) - bm_1*T/(B*(B + T))
-    M[2, 0] = bj_2*dy*n1_2*n2_2/(dx*R*(R + 1))
-    M[2, 1] = bj_2*n1_2*B*(dx*n1_2 - dy*n2_2*B - dy*n2_2)/(dx*T*(B + T)) + bm_2*B/(T*(B + T))
-    M[2, 2] = bj_2*n1_2*(2*dx*n1_2*B + dx*n1_2*T + dy*n2_2*B*T - dy*n2_2*B)/(dx*B*(B + T)) + bm_2*(2*B + T)/(B*(B + T)) - bp_2*-_phi(B)
+    M[0, 0] = bp_0 * -_phi(R) - _psi(R) * (bj_0 * n2_0**2 + bm_0)
+    M[0, 1] = bj_0 * dx * n1_0 * n2_0 * (B * R + B + R) / (dy * T * (B + T))
+    M[0, 2] = -bj_0 * dx * n1_0 * n2_0 * (R * T - R + T) / (dy * B * (B + T))
+    M[1, 0] = bj_1 * dy * n1_1 * n2_1 / (dx * R * (R + 1))
+    M[1, 1] = (
+        -bj_1
+        * n1_1
+        * (dx * n1_1 * B + 2 * dx * n1_1 * T - dy * n2_1 * B * T - dy * n2_1 * T)
+        / (dx * T * (B + T))
+        - bm_1 * (B + 2 * T) / (T * (B + T))
+        + bp_1 * -_phi(T)
+    )
+    M[1, 2] = -bj_1 * n1_1 * T * (dx * n1_1 + dy * n2_1 * T - dy * n2_1) / (
+        dx * B * (B + T)
+    ) - bm_1 * T / (B * (B + T))
+    M[2, 0] = bj_2 * dy * n1_2 * n2_2 / (dx * R * (R + 1))
+    M[2, 1] = bj_2 * n1_2 * B * (dx * n1_2 - dy * n2_2 * B - dy * n2_2) / (
+        dx * T * (B + T)
+    ) + bm_2 * B / (T * (B + T))
+    M[2, 2] = (
+        bj_2
+        * n1_2
+        * (2 * dx * n1_2 * B + dx * n1_2 * T + dy * n2_2 * B * T - dy * n2_2 * B)
+        / (dx * B * (B + T))
+        + bm_2 * (2 * B + T) / (B * (B + T))
+        - bp_2 * -_phi(B)
+    )
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bp_0*dx*n2_0 - a_0*bp_0*-_phi(R) + b_0*dx*n1_0
-    d[1] = a_tau_1*bp_1*dy*n1_1 - a_1*bp_1*-_phi(T) + b_1*dy*n2_1
-    d[2] = a_tau_2*bp_2*dy*n1_2 + a_2*bp_2*-_phi(B) + b_2*dy*n2_2
+    d[0] = -a_tau_0 * bp_0 * dx * n2_0 - a_0 * bp_0 * -_phi(R) + b_0 * dx * n1_0
+    d[1] = a_tau_1 * bp_1 * dy * n1_1 - a_1 * bp_1 * -_phi(T) + b_1 * dy * n2_1
+    d[2] = a_tau_2 * bp_2 * dy * n1_2 + a_2 * bp_2 * -_phi(B) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 0] = -R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 - bj_0*dy*n2_0**2 - bm_0*dy)/(dy*(R + 1))  # (-1, +0)
-    N[0, 1] = bj_0*dx*n1_0*n2_0*R/dy  # (-1, +1)
-    N[0, 4] = (bj_0*dx*n1_0*n2_0*B*R**2 + bj_0*dx*n1_0*n2_0*B*R - bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R**2 - bj_0*dx*n1_0*n2_0*R*T - bj_0*dy*n2_0**2*B*R*T - bj_0*dy*n2_0**2*B*T - bm_0*dy*B*R*T - bm_0*dy*B*T)/(dy*B*R*T)  # (+0, +0)
-    N[0, 7] = -bp_0*(R - 2)/(R - 1)  # (+1, +0)
-    N[0, 8] = bp_0*(R - 1)/(R - 2)  # (+2, +0)
-    N[1, 0] = -bj_1*dy*n1_1*n2_1*(R*T - R + T)/(dx*(R + 1))  # (-1, +0)
-    N[1, 1] = bj_1*dy*n1_1*n2_1*T/dx  # (-1, +1)
-    N[1, 4] = -(bj_1*dx*n1_1**2*B*R + bj_1*dx*n1_1**2*R*T - bj_1*dy*n1_1*n2_1*B*T + bj_1*dy*n1_1*n2_1*R*T**2 - bj_1*dy*n1_1*n2_1*R*T + bm_1*dx*B*R + bm_1*dx*R*T)/(dx*B*R*T)  # (+0, +0)
-    N[1, 5] = -bp_1*(T - 2)/(T - 1)  # (+0, +1)
-    N[1, 6] = bp_1*(T - 1)/(T - 2)  # (+0, +2)
-    N[2, 0] = bj_2*dy*n1_2*n2_2*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
-    N[2, 1] = -bj_2*dy*n1_2*n2_2*B/dx  # (-1, +1)
-    N[2, 2] = -bp_2*(B - 1)/(B - 2)  # (+0, -2)
-    N[2, 3] = bp_2*(B - 2)/(B - 1)  # (+0, -1)
-    N[2, 4] = (bj_2*dx*n1_2**2*B*R + bj_2*dx*n1_2**2*R*T - bj_2*dy*n1_2*n2_2*B**2*R - bj_2*dy*n1_2*n2_2*B*R + bj_2*dy*n1_2*n2_2*B*T + bm_2*dx*B*R + bm_2*dx*R*T)/(dx*B*R*T)  # (+0, +0)
+    N[0, 0] = (
+        -R
+        * (
+            bj_0 * dx * n1_0 * n2_0 * R
+            + bj_0 * dx * n1_0 * n2_0
+            - bj_0 * dy * n2_0**2
+            - bm_0 * dy
+        )
+        / (dy * (R + 1))
+    )  # (-1, +0)
+    N[0, 1] = bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, +1)
+    N[0, 4] = (
+        bj_0 * dx * n1_0 * n2_0 * B * R**2
+        + bj_0 * dx * n1_0 * n2_0 * B * R
+        - bj_0 * dx * n1_0 * n2_0 * R**2 * T
+        + bj_0 * dx * n1_0 * n2_0 * R**2
+        - bj_0 * dx * n1_0 * n2_0 * R * T
+        - bj_0 * dy * n2_0**2 * B * R * T
+        - bj_0 * dy * n2_0**2 * B * T
+        - bm_0 * dy * B * R * T
+        - bm_0 * dy * B * T
+    ) / (dy * B * R * T)  # (+0, +0)
+    N[0, 7] = -bp_0 * (R - 2) / (R - 1)  # (+1, +0)
+    N[0, 8] = bp_0 * (R - 1) / (R - 2)  # (+2, +0)
+    N[1, 0] = -bj_1 * dy * n1_1 * n2_1 * (R * T - R + T) / (dx * (R + 1))  # (-1, +0)
+    N[1, 1] = bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, +1)
+    N[1, 4] = -(
+        bj_1 * dx * n1_1**2 * B * R
+        + bj_1 * dx * n1_1**2 * R * T
+        - bj_1 * dy * n1_1 * n2_1 * B * T
+        + bj_1 * dy * n1_1 * n2_1 * R * T**2
+        - bj_1 * dy * n1_1 * n2_1 * R * T
+        + bm_1 * dx * B * R
+        + bm_1 * dx * R * T
+    ) / (dx * B * R * T)  # (+0, +0)
+    N[1, 5] = -bp_1 * (T - 2) / (T - 1)  # (+0, +1)
+    N[1, 6] = bp_1 * (T - 1) / (T - 2)  # (+0, +2)
+    N[2, 0] = bj_2 * dy * n1_2 * n2_2 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
+    N[2, 1] = -bj_2 * dy * n1_2 * n2_2 * B / dx  # (-1, +1)
+    N[2, 2] = -bp_2 * (B - 1) / (B - 2)  # (+0, -2)
+    N[2, 3] = bp_2 * (B - 2) / (B - 1)  # (+0, -1)
+    N[2, 4] = (
+        bj_2 * dx * n1_2**2 * B * R
+        + bj_2 * dx * n1_2**2 * R * T
+        - bj_2 * dy * n1_2 * n2_2 * B**2 * R
+        - bj_2 * dy * n1_2 * n2_2 * B * R
+        + bj_2 * dy * n1_2 * n2_2 * B * T
+        + bm_2 * dx * B * R
+        + bm_2 * dx * R * T
+    ) / (dx * B * R * T)  # (+0, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -2123,50 +3633,123 @@ def _case4_sc2_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case4_sc2_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 4 sub-case 2, eta > 0."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'T')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'B')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "B")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, +0), (+2, +0)]
+    offsets = [
+        (-1, +0),
+        (-1, +1),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+1, +0),
+        (+2, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bm_0*-_phi(R) - _psi(R) * (bj_0*n2_0**2 - bp_0)
-    M[0, 1] = bj_0*dx*n1_0*n2_0*(B*R + B + R)/(dy*T*(B + T))
-    M[0, 2] = -bj_0*dx*n1_0*n2_0*(R*T - R + T)/(dy*B*(B + T))
-    M[1, 0] = bj_1*dy*n1_1*n2_1/(dx*R*(R + 1))
-    M[1, 1] = -bj_1*n1_1*(dx*n1_1*B + 2*dx*n1_1*T - dy*n2_1*B*T - dy*n2_1*T)/(dx*T*(B + T)) - bm_1*-_phi(T) + bp_1*(B + 2*T)/(T*(B + T))
-    M[1, 2] = -bj_1*n1_1*T*(dx*n1_1 + dy*n2_1*T - dy*n2_1)/(dx*B*(B + T)) + bp_1*T/(B*(B + T))
-    M[2, 0] = bj_2*dy*n1_2*n2_2/(dx*R*(R + 1))
-    M[2, 1] = bj_2*n1_2*B*(dx*n1_2 - dy*n2_2*B - dy*n2_2)/(dx*T*(B + T)) - bp_2*B/(T*(B + T))
-    M[2, 2] = bj_2*n1_2*(2*dx*n1_2*B + dx*n1_2*T + dy*n2_2*B*T - dy*n2_2*B)/(dx*B*(B + T)) + bm_2*-_phi(B) - bp_2*(2*B + T)/(B*(B + T))
+    M[0, 0] = -bm_0 * -_phi(R) - _psi(R) * (bj_0 * n2_0**2 - bp_0)
+    M[0, 1] = bj_0 * dx * n1_0 * n2_0 * (B * R + B + R) / (dy * T * (B + T))
+    M[0, 2] = -bj_0 * dx * n1_0 * n2_0 * (R * T - R + T) / (dy * B * (B + T))
+    M[1, 0] = bj_1 * dy * n1_1 * n2_1 / (dx * R * (R + 1))
+    M[1, 1] = (
+        -bj_1
+        * n1_1
+        * (dx * n1_1 * B + 2 * dx * n1_1 * T - dy * n2_1 * B * T - dy * n2_1 * T)
+        / (dx * T * (B + T))
+        - bm_1 * -_phi(T)
+        + bp_1 * (B + 2 * T) / (T * (B + T))
+    )
+    M[1, 2] = -bj_1 * n1_1 * T * (dx * n1_1 + dy * n2_1 * T - dy * n2_1) / (
+        dx * B * (B + T)
+    ) + bp_1 * T / (B * (B + T))
+    M[2, 0] = bj_2 * dy * n1_2 * n2_2 / (dx * R * (R + 1))
+    M[2, 1] = bj_2 * n1_2 * B * (dx * n1_2 - dy * n2_2 * B - dy * n2_2) / (
+        dx * T * (B + T)
+    ) - bp_2 * B / (T * (B + T))
+    M[2, 2] = (
+        bj_2
+        * n1_2
+        * (2 * dx * n1_2 * B + dx * n1_2 * T + dy * n2_2 * B * T - dy * n2_2 * B)
+        / (dx * B * (B + T))
+        + bm_2 * -_phi(B)
+        - bp_2 * (2 * B + T) / (B * (B + T))
+    )
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bm_0*dx*n2_0 - a_0*bm_0*-_phi(R) + b_0*dx*n1_0
-    d[1] = a_tau_1*bm_1*dy*n1_1 - a_1*bm_1*-_phi(T) + b_1*dy*n2_1
-    d[2] = a_tau_2*bm_2*dy*n1_2 + a_2*bm_2*-_phi(B) + b_2*dy*n2_2
+    d[0] = -a_tau_0 * bm_0 * dx * n2_0 - a_0 * bm_0 * -_phi(R) + b_0 * dx * n1_0
+    d[1] = a_tau_1 * bm_1 * dy * n1_1 - a_1 * bm_1 * -_phi(T) + b_1 * dy * n2_1
+    d[2] = a_tau_2 * bm_2 * dy * n1_2 + a_2 * bm_2 * -_phi(B) + b_2 * dy * n2_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 0] = -R*(bj_0*dx*n1_0*n2_0*R + bj_0*dx*n1_0*n2_0 - bj_0*dy*n2_0**2 + bp_0*dy)/(dy*(R + 1))  # (-1, +0)
-    N[0, 1] = bj_0*dx*n1_0*n2_0*R/dy  # (-1, +1)
-    N[0, 4] = (bj_0*dx*n1_0*n2_0*B*R**2 + bj_0*dx*n1_0*n2_0*B*R - bj_0*dx*n1_0*n2_0*R**2*T + bj_0*dx*n1_0*n2_0*R**2 - bj_0*dx*n1_0*n2_0*R*T - bj_0*dy*n2_0**2*B*R*T - bj_0*dy*n2_0**2*B*T + bp_0*dy*B*R*T + bp_0*dy*B*T)/(dy*B*R*T)  # (+0, +0)
-    N[0, 7] = bm_0*(R - 2)/(R - 1)  # (+1, +0)
-    N[0, 8] = -bm_0*(R - 1)/(R - 2)  # (+2, +0)
-    N[1, 0] = -bj_1*dy*n1_1*n2_1*(R*T - R + T)/(dx*(R + 1))  # (-1, +0)
-    N[1, 1] = bj_1*dy*n1_1*n2_1*T/dx  # (-1, +1)
-    N[1, 4] = -(bj_1*dx*n1_1**2*B*R + bj_1*dx*n1_1**2*R*T - bj_1*dy*n1_1*n2_1*B*T + bj_1*dy*n1_1*n2_1*R*T**2 - bj_1*dy*n1_1*n2_1*R*T - bp_1*dx*B*R - bp_1*dx*R*T)/(dx*B*R*T)  # (+0, +0)
-    N[1, 5] = bm_1*(T - 2)/(T - 1)  # (+0, +1)
-    N[1, 6] = -bm_1*(T - 1)/(T - 2)  # (+0, +2)
-    N[2, 0] = bj_2*dy*n1_2*n2_2*(B*R + B + R)/(dx*(R + 1))  # (-1, +0)
-    N[2, 1] = -bj_2*dy*n1_2*n2_2*B/dx  # (-1, +1)
-    N[2, 2] = bm_2*(B - 1)/(B - 2)  # (+0, -2)
-    N[2, 3] = -bm_2*(B - 2)/(B - 1)  # (+0, -1)
-    N[2, 4] = (bj_2*dx*n1_2**2*B*R + bj_2*dx*n1_2**2*R*T - bj_2*dy*n1_2*n2_2*B**2*R - bj_2*dy*n1_2*n2_2*B*R + bj_2*dy*n1_2*n2_2*B*T - bp_2*dx*B*R - bp_2*dx*R*T)/(dx*B*R*T)  # (+0, +0)
+    N[0, 0] = (
+        -R
+        * (
+            bj_0 * dx * n1_0 * n2_0 * R
+            + bj_0 * dx * n1_0 * n2_0
+            - bj_0 * dy * n2_0**2
+            + bp_0 * dy
+        )
+        / (dy * (R + 1))
+    )  # (-1, +0)
+    N[0, 1] = bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, +1)
+    N[0, 4] = (
+        bj_0 * dx * n1_0 * n2_0 * B * R**2
+        + bj_0 * dx * n1_0 * n2_0 * B * R
+        - bj_0 * dx * n1_0 * n2_0 * R**2 * T
+        + bj_0 * dx * n1_0 * n2_0 * R**2
+        - bj_0 * dx * n1_0 * n2_0 * R * T
+        - bj_0 * dy * n2_0**2 * B * R * T
+        - bj_0 * dy * n2_0**2 * B * T
+        + bp_0 * dy * B * R * T
+        + bp_0 * dy * B * T
+    ) / (dy * B * R * T)  # (+0, +0)
+    N[0, 7] = bm_0 * (R - 2) / (R - 1)  # (+1, +0)
+    N[0, 8] = -bm_0 * (R - 1) / (R - 2)  # (+2, +0)
+    N[1, 0] = -bj_1 * dy * n1_1 * n2_1 * (R * T - R + T) / (dx * (R + 1))  # (-1, +0)
+    N[1, 1] = bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, +1)
+    N[1, 4] = -(
+        bj_1 * dx * n1_1**2 * B * R
+        + bj_1 * dx * n1_1**2 * R * T
+        - bj_1 * dy * n1_1 * n2_1 * B * T
+        + bj_1 * dy * n1_1 * n2_1 * R * T**2
+        - bj_1 * dy * n1_1 * n2_1 * R * T
+        - bp_1 * dx * B * R
+        - bp_1 * dx * R * T
+    ) / (dx * B * R * T)  # (+0, +0)
+    N[1, 5] = bm_1 * (T - 2) / (T - 1)  # (+0, +1)
+    N[1, 6] = -bm_1 * (T - 1) / (T - 2)  # (+0, +2)
+    N[2, 0] = bj_2 * dy * n1_2 * n2_2 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
+    N[2, 1] = -bj_2 * dy * n1_2 * n2_2 * B / dx  # (-1, +1)
+    N[2, 2] = bm_2 * (B - 1) / (B - 2)  # (+0, -2)
+    N[2, 3] = -bm_2 * (B - 2) / (B - 1)  # (+0, -1)
+    N[2, 4] = (
+        bj_2 * dx * n1_2**2 * B * R
+        + bj_2 * dx * n1_2**2 * R * T
+        - bj_2 * dy * n1_2 * n2_2 * B**2 * R
+        - bj_2 * dy * n1_2 * n2_2 * B * R
+        + bj_2 * dy * n1_2 * n2_2 * B * T
+        - bp_2 * dx * B * R
+        - bp_2 * dx * R * T
+    ) / (dx * B * R * T)  # (+0, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -2175,50 +3758,123 @@ def _case4_sc2_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case4_sc3_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 4 sub-case 3, eta < 0."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-2, +0), (-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, +0)]
+    offsets = [
+        (-2, +0),
+        (-1, +0),
+        (-1, +1),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+1, +0),
+        (+2, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bj_0*n2_0*(dx*n1_0*L*R - dx*n1_0*R + dy*n2_0*L + 2*dy*n2_0*R)/(dy*R*(L + R)) - bm_0*(L + 2*R)/(R*(L + R)) + bp_0*-_phi(R)
-    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
-    M[0, 2] = bj_0*n2_0*R*(dx*n1_0*R + dx*n1_0 - dy*n2_0)/(dy*L*(L + R)) - bm_0*R/(L*(L + R))
-    M[1, 0] = bj_1*dy*n1_1*n2_1*(B*L - B + L)/(dx*R*(L + R))
-    M[1, 1] = -bp_1*-_phi(B) + _psi(B) * (bj_1*n1_1**2 + bm_1)
-    M[1, 2] = -bj_1*dy*n1_1*n2_1*(B*R + B + R)/(dx*L*(L + R))
-    M[2, 0] = bj_2*n2_2*L*(dx*n1_2*L - dx*n1_2 + dy*n2_2)/(dy*R*(L + R)) + bm_2*L/(R*(L + R))
-    M[2, 1] = -bj_2*dx*n1_2*n2_2/(dy*B*(B + 1))
-    M[2, 2] = -bj_2*n2_2*(dx*n1_2*L*R + dx*n1_2*L - 2*dy*n2_2*L - dy*n2_2*R)/(dy*L*(L + R)) + bm_2*(2*L + R)/(L*(L + R)) - bp_2*-_phi(L)
+    M[0, 0] = (
+        -bj_0
+        * n2_0
+        * (dx * n1_0 * L * R - dx * n1_0 * R + dy * n2_0 * L + 2 * dy * n2_0 * R)
+        / (dy * R * (L + R))
+        - bm_0 * (L + 2 * R) / (R * (L + R))
+        + bp_0 * -_phi(R)
+    )
+    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
+    M[0, 2] = bj_0 * n2_0 * R * (dx * n1_0 * R + dx * n1_0 - dy * n2_0) / (
+        dy * L * (L + R)
+    ) - bm_0 * R / (L * (L + R))
+    M[1, 0] = bj_1 * dy * n1_1 * n2_1 * (B * L - B + L) / (dx * R * (L + R))
+    M[1, 1] = -bp_1 * -_phi(B) + _psi(B) * (bj_1 * n1_1**2 + bm_1)
+    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 * (B * R + B + R) / (dx * L * (L + R))
+    M[2, 0] = bj_2 * n2_2 * L * (dx * n1_2 * L - dx * n1_2 + dy * n2_2) / (
+        dy * R * (L + R)
+    ) + bm_2 * L / (R * (L + R))
+    M[2, 1] = -bj_2 * dx * n1_2 * n2_2 / (dy * B * (B + 1))
+    M[2, 2] = (
+        -bj_2
+        * n2_2
+        * (dx * n1_2 * L * R + dx * n1_2 * L - 2 * dy * n2_2 * L - dy * n2_2 * R)
+        / (dy * L * (L + R))
+        + bm_2 * (2 * L + R) / (L * (L + R))
+        - bp_2 * -_phi(L)
+    )
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bp_0*dx*n2_0 - a_0*bp_0*-_phi(R) + b_0*dx*n1_0
-    d[1] = a_tau_1*bp_1*dy*n1_1 + a_1*bp_1*-_phi(B) + b_1*dy*n2_1
-    d[2] = -a_tau_2*bp_2*dx*n2_2 + a_2*bp_2*-_phi(L) + b_2*dx*n1_2
+    d[0] = -a_tau_0 * bp_0 * dx * n2_0 - a_0 * bp_0 * -_phi(R) + b_0 * dx * n1_0
+    d[1] = a_tau_1 * bp_1 * dy * n1_1 + a_1 * bp_1 * -_phi(B) + b_1 * dy * n2_1
+    d[2] = -a_tau_2 * bp_2 * dx * n2_2 + a_2 * bp_2 * -_phi(L) + b_2 * dx * n1_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 2] = bj_0*dx*n1_0*n2_0*R/dy  # (-1, +1)
-    N[0, 5] = (bj_0*dx*n1_0*n2_0*B*R**2 + bj_0*dx*n1_0*n2_0*B*R - bj_0*dx*n1_0*n2_0*L*R - bj_0*dy*n2_0**2*B*L - bj_0*dy*n2_0**2*B*R - bm_0*dy*B*L - bm_0*dy*B*R)/(dy*B*L*R)  # (+0, +0)
-    N[0, 6] = -bj_0*dx*n1_0*n2_0*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
-    N[0, 7] = -bp_0*(R - 2)/(R - 1)  # (+1, +0)
-    N[0, 8] = bp_0*(R - 1)/(R - 2)  # (+2, +0)
-    N[1, 2] = -bj_1*dy*n1_1*n2_1*B/dx  # (-1, +1)
-    N[1, 3] = -bp_1*(B - 1)/(B - 2)  # (+0, -2)
-    N[1, 4] = bp_1*(B - 2)/(B - 1)  # (+0, -1)
-    N[1, 5] = (bj_1*dx*n1_1**2*B*L*R + bj_1*dx*n1_1**2*L*R + bj_1*dy*n1_1*n2_1*B**2*L - bj_1*dy*n1_1*n2_1*B**2*R - bj_1*dy*n1_1*n2_1*B**2 + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B*R + bm_1*dx*B*L*R + bm_1*dx*L*R)/(dx*B*L*R)  # (+0, +0)
-    N[1, 6] = -B*(bj_1*dx*n1_1**2 - bj_1*dy*n1_1*n2_1*B - bj_1*dy*n1_1*n2_1 + bm_1*dx)/(dx*(B + 1))  # (+0, +1)
-    N[2, 0] = -bp_2*(L - 1)/(L - 2)  # (-2, +0)
-    N[2, 1] = bp_2*(L - 2)/(L - 1)  # (-1, +0)
-    N[2, 2] = -bj_2*dx*n1_2*n2_2*L/dy  # (-1, +1)
-    N[2, 5] = (bj_2*dx*n1_2*n2_2*B*L**2 - bj_2*dx*n1_2*n2_2*B*L - bj_2*dx*n1_2*n2_2*L*R + bj_2*dy*n2_2**2*B*L + bj_2*dy*n2_2**2*B*R + bm_2*dy*B*L + bm_2*dy*B*R)/(dy*B*L*R)  # (+0, +0)
-    N[2, 6] = bj_2*dx*n1_2*n2_2*(B*L - B + L)/(dy*(B + 1))  # (+0, +1)
+    N[0, 2] = bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, +1)
+    N[0, 5] = (
+        bj_0 * dx * n1_0 * n2_0 * B * R**2
+        + bj_0 * dx * n1_0 * n2_0 * B * R
+        - bj_0 * dx * n1_0 * n2_0 * L * R
+        - bj_0 * dy * n2_0**2 * B * L
+        - bj_0 * dy * n2_0**2 * B * R
+        - bm_0 * dy * B * L
+        - bm_0 * dy * B * R
+    ) / (dy * B * L * R)  # (+0, +0)
+    N[0, 6] = -bj_0 * dx * n1_0 * n2_0 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
+    N[0, 7] = -bp_0 * (R - 2) / (R - 1)  # (+1, +0)
+    N[0, 8] = bp_0 * (R - 1) / (R - 2)  # (+2, +0)
+    N[1, 2] = -bj_1 * dy * n1_1 * n2_1 * B / dx  # (-1, +1)
+    N[1, 3] = -bp_1 * (B - 1) / (B - 2)  # (+0, -2)
+    N[1, 4] = bp_1 * (B - 2) / (B - 1)  # (+0, -1)
+    N[1, 5] = (
+        bj_1 * dx * n1_1**2 * B * L * R
+        + bj_1 * dx * n1_1**2 * L * R
+        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
+        - bj_1 * dy * n1_1 * n2_1 * B**2 * R
+        - bj_1 * dy * n1_1 * n2_1 * B**2
+        + bj_1 * dy * n1_1 * n2_1 * B * L
+        - bj_1 * dy * n1_1 * n2_1 * B * R
+        + bm_1 * dx * B * L * R
+        + bm_1 * dx * L * R
+    ) / (dx * B * L * R)  # (+0, +0)
+    N[1, 6] = (
+        -B
+        * (
+            bj_1 * dx * n1_1**2
+            - bj_1 * dy * n1_1 * n2_1 * B
+            - bj_1 * dy * n1_1 * n2_1
+            + bm_1 * dx
+        )
+        / (dx * (B + 1))
+    )  # (+0, +1)
+    N[2, 0] = -bp_2 * (L - 1) / (L - 2)  # (-2, +0)
+    N[2, 1] = bp_2 * (L - 2) / (L - 1)  # (-1, +0)
+    N[2, 2] = -bj_2 * dx * n1_2 * n2_2 * L / dy  # (-1, +1)
+    N[2, 5] = (
+        bj_2 * dx * n1_2 * n2_2 * B * L**2
+        - bj_2 * dx * n1_2 * n2_2 * B * L
+        - bj_2 * dx * n1_2 * n2_2 * L * R
+        + bj_2 * dy * n2_2**2 * B * L
+        + bj_2 * dy * n2_2**2 * B * R
+        + bm_2 * dy * B * L
+        + bm_2 * dy * B * R
+    ) / (dy * B * L * R)  # (+0, +0)
+    N[2, 6] = bj_2 * dx * n1_2 * n2_2 * (B * L - B + L) / (dy * (B + 1))  # (+0, +1)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -2227,50 +3883,123 @@ def _case4_sc3_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case4_sc3_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 4 sub-case 3, eta > 0."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'R')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-2, +0), (-1, +0), (-1, +1), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+1, +0), (+2, +0)]
+    offsets = [
+        (-2, +0),
+        (-1, +0),
+        (-1, +1),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+1, +0),
+        (+2, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bj_0*n2_0*(dx*n1_0*L*R - dx*n1_0*R + dy*n2_0*L + 2*dy*n2_0*R)/(dy*R*(L + R)) - bm_0*-_phi(R) + bp_0*(L + 2*R)/(R*(L + R))
-    M[0, 1] = -bj_0*dx*n1_0*n2_0/(dy*B*(B + 1))
-    M[0, 2] = bj_0*n2_0*R*(dx*n1_0*R + dx*n1_0 - dy*n2_0)/(dy*L*(L + R)) + bp_0*R/(L*(L + R))
-    M[1, 0] = bj_1*dy*n1_1*n2_1*(B*L - B + L)/(dx*R*(L + R))
-    M[1, 1] = bm_1*-_phi(B) + _psi(B) * (bj_1*n1_1**2 - bp_1)
-    M[1, 2] = -bj_1*dy*n1_1*n2_1*(B*R + B + R)/(dx*L*(L + R))
-    M[2, 0] = bj_2*n2_2*L*(dx*n1_2*L - dx*n1_2 + dy*n2_2)/(dy*R*(L + R)) - bp_2*L/(R*(L + R))
-    M[2, 1] = -bj_2*dx*n1_2*n2_2/(dy*B*(B + 1))
-    M[2, 2] = -bj_2*n2_2*(dx*n1_2*L*R + dx*n1_2*L - 2*dy*n2_2*L - dy*n2_2*R)/(dy*L*(L + R)) + bm_2*-_phi(L) - bp_2*(2*L + R)/(L*(L + R))
+    M[0, 0] = (
+        -bj_0
+        * n2_0
+        * (dx * n1_0 * L * R - dx * n1_0 * R + dy * n2_0 * L + 2 * dy * n2_0 * R)
+        / (dy * R * (L + R))
+        - bm_0 * -_phi(R)
+        + bp_0 * (L + 2 * R) / (R * (L + R))
+    )
+    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
+    M[0, 2] = bj_0 * n2_0 * R * (dx * n1_0 * R + dx * n1_0 - dy * n2_0) / (
+        dy * L * (L + R)
+    ) + bp_0 * R / (L * (L + R))
+    M[1, 0] = bj_1 * dy * n1_1 * n2_1 * (B * L - B + L) / (dx * R * (L + R))
+    M[1, 1] = bm_1 * -_phi(B) + _psi(B) * (bj_1 * n1_1**2 - bp_1)
+    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 * (B * R + B + R) / (dx * L * (L + R))
+    M[2, 0] = bj_2 * n2_2 * L * (dx * n1_2 * L - dx * n1_2 + dy * n2_2) / (
+        dy * R * (L + R)
+    ) - bp_2 * L / (R * (L + R))
+    M[2, 1] = -bj_2 * dx * n1_2 * n2_2 / (dy * B * (B + 1))
+    M[2, 2] = (
+        -bj_2
+        * n2_2
+        * (dx * n1_2 * L * R + dx * n1_2 * L - 2 * dy * n2_2 * L - dy * n2_2 * R)
+        / (dy * L * (L + R))
+        + bm_2 * -_phi(L)
+        - bp_2 * (2 * L + R) / (L * (L + R))
+    )
 
     d = np.zeros(3)
-    d[0] = -a_tau_0*bm_0*dx*n2_0 - a_0*bm_0*-_phi(R) + b_0*dx*n1_0
-    d[1] = a_tau_1*bm_1*dy*n1_1 + a_1*bm_1*-_phi(B) + b_1*dy*n2_1
-    d[2] = -a_tau_2*bm_2*dx*n2_2 + a_2*bm_2*-_phi(L) + b_2*dx*n1_2
+    d[0] = -a_tau_0 * bm_0 * dx * n2_0 - a_0 * bm_0 * -_phi(R) + b_0 * dx * n1_0
+    d[1] = a_tau_1 * bm_1 * dy * n1_1 + a_1 * bm_1 * -_phi(B) + b_1 * dy * n2_1
+    d[2] = -a_tau_2 * bm_2 * dx * n2_2 + a_2 * bm_2 * -_phi(L) + b_2 * dx * n1_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 2] = bj_0*dx*n1_0*n2_0*R/dy  # (-1, +1)
-    N[0, 5] = (bj_0*dx*n1_0*n2_0*B*R**2 + bj_0*dx*n1_0*n2_0*B*R - bj_0*dx*n1_0*n2_0*L*R - bj_0*dy*n2_0**2*B*L - bj_0*dy*n2_0**2*B*R + bp_0*dy*B*L + bp_0*dy*B*R)/(dy*B*L*R)  # (+0, +0)
-    N[0, 6] = -bj_0*dx*n1_0*n2_0*(B*R + B + R)/(dy*(B + 1))  # (+0, +1)
-    N[0, 7] = bm_0*(R - 2)/(R - 1)  # (+1, +0)
-    N[0, 8] = -bm_0*(R - 1)/(R - 2)  # (+2, +0)
-    N[1, 2] = -bj_1*dy*n1_1*n2_1*B/dx  # (-1, +1)
-    N[1, 3] = bm_1*(B - 1)/(B - 2)  # (+0, -2)
-    N[1, 4] = -bm_1*(B - 2)/(B - 1)  # (+0, -1)
-    N[1, 5] = (bj_1*dx*n1_1**2*B*L*R + bj_1*dx*n1_1**2*L*R + bj_1*dy*n1_1*n2_1*B**2*L - bj_1*dy*n1_1*n2_1*B**2*R - bj_1*dy*n1_1*n2_1*B**2 + bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B*R - bp_1*dx*B*L*R - bp_1*dx*L*R)/(dx*B*L*R)  # (+0, +0)
-    N[1, 6] = -B*(bj_1*dx*n1_1**2 - bj_1*dy*n1_1*n2_1*B - bj_1*dy*n1_1*n2_1 - bp_1*dx)/(dx*(B + 1))  # (+0, +1)
-    N[2, 0] = bm_2*(L - 1)/(L - 2)  # (-2, +0)
-    N[2, 1] = -bm_2*(L - 2)/(L - 1)  # (-1, +0)
-    N[2, 2] = -bj_2*dx*n1_2*n2_2*L/dy  # (-1, +1)
-    N[2, 5] = (bj_2*dx*n1_2*n2_2*B*L**2 - bj_2*dx*n1_2*n2_2*B*L - bj_2*dx*n1_2*n2_2*L*R + bj_2*dy*n2_2**2*B*L + bj_2*dy*n2_2**2*B*R - bp_2*dy*B*L - bp_2*dy*B*R)/(dy*B*L*R)  # (+0, +0)
-    N[2, 6] = bj_2*dx*n1_2*n2_2*(B*L - B + L)/(dy*(B + 1))  # (+0, +1)
+    N[0, 2] = bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, +1)
+    N[0, 5] = (
+        bj_0 * dx * n1_0 * n2_0 * B * R**2
+        + bj_0 * dx * n1_0 * n2_0 * B * R
+        - bj_0 * dx * n1_0 * n2_0 * L * R
+        - bj_0 * dy * n2_0**2 * B * L
+        - bj_0 * dy * n2_0**2 * B * R
+        + bp_0 * dy * B * L
+        + bp_0 * dy * B * R
+    ) / (dy * B * L * R)  # (+0, +0)
+    N[0, 6] = -bj_0 * dx * n1_0 * n2_0 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
+    N[0, 7] = bm_0 * (R - 2) / (R - 1)  # (+1, +0)
+    N[0, 8] = -bm_0 * (R - 1) / (R - 2)  # (+2, +0)
+    N[1, 2] = -bj_1 * dy * n1_1 * n2_1 * B / dx  # (-1, +1)
+    N[1, 3] = bm_1 * (B - 1) / (B - 2)  # (+0, -2)
+    N[1, 4] = -bm_1 * (B - 2) / (B - 1)  # (+0, -1)
+    N[1, 5] = (
+        bj_1 * dx * n1_1**2 * B * L * R
+        + bj_1 * dx * n1_1**2 * L * R
+        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
+        - bj_1 * dy * n1_1 * n2_1 * B**2 * R
+        - bj_1 * dy * n1_1 * n2_1 * B**2
+        + bj_1 * dy * n1_1 * n2_1 * B * L
+        - bj_1 * dy * n1_1 * n2_1 * B * R
+        - bp_1 * dx * B * L * R
+        - bp_1 * dx * L * R
+    ) / (dx * B * L * R)  # (+0, +0)
+    N[1, 6] = (
+        -B
+        * (
+            bj_1 * dx * n1_1**2
+            - bj_1 * dy * n1_1 * n2_1 * B
+            - bj_1 * dy * n1_1 * n2_1
+            - bp_1 * dx
+        )
+        / (dx * (B + 1))
+    )  # (+0, +1)
+    N[2, 0] = bm_2 * (L - 1) / (L - 2)  # (-2, +0)
+    N[2, 1] = -bm_2 * (L - 2) / (L - 1)  # (-1, +0)
+    N[2, 2] = -bj_2 * dx * n1_2 * n2_2 * L / dy  # (-1, +1)
+    N[2, 5] = (
+        bj_2 * dx * n1_2 * n2_2 * B * L**2
+        - bj_2 * dx * n1_2 * n2_2 * B * L
+        - bj_2 * dx * n1_2 * n2_2 * L * R
+        + bj_2 * dy * n2_2**2 * B * L
+        + bj_2 * dy * n2_2**2 * B * R
+        - bp_2 * dy * B * L
+        - bp_2 * dy * B * R
+    ) / (dy * B * L * R)  # (+0, +0)
+    N[2, 6] = bj_2 * dx * n1_2 * n2_2 * (B * L - B + L) / (dy * (B + 1))  # (+0, +1)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -2279,50 +4008,123 @@ def _case4_sc3_eta_p1(geom, theta_inputs, betas_per_row):
 
 def _case4_sc4_eta_m1(geom, theta_inputs, betas_per_row):
     """Case 4 sub-case 4, eta < 0."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-2, +0), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+    offsets = [
+        (-2, +0),
+        (-1, +0),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+1, -1),
+        (+1, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bj_0*n1_0*(dx*n1_0*B + 2*dx*n1_0*T + dy*n2_0*B*T - dy*n2_0*T)/(dx*T*(B + T)) - bm_0*(B + 2*T)/(T*(B + T)) + bp_0*-_phi(T)
-    M[0, 1] = -bj_0*n1_0*T*(dx*n1_0 - dy*n2_0*T - dy*n2_0)/(dx*B*(B + T)) - bm_0*T/(B*(B + T))
-    M[0, 2] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
-    M[1, 0] = bj_1*n1_1*B*(dx*n1_1 + dy*n2_1*B - dy*n2_1)/(dx*T*(B + T)) + bm_1*B/(T*(B + T))
-    M[1, 1] = bj_1*n1_1*(2*dx*n1_1*B + dx*n1_1*T - dy*n2_1*B*T - dy*n2_1*B)/(dx*B*(B + T)) + bm_1*(2*B + T)/(B*(B + T)) - bp_1*-_phi(B)
-    M[1, 2] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
-    M[2, 0] = bj_2*dx*n1_2*n2_2*(B*L + B - L)/(dy*T*(B + T))
-    M[2, 1] = -bj_2*dx*n1_2*n2_2*(L*T + L + T)/(dy*B*(B + T))
-    M[2, 2] = -bp_2*-_phi(L) + _psi(L) * (bj_2*n2_2**2 + bm_2)
+    M[0, 0] = (
+        -bj_0
+        * n1_0
+        * (dx * n1_0 * B + 2 * dx * n1_0 * T + dy * n2_0 * B * T - dy * n2_0 * T)
+        / (dx * T * (B + T))
+        - bm_0 * (B + 2 * T) / (T * (B + T))
+        + bp_0 * -_phi(T)
+    )
+    M[0, 1] = -bj_0 * n1_0 * T * (dx * n1_0 - dy * n2_0 * T - dy * n2_0) / (
+        dx * B * (B + T)
+    ) - bm_0 * T / (B * (B + T))
+    M[0, 2] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
+    M[1, 0] = bj_1 * n1_1 * B * (dx * n1_1 + dy * n2_1 * B - dy * n2_1) / (
+        dx * T * (B + T)
+    ) + bm_1 * B / (T * (B + T))
+    M[1, 1] = (
+        bj_1
+        * n1_1
+        * (2 * dx * n1_1 * B + dx * n1_1 * T - dy * n2_1 * B * T - dy * n2_1 * B)
+        / (dx * B * (B + T))
+        + bm_1 * (2 * B + T) / (B * (B + T))
+        - bp_1 * -_phi(B)
+    )
+    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
+    M[2, 0] = bj_2 * dx * n1_2 * n2_2 * (B * L + B - L) / (dy * T * (B + T))
+    M[2, 1] = -bj_2 * dx * n1_2 * n2_2 * (L * T + L + T) / (dy * B * (B + T))
+    M[2, 2] = -bp_2 * -_phi(L) + _psi(L) * (bj_2 * n2_2**2 + bm_2)
 
     d = np.zeros(3)
-    d[0] = a_tau_0*bp_0*dy*n1_0 - a_0*bp_0*-_phi(T) + b_0*dy*n2_0
-    d[1] = a_tau_1*bp_1*dy*n1_1 + a_1*bp_1*-_phi(B) + b_1*dy*n2_1
-    d[2] = -a_tau_2*bp_2*dx*n2_2 + a_2*bp_2*-_phi(L) + b_2*dx*n1_2
+    d[0] = a_tau_0 * bp_0 * dy * n1_0 - a_0 * bp_0 * -_phi(T) + b_0 * dy * n2_0
+    d[1] = a_tau_1 * bp_1 * dy * n1_1 + a_1 * bp_1 * -_phi(B) + b_1 * dy * n2_1
+    d[2] = -a_tau_2 * bp_2 * dx * n2_2 + a_2 * bp_2 * -_phi(L) + b_2 * dx * n1_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 4] = -(bj_0*dx*n1_0**2*B*L + bj_0*dx*n1_0**2*L*T + bj_0*dy*n1_0*n2_0*B*T - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T + bm_0*dx*B*L + bm_0*dx*L*T)/(dx*B*L*T)  # (+0, +0)
-    N[0, 5] = -bp_0*(T - 2)/(T - 1)  # (+0, +1)
-    N[0, 6] = bp_0*(T - 1)/(T - 2)  # (+0, +2)
-    N[0, 7] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
-    N[0, 8] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
-    N[1, 2] = -bp_1*(B - 1)/(B - 2)  # (+0, -2)
-    N[1, 3] = bp_1*(B - 2)/(B - 1)  # (+0, -1)
-    N[1, 4] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L*T + bj_1*dy*n1_1*n2_1*B**2*L - bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B*T + bm_1*dx*B*L + bm_1*dx*L*T)/(dx*B*L*T)  # (+0, +0)
-    N[1, 7] = -bj_1*dy*n1_1*n2_1*B/dx  # (+1, -1)
-    N[1, 8] = bj_1*dy*n1_1*n2_1*(B*L + B - L)/(dx*(L + 1))  # (+1, +0)
-    N[2, 0] = -bp_2*(L - 1)/(L - 2)  # (-2, +0)
-    N[2, 1] = bp_2*(L - 2)/(L - 1)  # (-1, +0)
-    N[2, 4] = (bj_2*dx*n1_2*n2_2*B*L**2 + bj_2*dx*n1_2*n2_2*B*L - bj_2*dx*n1_2*n2_2*L**2*T - bj_2*dx*n1_2*n2_2*L**2 - bj_2*dx*n1_2*n2_2*L*T + bj_2*dy*n2_2**2*B*L*T + bj_2*dy*n2_2**2*B*T + bm_2*dy*B*L*T + bm_2*dy*B*T)/(dy*B*L*T)  # (+0, +0)
-    N[2, 7] = -bj_2*dx*n1_2*n2_2*L/dy  # (+1, -1)
-    N[2, 8] = L*(bj_2*dx*n1_2*n2_2*L + bj_2*dx*n1_2*n2_2 - bj_2*dy*n2_2**2 - bm_2*dy)/(dy*(L + 1))  # (+1, +0)
+    N[0, 4] = -(
+        bj_0 * dx * n1_0**2 * B * L
+        + bj_0 * dx * n1_0**2 * L * T
+        + bj_0 * dy * n1_0 * n2_0 * B * T
+        - bj_0 * dy * n1_0 * n2_0 * L * T**2
+        - bj_0 * dy * n1_0 * n2_0 * L * T
+        + bm_0 * dx * B * L
+        + bm_0 * dx * L * T
+    ) / (dx * B * L * T)  # (+0, +0)
+    N[0, 5] = -bp_0 * (T - 2) / (T - 1)  # (+0, +1)
+    N[0, 6] = bp_0 * (T - 1) / (T - 2)  # (+0, +2)
+    N[0, 7] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
+    N[0, 8] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
+    N[1, 2] = -bp_1 * (B - 1) / (B - 2)  # (+0, -2)
+    N[1, 3] = bp_1 * (B - 2) / (B - 1)  # (+0, -1)
+    N[1, 4] = (
+        bj_1 * dx * n1_1**2 * B * L
+        + bj_1 * dx * n1_1**2 * L * T
+        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
+        - bj_1 * dy * n1_1 * n2_1 * B * L
+        - bj_1 * dy * n1_1 * n2_1 * B * T
+        + bm_1 * dx * B * L
+        + bm_1 * dx * L * T
+    ) / (dx * B * L * T)  # (+0, +0)
+    N[1, 7] = -bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, -1)
+    N[1, 8] = bj_1 * dy * n1_1 * n2_1 * (B * L + B - L) / (dx * (L + 1))  # (+1, +0)
+    N[2, 0] = -bp_2 * (L - 1) / (L - 2)  # (-2, +0)
+    N[2, 1] = bp_2 * (L - 2) / (L - 1)  # (-1, +0)
+    N[2, 4] = (
+        bj_2 * dx * n1_2 * n2_2 * B * L**2
+        + bj_2 * dx * n1_2 * n2_2 * B * L
+        - bj_2 * dx * n1_2 * n2_2 * L**2 * T
+        - bj_2 * dx * n1_2 * n2_2 * L**2
+        - bj_2 * dx * n1_2 * n2_2 * L * T
+        + bj_2 * dy * n2_2**2 * B * L * T
+        + bj_2 * dy * n2_2**2 * B * T
+        + bm_2 * dy * B * L * T
+        + bm_2 * dy * B * T
+    ) / (dy * B * L * T)  # (+0, +0)
+    N[2, 7] = -bj_2 * dx * n1_2 * n2_2 * L / dy  # (+1, -1)
+    N[2, 8] = (
+        L
+        * (
+            bj_2 * dx * n1_2 * n2_2 * L
+            + bj_2 * dx * n1_2 * n2_2
+            - bj_2 * dy * n2_2**2
+            - bm_2 * dy
+        )
+        / (dy * (L + 1))
+    )  # (+1, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
@@ -2331,85 +4133,157 @@ def _case4_sc4_eta_m1(geom, theta_inputs, betas_per_row):
 
 def _case4_sc4_eta_p1(geom, theta_inputs, betas_per_row):
     """Case 4 sub-case 4, eta > 0."""
-    R, T, L, B = theta_inputs['R'], theta_inputs['T'], theta_inputs['L'], theta_inputs['B']
-    r, t, l, b = theta_inputs['r'], theta_inputs['t'], theta_inputs['l'], theta_inputs['b']
+    R, T, L, B = (
+        theta_inputs["R"],
+        theta_inputs["T"],
+        theta_inputs["L"],
+        theta_inputs["B"],
+    )
+    r, t, l, b = (
+        theta_inputs["r"],
+        theta_inputs["t"],
+        theta_inputs["l"],
+        theta_inputs["b"],
+    )
 
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, 'T')
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, 'B')
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, 'L')
+    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
+    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
+    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
     bp_0, bm_0, bj_0 = betas_per_row[0]
     bp_1, bm_1, bj_1 = betas_per_row[1]
     bp_2, bm_2, bj_2 = betas_per_row[2]
 
-    offsets = [(-2, +0), (-1, +0), (+0, -2), (+0, -1), (+0, +0), (+0, +1), (+0, +2), (+1, -1), (+1, +0)]
+    offsets = [
+        (-2, +0),
+        (-1, +0),
+        (+0, -2),
+        (+0, -1),
+        (+0, +0),
+        (+0, +1),
+        (+0, +2),
+        (+1, -1),
+        (+1, +0),
+    ]
 
     M = np.zeros((3, 3))
-    M[0, 0] = -bj_0*n1_0*(dx*n1_0*B + 2*dx*n1_0*T + dy*n2_0*B*T - dy*n2_0*T)/(dx*T*(B + T)) - bm_0*-_phi(T) + bp_0*(B + 2*T)/(T*(B + T))
-    M[0, 1] = -bj_0*n1_0*T*(dx*n1_0 - dy*n2_0*T - dy*n2_0)/(dx*B*(B + T)) + bp_0*T/(B*(B + T))
-    M[0, 2] = -bj_0*dy*n1_0*n2_0/(dx*L*(L + 1))
-    M[1, 0] = bj_1*n1_1*B*(dx*n1_1 + dy*n2_1*B - dy*n2_1)/(dx*T*(B + T)) - bp_1*B/(T*(B + T))
-    M[1, 1] = bj_1*n1_1*(2*dx*n1_1*B + dx*n1_1*T - dy*n2_1*B*T - dy*n2_1*B)/(dx*B*(B + T)) + bm_1*-_phi(B) - bp_1*(2*B + T)/(B*(B + T))
-    M[1, 2] = -bj_1*dy*n1_1*n2_1/(dx*L*(L + 1))
-    M[2, 0] = bj_2*dx*n1_2*n2_2*(B*L + B - L)/(dy*T*(B + T))
-    M[2, 1] = -bj_2*dx*n1_2*n2_2*(L*T + L + T)/(dy*B*(B + T))
-    M[2, 2] = bm_2*-_phi(L) + _psi(L) * (bj_2*n2_2**2 - bp_2)
+    M[0, 0] = (
+        -bj_0
+        * n1_0
+        * (dx * n1_0 * B + 2 * dx * n1_0 * T + dy * n2_0 * B * T - dy * n2_0 * T)
+        / (dx * T * (B + T))
+        - bm_0 * -_phi(T)
+        + bp_0 * (B + 2 * T) / (T * (B + T))
+    )
+    M[0, 1] = -bj_0 * n1_0 * T * (dx * n1_0 - dy * n2_0 * T - dy * n2_0) / (
+        dx * B * (B + T)
+    ) + bp_0 * T / (B * (B + T))
+    M[0, 2] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
+    M[1, 0] = bj_1 * n1_1 * B * (dx * n1_1 + dy * n2_1 * B - dy * n2_1) / (
+        dx * T * (B + T)
+    ) - bp_1 * B / (T * (B + T))
+    M[1, 1] = (
+        bj_1
+        * n1_1
+        * (2 * dx * n1_1 * B + dx * n1_1 * T - dy * n2_1 * B * T - dy * n2_1 * B)
+        / (dx * B * (B + T))
+        + bm_1 * -_phi(B)
+        - bp_1 * (2 * B + T) / (B * (B + T))
+    )
+    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
+    M[2, 0] = bj_2 * dx * n1_2 * n2_2 * (B * L + B - L) / (dy * T * (B + T))
+    M[2, 1] = -bj_2 * dx * n1_2 * n2_2 * (L * T + L + T) / (dy * B * (B + T))
+    M[2, 2] = bm_2 * -_phi(L) + _psi(L) * (bj_2 * n2_2**2 - bp_2)
 
     d = np.zeros(3)
-    d[0] = a_tau_0*bm_0*dy*n1_0 - a_0*bm_0*-_phi(T) + b_0*dy*n2_0
-    d[1] = a_tau_1*bm_1*dy*n1_1 + a_1*bm_1*-_phi(B) + b_1*dy*n2_1
-    d[2] = -a_tau_2*bm_2*dx*n2_2 + a_2*bm_2*-_phi(L) + b_2*dx*n1_2
+    d[0] = a_tau_0 * bm_0 * dy * n1_0 - a_0 * bm_0 * -_phi(T) + b_0 * dy * n2_0
+    d[1] = a_tau_1 * bm_1 * dy * n1_1 + a_1 * bm_1 * -_phi(B) + b_1 * dy * n2_1
+    d[2] = -a_tau_2 * bm_2 * dx * n2_2 + a_2 * bm_2 * -_phi(L) + b_2 * dx * n1_2
 
     N = np.zeros((3, len(offsets)))
-    N[0, 4] = -(bj_0*dx*n1_0**2*B*L + bj_0*dx*n1_0**2*L*T + bj_0*dy*n1_0*n2_0*B*T - bj_0*dy*n1_0*n2_0*L*T**2 - bj_0*dy*n1_0*n2_0*L*T - bp_0*dx*B*L - bp_0*dx*L*T)/(dx*B*L*T)  # (+0, +0)
-    N[0, 5] = bm_0*(T - 2)/(T - 1)  # (+0, +1)
-    N[0, 6] = -bm_0*(T - 1)/(T - 2)  # (+0, +2)
-    N[0, 7] = bj_0*dy*n1_0*n2_0*T/dx  # (+1, -1)
-    N[0, 8] = -bj_0*dy*n1_0*n2_0*(L*T + L + T)/(dx*(L + 1))  # (+1, +0)
-    N[1, 2] = bm_1*(B - 1)/(B - 2)  # (+0, -2)
-    N[1, 3] = -bm_1*(B - 2)/(B - 1)  # (+0, -1)
-    N[1, 4] = (bj_1*dx*n1_1**2*B*L + bj_1*dx*n1_1**2*L*T + bj_1*dy*n1_1*n2_1*B**2*L - bj_1*dy*n1_1*n2_1*B*L - bj_1*dy*n1_1*n2_1*B*T - bp_1*dx*B*L - bp_1*dx*L*T)/(dx*B*L*T)  # (+0, +0)
-    N[1, 7] = -bj_1*dy*n1_1*n2_1*B/dx  # (+1, -1)
-    N[1, 8] = bj_1*dy*n1_1*n2_1*(B*L + B - L)/(dx*(L + 1))  # (+1, +0)
-    N[2, 0] = bm_2*(L - 1)/(L - 2)  # (-2, +0)
-    N[2, 1] = -bm_2*(L - 2)/(L - 1)  # (-1, +0)
-    N[2, 4] = (bj_2*dx*n1_2*n2_2*B*L**2 + bj_2*dx*n1_2*n2_2*B*L - bj_2*dx*n1_2*n2_2*L**2*T - bj_2*dx*n1_2*n2_2*L**2 - bj_2*dx*n1_2*n2_2*L*T + bj_2*dy*n2_2**2*B*L*T + bj_2*dy*n2_2**2*B*T - bp_2*dy*B*L*T - bp_2*dy*B*T)/(dy*B*L*T)  # (+0, +0)
-    N[2, 7] = -bj_2*dx*n1_2*n2_2*L/dy  # (+1, -1)
-    N[2, 8] = L*(bj_2*dx*n1_2*n2_2*L + bj_2*dx*n1_2*n2_2 - bj_2*dy*n2_2**2 + bp_2*dy)/(dy*(L + 1))  # (+1, +0)
+    N[0, 4] = -(
+        bj_0 * dx * n1_0**2 * B * L
+        + bj_0 * dx * n1_0**2 * L * T
+        + bj_0 * dy * n1_0 * n2_0 * B * T
+        - bj_0 * dy * n1_0 * n2_0 * L * T**2
+        - bj_0 * dy * n1_0 * n2_0 * L * T
+        - bp_0 * dx * B * L
+        - bp_0 * dx * L * T
+    ) / (dx * B * L * T)  # (+0, +0)
+    N[0, 5] = bm_0 * (T - 2) / (T - 1)  # (+0, +1)
+    N[0, 6] = -bm_0 * (T - 1) / (T - 2)  # (+0, +2)
+    N[0, 7] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
+    N[0, 8] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
+    N[1, 2] = bm_1 * (B - 1) / (B - 2)  # (+0, -2)
+    N[1, 3] = -bm_1 * (B - 2) / (B - 1)  # (+0, -1)
+    N[1, 4] = (
+        bj_1 * dx * n1_1**2 * B * L
+        + bj_1 * dx * n1_1**2 * L * T
+        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
+        - bj_1 * dy * n1_1 * n2_1 * B * L
+        - bj_1 * dy * n1_1 * n2_1 * B * T
+        - bp_1 * dx * B * L
+        - bp_1 * dx * L * T
+    ) / (dx * B * L * T)  # (+0, +0)
+    N[1, 7] = -bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, -1)
+    N[1, 8] = bj_1 * dy * n1_1 * n2_1 * (B * L + B - L) / (dx * (L + 1))  # (+1, +0)
+    N[2, 0] = bm_2 * (L - 1) / (L - 2)  # (-2, +0)
+    N[2, 1] = -bm_2 * (L - 2) / (L - 1)  # (-1, +0)
+    N[2, 4] = (
+        bj_2 * dx * n1_2 * n2_2 * B * L**2
+        + bj_2 * dx * n1_2 * n2_2 * B * L
+        - bj_2 * dx * n1_2 * n2_2 * L**2 * T
+        - bj_2 * dx * n1_2 * n2_2 * L**2
+        - bj_2 * dx * n1_2 * n2_2 * L * T
+        + bj_2 * dy * n2_2**2 * B * L * T
+        + bj_2 * dy * n2_2**2 * B * T
+        - bp_2 * dy * B * L * T
+        - bp_2 * dy * B * T
+    ) / (dy * B * L * T)  # (+0, +0)
+    N[2, 7] = -bj_2 * dx * n1_2 * n2_2 * L / dy  # (+1, -1)
+    N[2, 8] = (
+        L
+        * (
+            bj_2 * dx * n1_2 * n2_2 * L
+            + bj_2 * dx * n1_2 * n2_2
+            - bj_2 * dy * n2_2**2
+            + bp_2 * dy
+        )
+        / (dy * (L + 1))
+    )  # (+1, +0)
 
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
     return M_inv_d, M_inv_N, offsets
 
 
-
 # Row interfaces for each sub-case (needed by _row_betas)
 CASE3_ROW_IFACES = {
-    (1, -1): ('R', 'extra', 'T'),
-    (1, 1): ('R', 'extra', 'T'),
-    (2, -1): ('R', 'T', 'extra'),
-    (2, 1): ('R', 'T', 'extra'),
-    (3, -1): ('T', 'L', 'extra'),
-    (3, 1): ('T', 'L', 'extra'),
-    (4, -1): ('T', 'L', 'extra'),
-    (4, 1): ('T', 'L', 'extra'),
-    (5, -1): ('L', 'B', 'extra'),
-    (5, 1): ('L', 'B', 'extra'),
-    (6, -1): ('L', 'B', 'extra'),
-    (6, 1): ('L', 'B', 'extra'),
-    (7, -1): ('B', 'R', 'extra'),
-    (7, 1): ('B', 'R', 'extra'),
-    (8, -1): ('B', 'R', 'extra'),
-    (8, 1): ('B', 'R', 'extra'),
+    (1, -1): ("R", "extra", "T"),
+    (1, 1): ("R", "extra", "T"),
+    (2, -1): ("R", "T", "extra"),
+    (2, 1): ("R", "T", "extra"),
+    (3, -1): ("T", "L", "extra"),
+    (3, 1): ("T", "L", "extra"),
+    (4, -1): ("T", "L", "extra"),
+    (4, 1): ("T", "L", "extra"),
+    (5, -1): ("L", "B", "extra"),
+    (5, 1): ("L", "B", "extra"),
+    (6, -1): ("L", "B", "extra"),
+    (6, 1): ("L", "B", "extra"),
+    (7, -1): ("B", "R", "extra"),
+    (7, 1): ("B", "R", "extra"),
+    (8, -1): ("B", "R", "extra"),
+    (8, 1): ("B", "R", "extra"),
 }
 CASE4_ROW_IFACES = {
-    (1, -1): ('R', 'T', 'L'),
-    (1, 1): ('R', 'T', 'L'),
-    (2, -1): ('R', 'T', 'B'),
-    (2, 1): ('R', 'T', 'B'),
-    (3, -1): ('R', 'B', 'L'),
-    (3, 1): ('R', 'B', 'L'),
-    (4, -1): ('T', 'B', 'L'),
-    (4, 1): ('T', 'B', 'L'),
+    (1, -1): ("R", "T", "L"),
+    (1, 1): ("R", "T", "L"),
+    (2, -1): ("R", "T", "B"),
+    (2, 1): ("R", "T", "B"),
+    (3, -1): ("R", "B", "L"),
+    (3, 1): ("R", "B", "L"),
+    (4, -1): ("T", "B", "L"),
+    (4, 1): ("T", "B", "L"),
 }
 
 # Dispatch dicts
@@ -2441,9 +4315,24 @@ CASE4_FUNCS[(4, -1)] = _case4_sc4_eta_m1
 CASE4_FUNCS[(4, 1)] = _case4_sc4_eta_p1
 
 
-def _assemble_case_n(i, j, sw_idx, M_inv_d, M_inv_N, all_offsets,
-                    eps_r, eps_l, eps_t, eps_b,
-                    theta_R, theta_T, theta_L, theta_B, bot_x, bot_y):
+def _assemble_case_n(
+    i,
+    j,
+    sw_idx,
+    M_inv_d,
+    M_inv_N,
+    all_offsets,
+    eps_r,
+    eps_l,
+    eps_t,
+    eps_b,
+    theta_R,
+    theta_T,
+    theta_L,
+    theta_B,
+    bot_x,
+    bot_y,
+):
     """Shortley-Weller assembly for a case-3 / case-4 cell.
 
     `sw_idx` maps face label ('R'/'T'/'L'/'B') to the row index of the
@@ -2607,12 +4496,19 @@ def interface_value_case1(
 
     # Return (u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t)
     # where the cut face's value is the ghost value u_I.
-    slot_names = ['l', 'r', 't', 'b']
-    face_vals = {'l': u[i - 1, j], 'r': u[i + 1, j],
-                 'b': u[i, j - 1], 't': u[i, j + 1]}
+    slot_names = ["l", "r", "t", "b"]
+    face_vals = {"l": u[i - 1, j], "r": u[i + 1, j], "b": u[i, j - 1], "t": u[i, j + 1]}
     face_vals[slot_names[cd.slot]] = u_I
-    return (face_vals['l'], face_vals['r'], face_vals['b'], face_vals['t'],
-            theta_l, theta_r, theta_b, theta_t)
+    return (
+        face_vals["l"],
+        face_vals["r"],
+        face_vals["b"],
+        face_vals["t"],
+        theta_l,
+        theta_r,
+        theta_b,
+        theta_t,
+    )
 
 
 def interface_value_case2(
@@ -2705,9 +4601,7 @@ def interface_value_case4(
         raise ValueError(f"Invalid direction for case 4: {direction!r}")
 
     eta = geom["eta"]
-    M_inv_d, M_inv_N, all_offsets = _solve_case4_local(
-        sub_case, eta, direction, geom
-    )
+    M_inv_d, M_inv_N, all_offsets = _solve_case4_local(sub_case, eta, direction, geom)
     u_arr = np.array([u[i + di, j + dj] for (di, dj) in all_offsets])
     ghosts = M_inv_N @ u_arr + M_inv_d
     sw_idx = _CASE4_SW_INDEX[sub_case]
@@ -3236,9 +5130,7 @@ def convergence_test4():
         u = u.reshape((nx, ny))
         dudx, dudy = gradient(u)
 
-        errors_u[idx] = np.linalg.norm(
-            (u - u_exact)[2:-2, 2:-2].flat, np.inf
-        )
+        errors_u[idx] = np.linalg.norm((u - u_exact)[2:-2, 2:-2].flat, np.inf)
         errors_du[idx] = np.linalg.norm(
             np.append(
                 (dudx - dudx_exact)[2:-2, 2:-2].flat,
@@ -3273,12 +5165,16 @@ def convergence_test4():
     plt.subplot(121)
     plt.loglog(1 / n_range, errors_u, "o-", label="actual")
     plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
-    plt.xlabel("h"); plt.ylabel("err"); plt.legend()
+    plt.xlabel("h")
+    plt.ylabel("err")
+    plt.legend()
     plt.title("Example 4.2: convergence of $u$")
     plt.subplot(122)
     plt.loglog(1 / n_range, errors_du, "o-", label="actual")
     plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
-    plt.xlabel("h"); plt.ylabel("err"); plt.legend()
+    plt.xlabel("h")
+    plt.ylabel("err")
+    plt.legend()
     plt.title("Example 4.2: convergence of $\\nabla u$")
 
     fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
@@ -3363,8 +5259,7 @@ def convergence_test5():
         a = u_plus - u_minus
 
         n1, n2 = compute_normal_field()
-        b = (sxy + 2.0) * (2.0 * X * n1 + 2.0 * Y * n2) / R2P1 \
-            - e10x * cxy * (n1 + n2)
+        b = (sxy + 2.0) * (2.0 * X * n1 + 2.0 * Y * n2) / R2P1 - e10x * cxy * (n1 + n2)
         a_tau = compute_a_tau_field()
 
         rows, cols, vals = [], [], []
@@ -3373,9 +5268,7 @@ def convergence_test5():
         u = u.reshape((nx, ny))
         dudx, dudy = gradient(u)
 
-        errors_u[idx] = np.linalg.norm(
-            (u - u_exact)[2:-2, 2:-2].flat, np.inf
-        )
+        errors_u[idx] = np.linalg.norm((u - u_exact)[2:-2, 2:-2].flat, np.inf)
         errors_du[idx] = np.linalg.norm(
             np.append(
                 (dudx - dudx_exact)[2:-2, 2:-2].flat,
@@ -3410,12 +5303,16 @@ def convergence_test5():
     plt.subplot(121)
     plt.loglog(1 / n_range, errors_u, "o-", label="actual")
     plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
-    plt.xlabel("h"); plt.ylabel("err"); plt.legend()
+    plt.xlabel("h")
+    plt.ylabel("err")
+    plt.legend()
     plt.title("Example 4.3: convergence of $u$")
     plt.subplot(122)
     plt.loglog(1 / n_range, errors_du, "o-", label="actual")
     plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
-    plt.xlabel("h"); plt.ylabel("err"); plt.legend()
+    plt.xlabel("h")
+    plt.ylabel("err")
+    plt.legend()
     plt.title("Example 4.3: convergence of $\\nabla u$")
 
     fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
@@ -3428,7 +5325,7 @@ def convergence_test5():
 
 if __name__ == "__main__":
     # convergence_test1()
-    # convergence_test2()
+    convergence_test2()
     # convergence_test3()
-    convergence_test4()
-    convergence_test5()
+    # convergence_test4()
+    # convergence_test5()

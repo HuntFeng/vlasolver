@@ -81,13 +81,15 @@ P_coeff = A_inv @ sp.Matrix([uT, uB, uL, uR, uc, u_ext])
 A, B, C, D, E, F = P_coeff
 P = A * x**2 + B * x * y + C * y**2 + D * x + E * y + F
 
+
 # %% jupyter={"source_hidden": true}
 class Direction(enum.IntFlag):
     R = 1 << 0
     T = 1 << 1
     L = 1 << 2
     B = 1 << 3
-    
+
+
 def coeff_case2(
     eta: Literal[1, -1],
     direction: int,
@@ -153,13 +155,21 @@ def coeff_case2(
             eq_sub_y = equality_y.subs({uL_p: ux_m + a, uB_p: uy_m + a}).expand()
         else:
             raise ValueError("No such direction...", direction)
-            
-        ux_coeff_x = eq_sub_x.coeff(ux_m).simplify().collect([beta_p, beta_m, beta_jump])
-        uy_coeff_x = eq_sub_x.coeff(uy_m).simplify().collect([beta_p, beta_m, beta_jump])
+
+        ux_coeff_x = (
+            eq_sub_x.coeff(ux_m).simplify().collect([beta_p, beta_m, beta_jump])
+        )
+        uy_coeff_x = (
+            eq_sub_x.coeff(uy_m).simplify().collect([beta_p, beta_m, beta_jump])
+        )
         rest_x = (eq_sub_x - ux_coeff_x * ux_m - uy_coeff_x * uy_m).simplify().expand()
-    
-        ux_coeff_y = eq_sub_y.coeff(ux_m).simplify().collect([beta_p, beta_m, beta_jump])
-        uy_coeff_y = eq_sub_y.coeff(uy_m).simplify().collect([beta_p, beta_m, beta_jump])
+
+        ux_coeff_y = (
+            eq_sub_y.coeff(ux_m).simplify().collect([beta_p, beta_m, beta_jump])
+        )
+        uy_coeff_y = (
+            eq_sub_y.coeff(uy_m).simplify().collect([beta_p, beta_m, beta_jump])
+        )
         rest_y = (eq_sub_y - ux_coeff_y * ux_m - uy_coeff_y * uy_m).simplify().expand()
     else:
         if direction == Direction.R | Direction.T:
@@ -185,12 +195,20 @@ def coeff_case2(
         else:
             raise ValueError("No such direction...", direction)
 
-        ux_coeff_x = eq_sub_x.coeff(ux_p).simplify().collect([beta_p, beta_m, beta_jump])
-        uy_coeff_x = eq_sub_x.coeff(uy_p).simplify().collect([beta_p, beta_m, beta_jump])
+        ux_coeff_x = (
+            eq_sub_x.coeff(ux_p).simplify().collect([beta_p, beta_m, beta_jump])
+        )
+        uy_coeff_x = (
+            eq_sub_x.coeff(uy_p).simplify().collect([beta_p, beta_m, beta_jump])
+        )
         rest_x = (eq_sub_x - ux_coeff_x * ux_p - uy_coeff_x * uy_p).simplify().expand()
-    
-        ux_coeff_y = eq_sub_y.coeff(ux_p).simplify().collect([beta_p, beta_m, beta_jump])
-        uy_coeff_y = eq_sub_y.coeff(uy_p).simplify().collect([beta_p, beta_m, beta_jump])
+
+        ux_coeff_y = (
+            eq_sub_y.coeff(ux_p).simplify().collect([beta_p, beta_m, beta_jump])
+        )
+        uy_coeff_y = (
+            eq_sub_y.coeff(uy_p).simplify().collect([beta_p, beta_m, beta_jump])
+        )
         rest_y = (eq_sub_y - ux_coeff_y * ux_p - uy_coeff_y * uy_p).simplify().expand()
 
     M[0, 0] = sp.Add(
@@ -286,7 +304,7 @@ def coeff_case2(
 # ## $\eta < 0$
 
 # %% jupyter={"source_hidden": true}
-case2_right_vars_m = { # top right
+case2_right_vars_m = {  # top right
     x: x_i + theta_R * dx,
     y: y_j,
     xL: x_i - dx,
@@ -442,7 +460,7 @@ coeff_case2(
 )
 
 # %% jupyter={"source_hidden": true}
-case2_left_vars_m = { # left bottom
+case2_left_vars_m = {  # left bottom
     x: x_i - theta_L * dx,
     y: y_j,
     xL: x_i - theta_L * dx,
@@ -499,7 +517,7 @@ case2_bot_vars_p = {
     xL: x_i - dx,
     xR: x_i + dx,
     yT: y_j + (1 - theta_B) * dy,
-    yB: y_j -  dy,
+    yB: y_j - dy,
     x_ext: x_i - dx,
     y_ext: y_j - dy,
     uc: u[0][-1],
@@ -520,7 +538,7 @@ coeff_case2(
 )
 
 # %% jupyter={"source_hidden": true}
-case2_right_vars_m = { # right bottom
+case2_right_vars_m = {  # right bottom
     x: x_i + theta_R * dx,
     y: y_j,
     xL: x_i - dx,
@@ -577,7 +595,7 @@ case2_bot_vars_p = {
     xL: x_i - dx,
     xR: x_i + dx,
     yT: y_j + (1 - theta_B) * dy,
-    yB: y_j -  dy,
+    yB: y_j - dy,
     x_ext: x_i + dx,
     y_ext: y_j - dy,
     uc: u[0][-1],
@@ -601,7 +619,7 @@ coeff_case2(
 # ## $\eta > 0$
 
 # %% jupyter={"source_hidden": true}
-case2_right_vars_p = { # top right
+case2_right_vars_p = {  # top right
     x: x_i + theta_R * dx,
     y: y_j,
     xL: x_i - dx,
@@ -757,7 +775,7 @@ coeff_case2(
 )
 
 # %% jupyter={"source_hidden": true}
-case2_left_vars_p = { # left bottom
+case2_left_vars_p = {  # left bottom
     x: x_i - theta_L * dx,
     y: y_j,
     xL: x_i - theta_L * dx,
@@ -814,7 +832,7 @@ case2_bot_vars_m = {
     xL: x_i - dx,
     xR: x_i + dx,
     yT: y_j + (1 - theta_B) * dy,
-    yB: y_j -  dy,
+    yB: y_j - dy,
     x_ext: x_i - dx,
     y_ext: y_j - dy,
     uc: u[0][-1],
@@ -835,7 +853,7 @@ coeff_case2(
 )
 
 # %% jupyter={"source_hidden": true}
-case2_right_vars_p = { # right bottom
+case2_right_vars_p = {  # right bottom
     x: x_i + theta_R * dx,
     y: y_j,
     xL: x_i - dx,
@@ -892,7 +910,7 @@ case2_bot_vars_m = {
     xL: x_i - dx,
     xR: x_i + dx,
     yT: y_j + (1 - theta_B) * dy,
-    yB: y_j -  dy,
+    yB: y_j - dy,
     x_ext: x_i + dx,
     y_ext: y_j - dy,
     uc: u[0][-1],

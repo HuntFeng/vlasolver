@@ -92,11 +92,11 @@ beta_jump, beta_p, beta_m = sp.symbols("[\\beta], beta^+, beta^-")
 #   P(0, 0)         = uc,  P(x_ext, y_ext) = u_ext.
 A_mat = sp.Matrix(
     [
-        [0,        0,            yT**2,    0,     yT,    1],
-        [0,        0,            yB**2,    0,     yB,    1],
-        [xL**2,    0,            0,        xL,    0,     1],
-        [xR**2,    0,            0,        xR,    0,     1],
-        [0,        0,            0,        0,     0,     1],
+        [0, 0, yT**2, 0, yT, 1],
+        [0, 0, yB**2, 0, yB, 1],
+        [xL**2, 0, 0, xL, 0, 1],
+        [xR**2, 0, 0, xR, 0, 1],
+        [0, 0, 0, 0, 0, 1],
         [x_ext**2, x_ext * y_ext, y_ext**2, x_ext, y_ext, 1],
     ]
 )
@@ -213,9 +213,7 @@ def coeff_case3(eta, points):
         Nu[i] = -sp.Add(
             *[
                 term.cancel().factor()
-                for term in sp.Add(*u_terms)
-                .collect(flatten(u))
-                .as_ordered_terms()
+                for term in sp.Add(*u_terms).collect(flatten(u)).as_ordered_terms()
             ]
         )
 
@@ -241,14 +239,22 @@ def coeff_case3(eta, points):
 
 # %%
 _MP_SWAP = {
-    uR_m: uR_p, uR_p: uR_m,
-    uL_m: uL_p, uL_p: uL_m,
-    uT_m: uT_p, uT_p: uT_m,
-    uB_m: uB_p, uB_p: uB_m,
-    ur_m: ur_p, ur_p: ur_m,
-    ut_m: ut_p, ut_p: ut_m,
-    ul_m: ul_p, ul_p: ul_m,
-    ub_m: ub_p, ub_p: ub_m,
+    uR_m: uR_p,
+    uR_p: uR_m,
+    uL_m: uL_p,
+    uL_p: uL_m,
+    uT_m: uT_p,
+    uT_p: uT_m,
+    uB_m: uB_p,
+    uB_p: uB_m,
+    ur_m: ur_p,
+    ur_p: ur_m,
+    ut_m: ut_p,
+    ut_p: ut_m,
+    ul_m: ul_p,
+    ul_p: ul_m,
+    ub_m: ub_p,
+    ub_p: ub_m,
 }
 
 
@@ -282,40 +288,84 @@ def points_for_eta_pos(points_neg):
 
 # %%
 s1_pm_ij = {
-    xL: -dx, xR: theta_R * dx, yT: theta_T * dy, yB: -dy,
-    x_ext: -dx, y_ext: -dy,
-    uL: u[-1][0], uR: uR_m, uT: uT_m, uB: u[0][-1],
-    uc: u[0][0], u_ext: u[-1][-1],
+    xL: -dx,
+    xR: theta_R * dx,
+    yT: theta_T * dy,
+    yB: -dy,
+    x_ext: -dx,
+    y_ext: -dy,
+    uL: u[-1][0],
+    uR: uR_m,
+    uT: uT_m,
+    uB: u[0][-1],
+    uc: u[0][0],
+    u_ext: u[-1][-1],
 }
 s1_pm_i2j = {
-    xL: -theta_r * dx, xR: dx, yT: dy, yB: -dy,
-    x_ext: dx, y_ext: -dy,
-    uL: ur_m, uR: u[3][0], uT: u[2][1], uB: u[2][-1],
-    uc: u[2][0], u_ext: u[3][-1],
+    xL: -theta_r * dx,
+    xR: dx,
+    yT: dy,
+    yB: -dy,
+    x_ext: dx,
+    y_ext: -dy,
+    uL: ur_m,
+    uR: u[3][0],
+    uT: u[2][1],
+    uB: u[2][-1],
+    uc: u[2][0],
+    u_ext: u[3][-1],
 }
 s1_pp_i1j = {
-    xL: -(1 - theta_R) * dx, xR: (1 - theta_r) * dx, yT: dy, yB: -dy,
-    x_ext: dx, y_ext: dy,
-    uL: uR_p, uR: ur_p, uT: u[1][1], uB: u[1][-1],
-    uc: u[1][0], u_ext: u[2][1],
+    xL: -(1 - theta_R) * dx,
+    xR: (1 - theta_r) * dx,
+    yT: dy,
+    yB: -dy,
+    x_ext: dx,
+    y_ext: dy,
+    uL: uR_p,
+    uR: ur_p,
+    uT: u[1][1],
+    uB: u[1][-1],
+    uc: u[1][0],
+    u_ext: u[2][1],
 }
 s1_pp_ij1 = {
-    xL: -dx, xR: dx, yT: dy, yB: -(1 - theta_T) * dy,
-    x_ext: dx, y_ext: dy,
-    uL: u[-1][1], uR: u[1][1], uT: u[0][2], uB: uT_p,
-    uc: u[0][1], u_ext: u[1][2],
+    xL: -dx,
+    xR: dx,
+    yT: dy,
+    yB: -(1 - theta_T) * dy,
+    x_ext: dx,
+    y_ext: dy,
+    uL: u[-1][1],
+    uR: u[1][1],
+    uT: u[0][2],
+    uB: uT_p,
+    uc: u[0][1],
+    u_ext: u[1][2],
 }
 
 s1_pts_neg = [
-    {"axis": "x", "u_m": uR_m, "u_p": uR_p,
-     "vars_m": {x: theta_R * dx, y: 0, **s1_pm_ij},
-     "vars_p": {x: -(1 - theta_R) * dx, y: 0, **s1_pp_i1j}},
-    {"axis": "x", "u_m": ur_m, "u_p": ur_p,
-     "vars_m": {x: -theta_r * dx, y: 0, **s1_pm_i2j},
-     "vars_p": {x: (1 - theta_r) * dx, y: 0, **s1_pp_i1j}},
-    {"axis": "y", "u_m": uT_m, "u_p": uT_p,
-     "vars_m": {x: 0, y: theta_T * dy, **s1_pm_ij},
-     "vars_p": {x: 0, y: -(1 - theta_T) * dy, **s1_pp_ij1}},
+    {
+        "axis": "x",
+        "u_m": uR_m,
+        "u_p": uR_p,
+        "vars_m": {x: theta_R * dx, y: 0, **s1_pm_ij},
+        "vars_p": {x: -(1 - theta_R) * dx, y: 0, **s1_pp_i1j},
+    },
+    {
+        "axis": "x",
+        "u_m": ur_m,
+        "u_p": ur_p,
+        "vars_m": {x: -theta_r * dx, y: 0, **s1_pm_i2j},
+        "vars_p": {x: (1 - theta_r) * dx, y: 0, **s1_pp_i1j},
+    },
+    {
+        "axis": "y",
+        "u_m": uT_m,
+        "u_p": uT_p,
+        "vars_m": {x: 0, y: theta_T * dy, **s1_pm_ij},
+        "vars_p": {x: 0, y: -(1 - theta_T) * dy, **s1_pp_ij1},
+    },
 ]
 
 # %%
@@ -342,34 +392,70 @@ M, Nu, d = coeff_case3(+1, points_for_eta_pos(s1_pts_neg))
 s2_pm_ij = s1_pm_ij
 
 s2_pm_ij2 = {
-    xL: -dx, xR: dx, yT: dy, yB: -theta_t * dy,
-    x_ext: -dx, y_ext: dy,
-    uL: u[-1][2], uR: u[1][2], uT: u[0][3], uB: ut_m,
-    uc: u[0][2], u_ext: u[-1][3],
+    xL: -dx,
+    xR: dx,
+    yT: dy,
+    yB: -theta_t * dy,
+    x_ext: -dx,
+    y_ext: dy,
+    uL: u[-1][2],
+    uR: u[1][2],
+    uT: u[0][3],
+    uB: ut_m,
+    uc: u[0][2],
+    u_ext: u[-1][3],
 }
 s2_pp_i1j = {
-    xL: -(1 - theta_R) * dx, xR: dx, yT: dy, yB: -dy,
-    x_ext: dx, y_ext: dy,
-    uL: uR_p, uR: u[2][0], uT: u[1][1], uB: u[1][-1],
-    uc: u[1][0], u_ext: u[2][1],
+    xL: -(1 - theta_R) * dx,
+    xR: dx,
+    yT: dy,
+    yB: -dy,
+    x_ext: dx,
+    y_ext: dy,
+    uL: uR_p,
+    uR: u[2][0],
+    uT: u[1][1],
+    uB: u[1][-1],
+    uc: u[1][0],
+    u_ext: u[2][1],
 }
 s2_pp_ij1 = {
-    xL: -dx, xR: dx, yT: (1 - theta_t) * dy, yB: -(1 - theta_T) * dy,
-    x_ext: dx, y_ext: dy,
-    uL: u[-1][1], uR: u[1][1], uT: ut_p, uB: uT_p,
-    uc: u[0][1], u_ext: u[1][2],
+    xL: -dx,
+    xR: dx,
+    yT: (1 - theta_t) * dy,
+    yB: -(1 - theta_T) * dy,
+    x_ext: dx,
+    y_ext: dy,
+    uL: u[-1][1],
+    uR: u[1][1],
+    uT: ut_p,
+    uB: uT_p,
+    uc: u[0][1],
+    u_ext: u[1][2],
 }
 
 s2_pts_neg = [
-    {"axis": "x", "u_m": uR_m, "u_p": uR_p,
-     "vars_m": {x: theta_R * dx, y: 0, **s2_pm_ij},
-     "vars_p": {x: -(1 - theta_R) * dx, y: 0, **s2_pp_i1j}},
-    {"axis": "y", "u_m": uT_m, "u_p": uT_p,
-     "vars_m": {x: 0, y: theta_T * dy, **s2_pm_ij},
-     "vars_p": {x: 0, y: -(1 - theta_T) * dy, **s2_pp_ij1}},
-    {"axis": "y", "u_m": ut_m, "u_p": ut_p,
-     "vars_m": {x: 0, y: -theta_t * dy, **s2_pm_ij2},
-     "vars_p": {x: 0, y: (1 - theta_t) * dy, **s2_pp_ij1}},
+    {
+        "axis": "x",
+        "u_m": uR_m,
+        "u_p": uR_p,
+        "vars_m": {x: theta_R * dx, y: 0, **s2_pm_ij},
+        "vars_p": {x: -(1 - theta_R) * dx, y: 0, **s2_pp_i1j},
+    },
+    {
+        "axis": "y",
+        "u_m": uT_m,
+        "u_p": uT_p,
+        "vars_m": {x: 0, y: theta_T * dy, **s2_pm_ij},
+        "vars_p": {x: 0, y: -(1 - theta_T) * dy, **s2_pp_ij1},
+    },
+    {
+        "axis": "y",
+        "u_m": ut_m,
+        "u_p": ut_p,
+        "vars_m": {x: 0, y: -theta_t * dy, **s2_pm_ij2},
+        "vars_p": {x: 0, y: (1 - theta_t) * dy, **s2_pp_ij1},
+    },
 ]
 
 # %%
@@ -394,30 +480,58 @@ M, Nu, d = coeff_case3(+1, points_for_eta_pos(s2_pts_neg))
 
 # %%
 s3_pm_ij = {
-    xL: -theta_L * dx, xR: dx, yT: theta_T * dy, yB: -dy,
-    x_ext: dx, y_ext: -dy,
-    uL: uL_m, uR: u[1][0], uT: uT_m, uB: u[0][-1],
-    uc: u[0][0], u_ext: u[1][-1],
+    xL: -theta_L * dx,
+    xR: dx,
+    yT: theta_T * dy,
+    yB: -dy,
+    x_ext: dx,
+    y_ext: -dy,
+    uL: uL_m,
+    uR: u[1][0],
+    uT: uT_m,
+    uB: u[0][-1],
+    uc: u[0][0],
+    u_ext: u[1][-1],
 }
 s3_pm_ij2 = s2_pm_ij2
 s3_pp_im1j = {
-    xL: -dx, xR: (1 - theta_L) * dx, yT: dy, yB: -dy,
-    x_ext: -dx, y_ext: dy,
-    uL: u[-2][0], uR: uL_p, uT: u[-1][1], uB: u[-1][-1],
-    uc: u[-1][0], u_ext: u[-2][1],
+    xL: -dx,
+    xR: (1 - theta_L) * dx,
+    yT: dy,
+    yB: -dy,
+    x_ext: -dx,
+    y_ext: dy,
+    uL: u[-2][0],
+    uR: uL_p,
+    uT: u[-1][1],
+    uB: u[-1][-1],
+    uc: u[-1][0],
+    u_ext: u[-2][1],
 }
 s3_pp_ij1 = s2_pp_ij1
 
 s3_pts_neg = [
-    {"axis": "y", "u_m": uT_m, "u_p": uT_p,
-     "vars_m": {x: 0, y: theta_T * dy, **s3_pm_ij},
-     "vars_p": {x: 0, y: -(1 - theta_T) * dy, **s3_pp_ij1}},
-    {"axis": "x", "u_m": uL_m, "u_p": uL_p,
-     "vars_m": {x: -theta_L * dx, y: 0, **s3_pm_ij},
-     "vars_p": {x: (1 - theta_L) * dx, y: 0, **s3_pp_im1j}},
-    {"axis": "y", "u_m": ut_m, "u_p": ut_p,
-     "vars_m": {x: 0, y: -theta_t * dy, **s3_pm_ij2},
-     "vars_p": {x: 0, y: (1 - theta_t) * dy, **s3_pp_ij1}},
+    {
+        "axis": "y",
+        "u_m": uT_m,
+        "u_p": uT_p,
+        "vars_m": {x: 0, y: theta_T * dy, **s3_pm_ij},
+        "vars_p": {x: 0, y: -(1 - theta_T) * dy, **s3_pp_ij1},
+    },
+    {
+        "axis": "x",
+        "u_m": uL_m,
+        "u_p": uL_p,
+        "vars_m": {x: -theta_L * dx, y: 0, **s3_pm_ij},
+        "vars_p": {x: (1 - theta_L) * dx, y: 0, **s3_pp_im1j},
+    },
+    {
+        "axis": "y",
+        "u_m": ut_m,
+        "u_p": ut_p,
+        "vars_m": {x: 0, y: -theta_t * dy, **s3_pm_ij2},
+        "vars_p": {x: 0, y: (1 - theta_t) * dy, **s3_pp_ij1},
+    },
 ]
 
 # %%
@@ -443,34 +557,70 @@ M, Nu, d = coeff_case3(+1, points_for_eta_pos(s3_pts_neg))
 # %%
 s4_pm_ij = s3_pm_ij
 s4_pm_im2j = {
-    xL: -dx, xR: theta_l * dx, yT: dy, yB: -dy,
-    x_ext: -dx, y_ext: -dy,
-    uL: u[-3][0], uR: ul_m, uT: u[-2][1], uB: u[-2][-1],
-    uc: u[-2][0], u_ext: u[-3][-1],
+    xL: -dx,
+    xR: theta_l * dx,
+    yT: dy,
+    yB: -dy,
+    x_ext: -dx,
+    y_ext: -dy,
+    uL: u[-3][0],
+    uR: ul_m,
+    uT: u[-2][1],
+    uB: u[-2][-1],
+    uc: u[-2][0],
+    u_ext: u[-3][-1],
 }
 s4_pp_im1j = {
-    xL: -(1 - theta_l) * dx, xR: (1 - theta_L) * dx, yT: dy, yB: -dy,
-    x_ext: -dx, y_ext: dy,
-    uL: ul_p, uR: uL_p, uT: u[-1][1], uB: u[-1][-1],
-    uc: u[-1][0], u_ext: u[-2][1],
+    xL: -(1 - theta_l) * dx,
+    xR: (1 - theta_L) * dx,
+    yT: dy,
+    yB: -dy,
+    x_ext: -dx,
+    y_ext: dy,
+    uL: ul_p,
+    uR: uL_p,
+    uT: u[-1][1],
+    uB: u[-1][-1],
+    uc: u[-1][0],
+    u_ext: u[-2][1],
 }
 s4_pp_ij1 = {
-    xL: -dx, xR: dx, yT: dy, yB: -(1 - theta_T) * dy,
-    x_ext: -dx, y_ext: dy,
-    uL: u[-1][1], uR: u[1][1], uT: u[0][2], uB: uT_p,
-    uc: u[0][1], u_ext: u[-1][2],
+    xL: -dx,
+    xR: dx,
+    yT: dy,
+    yB: -(1 - theta_T) * dy,
+    x_ext: -dx,
+    y_ext: dy,
+    uL: u[-1][1],
+    uR: u[1][1],
+    uT: u[0][2],
+    uB: uT_p,
+    uc: u[0][1],
+    u_ext: u[-1][2],
 }
 
 s4_pts_neg = [
-    {"axis": "y", "u_m": uT_m, "u_p": uT_p,
-     "vars_m": {x: 0, y: theta_T * dy, **s4_pm_ij},
-     "vars_p": {x: 0, y: -(1 - theta_T) * dy, **s4_pp_ij1}},
-    {"axis": "x", "u_m": uL_m, "u_p": uL_p,
-     "vars_m": {x: -theta_L * dx, y: 0, **s4_pm_ij},
-     "vars_p": {x: (1 - theta_L) * dx, y: 0, **s4_pp_im1j}},
-    {"axis": "x", "u_m": ul_m, "u_p": ul_p,
-     "vars_m": {x: theta_l * dx, y: 0, **s4_pm_im2j},
-     "vars_p": {x: -(1 - theta_l) * dx, y: 0, **s4_pp_im1j}},
+    {
+        "axis": "y",
+        "u_m": uT_m,
+        "u_p": uT_p,
+        "vars_m": {x: 0, y: theta_T * dy, **s4_pm_ij},
+        "vars_p": {x: 0, y: -(1 - theta_T) * dy, **s4_pp_ij1},
+    },
+    {
+        "axis": "x",
+        "u_m": uL_m,
+        "u_p": uL_p,
+        "vars_m": {x: -theta_L * dx, y: 0, **s4_pm_ij},
+        "vars_p": {x: (1 - theta_L) * dx, y: 0, **s4_pp_im1j},
+    },
+    {
+        "axis": "x",
+        "u_m": ul_m,
+        "u_p": ul_p,
+        "vars_m": {x: theta_l * dx, y: 0, **s4_pm_im2j},
+        "vars_p": {x: -(1 - theta_l) * dx, y: 0, **s4_pp_im1j},
+    },
 ]
 
 # %%
@@ -490,35 +640,71 @@ M, Nu, d = coeff_case3(+1, points_for_eta_pos(s4_pts_neg))
 
 # %%
 s5_pm_ij = {
-    xL: -theta_L * dx, xR: dx, yT: dy, yB: -theta_B * dy,
-    x_ext: dx, y_ext: dy,
-    uL: uL_m, uR: u[1][0], uT: u[0][1], uB: uB_m,
-    uc: u[0][0], u_ext: u[1][1],
+    xL: -theta_L * dx,
+    xR: dx,
+    yT: dy,
+    yB: -theta_B * dy,
+    x_ext: dx,
+    y_ext: dy,
+    uL: uL_m,
+    uR: u[1][0],
+    uT: u[0][1],
+    uB: uB_m,
+    uc: u[0][0],
+    u_ext: u[1][1],
 }
 s5_pm_im2j = s4_pm_im2j
 s5_pp_im1j = {
-    xL: -(1 - theta_l) * dx, xR: (1 - theta_L) * dx, yT: dy, yB: -dy,
-    x_ext: -dx, y_ext: -dy,
-    uL: ul_p, uR: uL_p, uT: u[-1][1], uB: u[-1][-1],
-    uc: u[-1][0], u_ext: u[-2][-1],
+    xL: -(1 - theta_l) * dx,
+    xR: (1 - theta_L) * dx,
+    yT: dy,
+    yB: -dy,
+    x_ext: -dx,
+    y_ext: -dy,
+    uL: ul_p,
+    uR: uL_p,
+    uT: u[-1][1],
+    uB: u[-1][-1],
+    uc: u[-1][0],
+    u_ext: u[-2][-1],
 }
 s5_pp_ijm1 = {
-    xL: -dx, xR: dx, yT: (1 - theta_B) * dy, yB: -dy,
-    x_ext: -dx, y_ext: -dy,
-    uL: u[-1][-1], uR: u[1][-1], uT: uB_p, uB: u[0][-2],
-    uc: u[0][-1], u_ext: u[-1][-2],
+    xL: -dx,
+    xR: dx,
+    yT: (1 - theta_B) * dy,
+    yB: -dy,
+    x_ext: -dx,
+    y_ext: -dy,
+    uL: u[-1][-1],
+    uR: u[1][-1],
+    uT: uB_p,
+    uB: u[0][-2],
+    uc: u[0][-1],
+    u_ext: u[-1][-2],
 }
 
 s5_pts_neg = [
-    {"axis": "x", "u_m": uL_m, "u_p": uL_p,
-     "vars_m": {x: -theta_L * dx, y: 0, **s5_pm_ij},
-     "vars_p": {x: (1 - theta_L) * dx, y: 0, **s5_pp_im1j}},
-    {"axis": "y", "u_m": uB_m, "u_p": uB_p,
-     "vars_m": {x: 0, y: -theta_B * dy, **s5_pm_ij},
-     "vars_p": {x: 0, y: (1 - theta_B) * dy, **s5_pp_ijm1}},
-    {"axis": "x", "u_m": ul_m, "u_p": ul_p,
-     "vars_m": {x: theta_l * dx, y: 0, **s5_pm_im2j},
-     "vars_p": {x: -(1 - theta_l) * dx, y: 0, **s5_pp_im1j}},
+    {
+        "axis": "x",
+        "u_m": uL_m,
+        "u_p": uL_p,
+        "vars_m": {x: -theta_L * dx, y: 0, **s5_pm_ij},
+        "vars_p": {x: (1 - theta_L) * dx, y: 0, **s5_pp_im1j},
+    },
+    {
+        "axis": "y",
+        "u_m": uB_m,
+        "u_p": uB_p,
+        "vars_m": {x: 0, y: -theta_B * dy, **s5_pm_ij},
+        "vars_p": {x: 0, y: (1 - theta_B) * dy, **s5_pp_ijm1},
+    },
+    {
+        "axis": "x",
+        "u_m": ul_m,
+        "u_p": ul_p,
+        "vars_m": {x: theta_l * dx, y: 0, **s5_pm_im2j},
+        "vars_p": {x: -(1 - theta_l) * dx, y: 0, **s5_pp_im1j},
+    },
 ]
 
 # %%
@@ -539,34 +725,70 @@ M, Nu, d = coeff_case3(+1, points_for_eta_pos(s5_pts_neg))
 # %%
 s6_pm_ij = s5_pm_ij
 s6_pm_ijm2 = {
-    xL: -dx, xR: dx, yT: theta_b * dy, yB: -dy,
-    x_ext: -dx, y_ext: -dy,
-    uL: u[-1][-2], uR: u[1][-2], uT: ub_m, uB: u[0][-3],
-    uc: u[0][-2], u_ext: u[-1][-3],
+    xL: -dx,
+    xR: dx,
+    yT: theta_b * dy,
+    yB: -dy,
+    x_ext: -dx,
+    y_ext: -dy,
+    uL: u[-1][-2],
+    uR: u[1][-2],
+    uT: ub_m,
+    uB: u[0][-3],
+    uc: u[0][-2],
+    u_ext: u[-1][-3],
 }
 s6_pp_im1j = {
-    xL: -dx, xR: (1 - theta_L) * dx, yT: dy, yB: -dy,
-    x_ext: -dx, y_ext: -dy,
-    uL: u[-2][0], uR: uL_p, uT: u[-1][1], uB: u[-1][-1],
-    uc: u[-1][0], u_ext: u[-2][-1],
+    xL: -dx,
+    xR: (1 - theta_L) * dx,
+    yT: dy,
+    yB: -dy,
+    x_ext: -dx,
+    y_ext: -dy,
+    uL: u[-2][0],
+    uR: uL_p,
+    uT: u[-1][1],
+    uB: u[-1][-1],
+    uc: u[-1][0],
+    u_ext: u[-2][-1],
 }
 s6_pp_ijm1 = {
-    xL: -dx, xR: dx, yT: (1 - theta_B) * dy, yB: -(1 - theta_b) * dy,
-    x_ext: -dx, y_ext: -dy,
-    uL: u[-1][-1], uR: u[1][-1], uT: uB_p, uB: ub_p,
-    uc: u[0][-1], u_ext: u[-1][-2],
+    xL: -dx,
+    xR: dx,
+    yT: (1 - theta_B) * dy,
+    yB: -(1 - theta_b) * dy,
+    x_ext: -dx,
+    y_ext: -dy,
+    uL: u[-1][-1],
+    uR: u[1][-1],
+    uT: uB_p,
+    uB: ub_p,
+    uc: u[0][-1],
+    u_ext: u[-1][-2],
 }
 
 s6_pts_neg = [
-    {"axis": "x", "u_m": uL_m, "u_p": uL_p,
-     "vars_m": {x: -theta_L * dx, y: 0, **s6_pm_ij},
-     "vars_p": {x: (1 - theta_L) * dx, y: 0, **s6_pp_im1j}},
-    {"axis": "y", "u_m": uB_m, "u_p": uB_p,
-     "vars_m": {x: 0, y: -theta_B * dy, **s6_pm_ij},
-     "vars_p": {x: 0, y: (1 - theta_B) * dy, **s6_pp_ijm1}},
-    {"axis": "y", "u_m": ub_m, "u_p": ub_p,
-     "vars_m": {x: 0, y: theta_b * dy, **s6_pm_ijm2},
-     "vars_p": {x: 0, y: -(1 - theta_b) * dy, **s6_pp_ijm1}},
+    {
+        "axis": "x",
+        "u_m": uL_m,
+        "u_p": uL_p,
+        "vars_m": {x: -theta_L * dx, y: 0, **s6_pm_ij},
+        "vars_p": {x: (1 - theta_L) * dx, y: 0, **s6_pp_im1j},
+    },
+    {
+        "axis": "y",
+        "u_m": uB_m,
+        "u_p": uB_p,
+        "vars_m": {x: 0, y: -theta_B * dy, **s6_pm_ij},
+        "vars_p": {x: 0, y: (1 - theta_B) * dy, **s6_pp_ijm1},
+    },
+    {
+        "axis": "y",
+        "u_m": ub_m,
+        "u_p": ub_p,
+        "vars_m": {x: 0, y: theta_b * dy, **s6_pm_ijm2},
+        "vars_p": {x: 0, y: -(1 - theta_b) * dy, **s6_pp_ijm1},
+    },
 ]
 
 # %%
@@ -586,30 +808,58 @@ M, Nu, d = coeff_case3(+1, points_for_eta_pos(s6_pts_neg))
 
 # %%
 s7_pm_ij = {
-    xL: -dx, xR: theta_R * dx, yT: dy, yB: -theta_B * dy,
-    x_ext: -dx, y_ext: dy,
-    uL: u[-1][0], uR: uR_m, uT: u[0][1], uB: uB_m,
-    uc: u[0][0], u_ext: u[-1][1],
+    xL: -dx,
+    xR: theta_R * dx,
+    yT: dy,
+    yB: -theta_B * dy,
+    x_ext: -dx,
+    y_ext: dy,
+    uL: u[-1][0],
+    uR: uR_m,
+    uT: u[0][1],
+    uB: uB_m,
+    uc: u[0][0],
+    u_ext: u[-1][1],
 }
 s7_pm_ijm2 = s6_pm_ijm2
 s7_pp_i1j = {
-    xL: -(1 - theta_R) * dx, xR: dx, yT: dy, yB: -dy,
-    x_ext: dx, y_ext: -dy,
-    uL: uR_p, uR: u[2][0], uT: u[1][1], uB: u[1][-1],
-    uc: u[1][0], u_ext: u[2][-1],
+    xL: -(1 - theta_R) * dx,
+    xR: dx,
+    yT: dy,
+    yB: -dy,
+    x_ext: dx,
+    y_ext: -dy,
+    uL: uR_p,
+    uR: u[2][0],
+    uT: u[1][1],
+    uB: u[1][-1],
+    uc: u[1][0],
+    u_ext: u[2][-1],
 }
 s7_pp_ijm1 = s6_pp_ijm1
 
 s7_pts_neg = [
-    {"axis": "y", "u_m": uB_m, "u_p": uB_p,
-     "vars_m": {x: 0, y: -theta_B * dy, **s7_pm_ij},
-     "vars_p": {x: 0, y: (1 - theta_B) * dy, **s7_pp_ijm1}},
-    {"axis": "x", "u_m": uR_m, "u_p": uR_p,
-     "vars_m": {x: theta_R * dx, y: 0, **s7_pm_ij},
-     "vars_p": {x: -(1 - theta_R) * dx, y: 0, **s7_pp_i1j}},
-    {"axis": "y", "u_m": ub_m, "u_p": ub_p,
-     "vars_m": {x: 0, y: theta_b * dy, **s7_pm_ijm2},
-     "vars_p": {x: 0, y: -(1 - theta_b) * dy, **s7_pp_ijm1}},
+    {
+        "axis": "y",
+        "u_m": uB_m,
+        "u_p": uB_p,
+        "vars_m": {x: 0, y: -theta_B * dy, **s7_pm_ij},
+        "vars_p": {x: 0, y: (1 - theta_B) * dy, **s7_pp_ijm1},
+    },
+    {
+        "axis": "x",
+        "u_m": uR_m,
+        "u_p": uR_p,
+        "vars_m": {x: theta_R * dx, y: 0, **s7_pm_ij},
+        "vars_p": {x: -(1 - theta_R) * dx, y: 0, **s7_pp_i1j},
+    },
+    {
+        "axis": "y",
+        "u_m": ub_m,
+        "u_p": ub_p,
+        "vars_m": {x: 0, y: theta_b * dy, **s7_pm_ijm2},
+        "vars_p": {x: 0, y: -(1 - theta_b) * dy, **s7_pp_ijm1},
+    },
 ]
 
 # %%
@@ -631,28 +881,56 @@ M, Nu, d = coeff_case3(+1, points_for_eta_pos(s7_pts_neg))
 s8_pm_ij = s7_pm_ij
 s8_pm_i2j = s1_pm_i2j
 s8_pp_i1j = {
-    xL: -(1 - theta_R) * dx, xR: (1 - theta_r) * dx, yT: dy, yB: -dy,
-    x_ext: dx, y_ext: -dy,
-    uL: uR_p, uR: ur_p, uT: u[1][1], uB: u[1][-1],
-    uc: u[1][0], u_ext: u[2][-1],
+    xL: -(1 - theta_R) * dx,
+    xR: (1 - theta_r) * dx,
+    yT: dy,
+    yB: -dy,
+    x_ext: dx,
+    y_ext: -dy,
+    uL: uR_p,
+    uR: ur_p,
+    uT: u[1][1],
+    uB: u[1][-1],
+    uc: u[1][0],
+    u_ext: u[2][-1],
 }
 s8_pp_ijm1 = {
-    xL: -dx, xR: dx, yT: (1 - theta_B) * dy, yB: -dy,
-    x_ext: dx, y_ext: -dy,
-    uL: u[-1][-1], uR: u[1][-1], uT: uB_p, uB: u[0][-2],
-    uc: u[0][-1], u_ext: u[1][-2],
+    xL: -dx,
+    xR: dx,
+    yT: (1 - theta_B) * dy,
+    yB: -dy,
+    x_ext: dx,
+    y_ext: -dy,
+    uL: u[-1][-1],
+    uR: u[1][-1],
+    uT: uB_p,
+    uB: u[0][-2],
+    uc: u[0][-1],
+    u_ext: u[1][-2],
 }
 
 s8_pts_neg = [
-    {"axis": "y", "u_m": uB_m, "u_p": uB_p,
-     "vars_m": {x: 0, y: -theta_B * dy, **s8_pm_ij},
-     "vars_p": {x: 0, y: (1 - theta_B) * dy, **s8_pp_ijm1}},
-    {"axis": "x", "u_m": uR_m, "u_p": uR_p,
-     "vars_m": {x: theta_R * dx, y: 0, **s8_pm_ij},
-     "vars_p": {x: -(1 - theta_R) * dx, y: 0, **s8_pp_i1j}},
-    {"axis": "x", "u_m": ur_m, "u_p": ur_p,
-     "vars_m": {x: -theta_r * dx, y: 0, **s8_pm_i2j},
-     "vars_p": {x: (1 - theta_r) * dx, y: 0, **s8_pp_i1j}},
+    {
+        "axis": "y",
+        "u_m": uB_m,
+        "u_p": uB_p,
+        "vars_m": {x: 0, y: -theta_B * dy, **s8_pm_ij},
+        "vars_p": {x: 0, y: (1 - theta_B) * dy, **s8_pp_ijm1},
+    },
+    {
+        "axis": "x",
+        "u_m": uR_m,
+        "u_p": uR_p,
+        "vars_m": {x: theta_R * dx, y: 0, **s8_pm_ij},
+        "vars_p": {x: -(1 - theta_R) * dx, y: 0, **s8_pp_i1j},
+    },
+    {
+        "axis": "x",
+        "u_m": ur_m,
+        "u_p": ur_p,
+        "vars_m": {x: -theta_r * dx, y: 0, **s8_pm_i2j},
+        "vars_p": {x: (1 - theta_r) * dx, y: 0, **s8_pp_i1j},
+    },
 ]
 
 # %%

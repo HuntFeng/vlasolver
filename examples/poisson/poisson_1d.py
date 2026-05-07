@@ -17,7 +17,7 @@ class PoissonProblem:
         self.a = np.zeros_like(self.x)  # [u]
         self.b = np.zeros_like(self.x)  # [beta u_x]
         self.u_exact = np.sin(np.pi * self.x)
-        self.f = -np.pi**2 * np.sin(np.pi * self.x)
+        self.f = -(np.pi**2) * np.sin(np.pi * self.x)
 
     def surface(self, x: float):
         return x - self.xI

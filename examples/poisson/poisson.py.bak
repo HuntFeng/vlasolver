@@ -4,6 +4,7 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 EPS = 0.5
 
 # Shared zero function — all constant-zero matrix entries.
@@ -113,13 +114,14 @@ class Direction(enum.IntFlag):
     L = 1 << 2  # 0100
     B = 1 << 3  # 1000
 
-def dirsign(direction: int, is_extra=False):
+def dirsign(direction: int):
     if direction == Direction.R or direction == Direction.T:
-        return 1.0 if not is_extra else -1.0
+        return 1.0
     elif direction == Direction.L or direction == direction.B:
-        return -1.0 if not is_extra else 1.0
+        return -1.0
     else:
         raise ValueError("Invalid direction for dirsign", direction)
+
 
 _build_dispatch_tables()
 
@@ -786,14 +788,14 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
     ]
     eps_jump = [eps_p[d] - eps_m[d] for d in range(2)]
 
-    # normal evaluated at x and y
+    # normal evaluated at x_R and x_y
     n1_I = np.array([interp(dir[d], theta[d], i, j, n1) for d in range(2)])
     n2_I = np.array([interp(dir[d], theta[d], i, j, n2) for d in range(2)])
 
-    # a_tau at x and y
+    # a_yau at x and y
     a_tau_I = [interp(dir[d], theta[d], i, j, a_tau) for d in range(2)]
 
-    # jump conditions at x and y
+    # jump conditions at x_x and x_y
     a_I = [interp(dir[d], theta[d], i, j, a) for d in range(2)]
     b_I = [interp(dir[d], theta[d], i, j, b) for d in range(2)]
 
@@ -929,43 +931,61 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
 #   8. R|B with extra xr   on segment [(i+1,j), (i+2,j)]
 
 
-def case3_extra_dir(direction: int, i: int, j: int) -> int:
+def case3_extra_dir(direction: int, i: int, j: int) -> int | None:
+    """Detect the 'extra' direction that promotes a case-2 stencil to case 3.
+
+    Returns one of Direction.{R, T, L, B} if a single extra outer-segment cut
+    is found consistent with the corner given by `direction` (a 2-bit value
+    R|T / L|T / R|B / L|B); returns None if no such extra cut exists (i.e.
+    the cell is plain case 2). Raises if both possible outer segments are
+    cut (that would be a higher-order case not handled here).
+    """
     x_, y_ = center(i, j)
-    extra = 0
-    if (Direction.R & direction) and (surface(x_ + dx, y_) * surface(x_ + 2 * dx, y_) < 0):
-        extra |= Direction.R
-    if (Direction.T & direction) and ( surface(x_, y_ + dy) * surface(x_, y_ + 2 * dy) < 0) :
-        extra |= Direction.T
-    if (Direction.L & direction) and ( surface(x_ - dx, y_) * surface(x_ - 2 * dx, y_) < 0) :
-        extra |= Direction.L
-    if (Direction.B & direction) and ( surface(x_, y_ - dy) * surface(x_, y_ - 2 * dy) < 0) :
-        extra |= Direction.B
+
+    extras = []
+    # Probe only the two outer segments adjacent to the case-2 corner.
+    if direction == (Direction.R | Direction.T):
+        if surface(x_ + dx, y_) * surface(x_ + 2 * dx, y_) < 0:
+            extras.append(Direction.R)
+        if surface(x_, y_ + dy) * surface(x_, y_ + 2 * dy) < 0:
+            extras.append(Direction.T)
+    elif direction == (Direction.L | Direction.T):
+        if surface(x_, y_ + dy) * surface(x_, y_ + 2 * dy) < 0:
+            extras.append(Direction.T)
+        if surface(x_ - dx, y_) * surface(x_ - 2 * dx, y_) < 0:
+            extras.append(Direction.L)
+    elif direction == (Direction.L | Direction.B):
+        if surface(x_ - dx, y_) * surface(x_ - 2 * dx, y_) < 0:
+            extras.append(Direction.L)
+        if surface(x_, y_ - dy) * surface(x_, y_ - 2 * dy) < 0:
+            extras.append(Direction.B)
+    elif direction == (Direction.R | Direction.B):
+        if surface(x_, y_ - dy) * surface(x_, y_ - 2 * dy) < 0:
+            extras.append(Direction.B)
+        if surface(x_ + dx, y_) * surface(x_ + 2 * dx, y_) < 0:
+            extras.append(Direction.R)
+
+    if len(extras) == 0:
+        return None
+    if len(extras) > 1:
+        raise NotImplementedError(
+            f"Two extra outer-segment cuts at ({i},{j}); beyond case 3."
+        )
+
+    # Case 3's local stencil reaches +/- 3 grid cells. If we're too close to
+    # the Dirichlet boundary to access the full stencil, fall back to plain
+    # case 2 (drop the outer-segment interface). This loses one order of
+    # accuracy locally but only at the boundary rim.
+    extra = extras[0]
+    if extra == Direction.R and i + 3 >= nx:
+        return None
+    if extra == Direction.L and i - 3 < 0:
+        return None
+    if extra == Direction.T and j + 3 >= ny:
+        return None
+    if extra == Direction.B and j - 3 < 0:
+        return None
     return extra
-    # extras = []
-    # if direction == (Direction.R | Direction.T):
-    #     if surface(x_ + dx, y_) * surface(x_ + 2 * dx, y_) < 0:
-    #         extras.append(Direction.R)
-    #     if surface(x_, y_ + dy) * surface(x_, y_ + 2 * dy) < 0:
-    #         extras.append(Direction.T)
-    # elif direction == (Direction.L | Direction.T):
-    #     if surface(x_, y_ + dy) * surface(x_, y_ + 2 * dy) < 0:
-    #         extras.append(Direction.T)
-    #     if surface(x_ - dx, y_) * surface(x_ - 2 * dx, y_) < 0:
-    #         extras.append(Direction.L)
-    # elif direction == (Direction.L | Direction.B):
-    #     if surface(x_ - dx, y_) * surface(x_ - 2 * dx, y_) < 0:
-    #         extras.append(Direction.L)
-    #     if surface(x_, y_ - dy) * surface(x_, y_ - 2 * dy) < 0:
-    #         extras.append(Direction.B)
-    # elif direction == (Direction.R | Direction.B):
-    #     if surface(x_, y_ - dy) * surface(x_, y_ - 2 * dy) < 0:
-    #         extras.append(Direction.B)
-    #     if surface(x_ + dx, y_) * surface(x_ + 2 * dx, y_) < 0:
-    #         extras.append(Direction.R)
-    # for extra in extras.copy():
-    #     if (extra == Direction.R and i + 3 >= nx) or (extra == Direction.L and i - 3 < 0) or (extra == Direction.T and j + 3 >= ny) or (extra == Direction.B and j - 3 < 0):
-    #         extras.pop()
-    # return extras
 
 
 def _case3_geometry(direction: int, extra: int, i: int, j: int):
@@ -1097,177 +1117,100 @@ def _case3_geometry(direction: int, extra: int, i: int, j: int):
 
 
 def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
-    x, y = center(i, j)
-    eta = surface(x, y)
-    row_idx = index(i, j)
+    """Add the case-3 row contributions for grid point (i,j).
 
-    offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
+    `direction` is the (2-bit) corner type R|T / L|T / R|B / L|B, and
+    `extra` is one of Direction.{R, T, L, B} naming the outer-segment
+    interface (xr / xt / xl / xb). The eight (direction, extra) combinations
+    map 1-to-1 to the eight sub-cases in derivation_case3.ju.py:
 
-    theta_r = compute_theta(Direction.R, i, j)
-    theta_t = compute_theta(Direction.T, i, j)
-    theta_l = compute_theta(Direction.L, i, j)
-    theta_b = compute_theta(Direction.B, i, j)
+        (R|T, R) -> sub-case 1     (R|T, T) -> sub-case 2
+        (L|T, T) -> sub-case 3     (L|T, L) -> sub-case 4
+        (L|B, L) -> sub-case 5     (L|B, B) -> sub-case 6
+        (R|B, B) -> sub-case 7     (R|B, R) -> sub-case 8
 
-    theta_rr = theta_tt = theta_ll = theta_bb = 0.0
-    if Direction.R & extra:
-        theta_rr = compute_theta(Direction.R, i + 1, j)  # within [(i+1,j),(i+2,j)]
-    if Direction.T & extra:
-        theta_tt = compute_theta(Direction.T, i, j + 1)
-    if Direction.L & extra:
-        theta_ll = compute_theta(Direction.L, i - 1, j)
-    if Direction.B & extra:
-        theta_bb = compute_theta(Direction.B, i, j - 1)
+    The 3x3 system is M [u_*1, u_*2, u_*3]^T = N u_stencil + d, where the
+    three unknowns are the interface ghost values at the two corner points
+    (xR/xT/xL/xB) and the one extra point (xr/xt/xl/xb). The exact
+    M / N / d for each sub-case must be filled in from the symbolic
+    derivation in derivation_case3.ju.py.
+    """
+    x_, y_ = center(i, j)
+    geom = _case3_geometry(direction, extra, i, j)
+    eta = geom["eta"]
 
-    x_r = x + theta_r * dx
-    x_l = x - theta_l * dx
-    y_t = y + theta_t * dy
-    y_b = y - theta_b * dy
-
-    eps_r = permittivity(x + theta_r * dx / 2, y)
-    eps_l = permittivity(x - theta_l * dx / 2, y)
-    eps_t = permittivity(x, y + theta_t * dy / 2)
-    eps_b = permittivity(x, y - theta_b * dy / 2)
-
-    # always put the extra direction last in the list for consistent handling below
-    s = [dirsign(d) for d in direction] + [dirsign(extra, is_extra=True)]
-    # algebraic [eps*u_x] and [eps*u_y]
-    if (direction == Direction.T | Direction.R) and (extra == Direction.R):
-        dir = [Direction.T, Direction.R, Direction.R]
-        theta = [theta_t, theta_r, theta_rr]
-        eps = [eps_t, eps_r, 0.0] # last one not used
-        eps_p = [
-            permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
-            permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
-            permittivity(x+2*dx + s[2] * (theta[2] + EPS) * dx, y) ]
-        eps_m = [
-            permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
-            permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
-            permittivity(x+2*dx + s[2] * (theta[2] - EPS) * dx, y) ]
-    elif (direction == Direction.T | Direction.R) and (extra == Direction.T):
-        dir = [Direction.R, Direction.T, Direction.T]
-        theta = [theta_r, theta_t, theta_tt]
-        eps = [eps_r, eps_t, 0.0]
-        eps_p = [
-            permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
-            permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
-            permittivity(x, y+2*dy + s[2] * (theta[2] + EPS) * dy) ]
-        eps_m = [
-            permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
-            permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
-            permittivity(x, y+2*dy + s[2] * (theta[2] - EPS) * dy) ]
-    elif (direction == Direction.T | Direction.L) and (extra == Direction.T):
-        dir = [Direction.L, Direction.T, Direction.T]
-        theta = [theta_l, theta_t, theta_tt]
-        eps = [eps_l, eps_t, 0.0]
-        eps_p = [
-            permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
-            permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
-            permittivity(x, y+2*dy + s[2] * (theta[2] + EPS) * dy) ]
-        eps_m = [
-            permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
-            permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
-            permittivity(x, y+2*dy + s[2] * (theta[2] - EPS) * dy) ]
-    elif (direction == Direction.T | Direction.L) and (extra == Direction.L):
-        dir = [Direction.T, Direction.L, Direction.L]
-        theta = [theta_t, theta_l, theta_ll]
-        eps = [eps_t, eps_l, 0.0]
-        eps_p = [
-            permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
-            permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
-            permittivity(x-2*dx + s[2] * (theta[2] + EPS) * dx, y) ]
-        eps_m = [
-            permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
-            permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
-            permittivity(x-2*dx + s[2] * (theta[2] - EPS) * dx, y) ]
-    elif (direction == Direction.L | Direction.B) and (extra == Direction.L):
-        dir = [Direction.B, Direction.L, Direction.L]
-        theta = [theta_b, theta_l, theta_ll]
-        eps = [eps_b, eps_l, 0.0]
-        eps_p = [
-            permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
-            permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
-            permittivity(x-2*dx + s[2] * (theta[2] + EPS) * dx, y) ]
-        eps_m = [
-            permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
-            permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
-            permittivity(x-2*dx + s[2] * (theta[2] - EPS) * dx, y) ]
-    elif (direction == Direction.L | Direction.B) and (extra == Direction.B):
-        dir = [Direction.L, Direction.B, Direction.B]
-        theta = [theta_l, theta_b, theta_bb]
-        eps = [eps_l, eps_b, 0.0]
-        eps_p = [
-            permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
-            permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
-            permittivity(x, y-2*dy + s[2] * (theta[2] + EPS) * dy) ]
-        eps_m = [
-            permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
-            permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
-            permittivity(x, y-2*dy + s[2] * (theta[2] - EPS) * dy) ]
-    elif (direction == Direction.R | Direction.B) and (extra == Direction.B):
-        dir = [Direction.R, Direction.B, Direction.B]
-        theta = [theta_r, theta_b, theta_bb]
-        eps = [eps_r, eps_b, 0.0]
-        eps_p = [
-            permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
-            permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
-            permittivity(x, y-2*dy + s[2] * (theta[2] + EPS) * dy) ]
-        eps_m = [
-            permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
-            permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
-            permittivity(x, y-2*dy + s[2] * (theta[2] - EPS) * dy) ]
-    elif (direction == Direction.R | Direction.B) and (extra == Direction.R):
-        dir = [Direction.B, Direction.R, Direction.R]
-        theta = [theta_b, theta_r, theta_rr]
-        eps = [eps_b, eps_r, 0.0]
-        eps_p = [
-            permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
-            permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
-            permittivity(x+2*dx + s[2] * (theta[2] + EPS) * dx, y) ]
-        eps_m = [
-            permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
-            permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
-            permittivity(x+2*dx + s[2] * (theta[2] - EPS) * dx, y) ]
-    else:
-        raise ValueError("Invalid direction/extra combination for case 3", direction, extra)
-    
-    # last element is not used, but compute for consistency
-    eps_jump = [eps_p[d] - eps_m[d] for d in range(3)]
-    n1_I = [interp(dir[d], theta[d], i, j, n1) for d in range(3)]
-    n2_I = [interp(dir[d], theta[d], i, j, n2) for d in range(3)]
-    a_tau_I = [interp(dir[d], theta[d], i, j, a_tau) for d in range(3)]
-    a_I = [interp(dir[d], theta[d], i, j, a) for d in range(3)]
-    b_I = [interp(dir[d], theta[d], i, j, b) for d in range(3)]
-
-    # algebraic [eps*u_x] and [eps*u_y] 
-    B = [
-        s_eta
-        * s[d]
-        * (
-            eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
-            + eps_m[d] * (2 * theta[d] + 1) / (theta[d] * (theta[d] + 1))
+    # Identify which sub-case (1-8) this maps to.
+    sub_case_table = {
+        (Direction.R | Direction.T, Direction.R): 1,
+        (Direction.R | Direction.T, Direction.T): 2,
+        (Direction.L | Direction.T, Direction.T): 3,
+        (Direction.L | Direction.T, Direction.L): 4,
+        (Direction.L | Direction.B, Direction.L): 5,
+        (Direction.L | Direction.B, Direction.B): 6,
+        (Direction.R | Direction.B, Direction.B): 7,
+        (Direction.R | Direction.B, Direction.R): 8,
+    }
+    sub_case = sub_case_table.get((int(direction), int(extra)))
+    if sub_case is None:
+        raise ValueError(
+            f"Invalid (direction, extra) for case 3: ({direction!r}, {extra!r})"
         )
-        for d in range(3)
-    ]
-    C = [
-        -s_eta
-        * s[d]
-        * np.array(
-            [
-                -eps_m[d] * theta[d] / (1 + theta[d]),
-                eps_m[d] * (1 + theta[d]) / theta[d],
-                eps_p[d] * (2 - theta[d]) / (1 - theta[d]),
-                -eps_p[d] * (1 - theta[d]) / (2 - theta[d]),
-            ]
-        )
-        for d in range(3)
-    ]
-    a_term = [
-        -s[d] * a_I[d] * eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
-        for d in range(3)
-    ]
-    
-    
 
+    # The Shortley-Weller geometry on the case-3 stencil is the same as case 2
+    # at the corner — only the local (M, N, d) for the three interface ghosts
+    # changes. theta's for the corner-side eps factors:
+    theta_R = geom["theta_R"]
+    theta_T = geom["theta_T"]
+    theta_L = geom["theta_L"]
+    theta_B = geom["theta_B"]
+    bot_x = (theta_R + theta_L) / 2 * dx**2
+    bot_y = (theta_T + theta_B) / 2 * dy**2
+
+    # eps at the four half-points (used by the Shortley-Weller assembly later)
+    eps_r = permittivity(x_ + theta_R * dx / 2, y_)
+    eps_l = permittivity(x_ - theta_L * dx / 2, y_)
+    eps_t = permittivity(x_, y_ + theta_T * dy / 2)
+    eps_b = permittivity(x_, y_ - theta_B * dy / 2)
+
+    M_inv_d, M_inv_N, all_offsets = _solve_case3_local(
+        sub_case, eta, direction, extra, geom
+    )
+
+    sw_idx = _CASE3_SW_INDEX[sub_case]
+    _assemble_case_n(
+        i,
+        j,
+        sw_idx,
+        M_inv_d,
+        M_inv_N,
+        all_offsets,
+        eps_r,
+        eps_l,
+        eps_t,
+        eps_b,
+        theta_R,
+        theta_T,
+        theta_L,
+        theta_B,
+        bot_x,
+        bot_y,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Case 4
+# ---------------------------------------------------------------------------
+# Case 4 has THREE corner cuts at (i,j) — three of {R, T, L, B} are crossed
+# and the fourth segment stays in the home region. There is no extra outer-
+# segment cut (otherwise we would be in a higher case). The Omega^- polynomial
+# at (i,j) carries all three corner interfaces; each Omega^+ neighbour
+# (i+/-1,j) or (i,j+/-1) gets its own single-interface polynomial.
+#
+# Sub-cases (matching examples/poisson/derivation_case4.ju.py):
+#   1. R|T|L   no B cut
+#   2. R|T|B   no L cut
+#   3. R|B|L   no T cut
+#   4. T|B|L   no R cut
 
 
 def _case4_geometry(direction: int, i: int, j: int):
@@ -1451,7 +1394,6 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
         for d in range(3)
     ]
 
-    # geometric [eps*u_x] and [eps*u_y]
     P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
     grad_tau = [
         np.array(
@@ -4850,17 +4792,15 @@ def construct_matrix():
                     coeff_case1(direction, i, j)
                 case 2:
                     extra = case3_extra_dir(direction, i, j)
-                    if extra.bit_count() == 0:
-                        coeff_case2(direction, extra, i, j)
-                    elif extra.bit_count() == 1:
-                        coeff_case3(direction, extra, i, j)
+                    if extra is None:
+                        coeff_case2(direction, i, j)
                     else:
-                        raise ValueError(f"Invalid extra direction {extra} at ({i},{j}), use finer grid.")
+                        coeff_case3(direction, extra, i, j)
                 case 3:
                     coeff_case4(direction, i, j)
                 case _:
-                    raise ValueError(
-                        "All four sides cut at ({i},{j}), use finer grid."
+                    raise NotImplementedError(
+                        "All four sides cut at one cell — beyond case 4."
                     )
 
     A = coo_matrix((vals, (rows, cols)), shape=(nx * ny, nx * ny))

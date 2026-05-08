@@ -849,7 +849,7 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
     a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(2)]
     b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(2)]
 
-    D[:] = [ a_tau_term[d] + b_term[d] - a_term[d] for d in range(2) ]
+    D[:] = [a_tau_term[d] + b_term[d] - a_term[d] for d in range(2) ]
 
     _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
     M[0, 0] = B[0] - grad_coeff[0][_grad_idx[dir[0]]]
@@ -1099,6 +1099,7 @@ def _case3_geometry(direction: int, extra: int, i: int, j: int):
 def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     x, y = center(i, j)
     eta = surface(x, y)
+    s_eta = np.sign(eta)
     row_idx = index(i, j)
 
     offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
@@ -1107,6 +1108,9 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     theta_t = compute_theta(Direction.T, i, j)
     theta_l = compute_theta(Direction.L, i, j)
     theta_b = compute_theta(Direction.B, i, j)
+
+    bot_x = (theta_r + theta_l) / 2 * dx**2
+    bot_y = (theta_t + theta_b) / 2 * dy**2
 
     theta_rr = theta_tt = theta_ll = theta_bb = 0.0
     if Direction.R & extra:
@@ -1133,140 +1137,323 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     # algebraic [eps*u_x] and [eps*u_y]
     if (direction == Direction.T | Direction.R) and (extra == Direction.R):
         dir = [Direction.T, Direction.R, Direction.R]
-        theta = [theta_t, theta_r, theta_rr]
+        theta = [theta_t, theta_r]
+        theta_extra = [0, theta_rr]
         eps = [eps_t, eps_r, 0.0] # last one not used
         eps_p = [
             permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
             permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
-            permittivity(x+2*dx + s[2] * (theta[2] + EPS) * dx, y) ]
+            permittivity(x+2*dx + s[2] * (theta_extra[1] + EPS) * dx, y) ]
         eps_m = [
             permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
             permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
-            permittivity(x+2*dx + s[2] * (theta[2] - EPS) * dx, y) ]
+            permittivity(x+2*dx + s[2] * (theta_extra[1] - EPS) * dx, y) ]
+        x_ext, y_ext = x - dx, y - dy
+        offset_ext = (-1, -1)
     elif (direction == Direction.T | Direction.R) and (extra == Direction.T):
         dir = [Direction.R, Direction.T, Direction.T]
-        theta = [theta_r, theta_t, theta_tt]
+        theta = [theta_r, theta_t]
+        theta_extra = [0, theta_tt]
         eps = [eps_r, eps_t, 0.0]
         eps_p = [
             permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
             permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
-            permittivity(x, y+2*dy + s[2] * (theta[2] + EPS) * dy) ]
+            permittivity(x, y+2*dy + s[2] * (theta_extra[1] + EPS) * dy) ]
         eps_m = [
             permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
             permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
-            permittivity(x, y+2*dy + s[2] * (theta[2] - EPS) * dy) ]
+            permittivity(x, y+2*dy + s[2] * (theta_extra[1] - EPS) * dy) ]
+        x_ext, y_ext = x - dx, y - dy
+        offset_ext = (-1, -1)
     elif (direction == Direction.T | Direction.L) and (extra == Direction.T):
         dir = [Direction.L, Direction.T, Direction.T]
-        theta = [theta_l, theta_t, theta_tt]
+        theta = [theta_l, theta_t]
+        theta_extra = [0, theta_tt]
         eps = [eps_l, eps_t, 0.0]
         eps_p = [
             permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
             permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
-            permittivity(x, y+2*dy + s[2] * (theta[2] + EPS) * dy) ]
+            permittivity(x, y+2*dy + s[2] * (theta_extra[1] + EPS) * dy) ]
         eps_m = [
             permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
             permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
-            permittivity(x, y+2*dy + s[2] * (theta[2] - EPS) * dy) ]
+            permittivity(x, y+2*dy + s[2] * (theta_extra[1] - EPS) * dy) ]
+        x_ext, y_ext = x + dx, y - dy
+        offset_ext = (1, -1)
     elif (direction == Direction.T | Direction.L) and (extra == Direction.L):
         dir = [Direction.T, Direction.L, Direction.L]
-        theta = [theta_t, theta_l, theta_ll]
+        theta = [theta_t, theta_l]
+        theta_extra = [0, theta_ll]
         eps = [eps_t, eps_l, 0.0]
         eps_p = [
             permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
             permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
-            permittivity(x-2*dx + s[2] * (theta[2] + EPS) * dx, y) ]
+            permittivity(x-2*dx + s[2] * (theta_extra[1] + EPS) * dx, y) ]
         eps_m = [
             permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
             permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
-            permittivity(x-2*dx + s[2] * (theta[2] - EPS) * dx, y) ]
+            permittivity(x-2*dx + s[2] * (theta_extra[1] - EPS) * dx, y) ]
+        x_ext, y_ext = x + dx, y - dy
+        offset_ext = (1, -1)
     elif (direction == Direction.L | Direction.B) and (extra == Direction.L):
         dir = [Direction.B, Direction.L, Direction.L]
-        theta = [theta_b, theta_l, theta_ll]
+        theta = [theta_b, theta_l]
+        theta_extra = [0, theta_ll]
         eps = [eps_b, eps_l, 0.0]
         eps_p = [
             permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
             permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
-            permittivity(x-2*dx + s[2] * (theta[2] + EPS) * dx, y) ]
+            permittivity(x-2*dx + s[2] * (theta_extra[1] + EPS) * dx, y) ]
         eps_m = [
             permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
             permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
-            permittivity(x-2*dx + s[2] * (theta[2] - EPS) * dx, y) ]
+            permittivity(x-2*dx + s[2] * (theta_extra[1] - EPS) * dx, y) ]
+        x_ext, y_ext = x + dx, y + dy
+        offset_ext = (1, 1)
     elif (direction == Direction.L | Direction.B) and (extra == Direction.B):
         dir = [Direction.L, Direction.B, Direction.B]
-        theta = [theta_l, theta_b, theta_bb]
+        theta = [theta_l, theta_b]
+        theta_extra = [0, theta_bb]
         eps = [eps_l, eps_b, 0.0]
         eps_p = [
             permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
             permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
-            permittivity(x, y-2*dy + s[2] * (theta[2] + EPS) * dy) ]
+            permittivity(x, y-2*dy + s[2] * (theta_extra[1] + EPS) * dy) ]
         eps_m = [
             permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
             permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
-            permittivity(x, y-2*dy + s[2] * (theta[2] - EPS) * dy) ]
+            permittivity(x, y-2*dy + s[2] * (theta_extra[1] - EPS) * dy) ]
+        x_ext, y_ext = x + dx, y + dy
+        offset_ext = (1, 1)
     elif (direction == Direction.R | Direction.B) and (extra == Direction.B):
         dir = [Direction.R, Direction.B, Direction.B]
-        theta = [theta_r, theta_b, theta_bb]
+        theta = [theta_r, theta_b]
+        theta_extra = [0, theta_bb]
         eps = [eps_r, eps_b, 0.0]
         eps_p = [
             permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
             permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
-            permittivity(x, y-2*dy + s[2] * (theta[2] + EPS) * dy) ]
+            permittivity(x, y-2*dy + s[2] * (theta_extra[1] + EPS) * dy) ]
         eps_m = [
             permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
             permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
-            permittivity(x, y-2*dy + s[2] * (theta[2] - EPS) * dy) ]
+            permittivity(x, y-2*dy + s[2] * (theta_extra[1] - EPS) * dy) ]
+        x_ext, y_ext = x - dx, y + dy
+        offset_ext = (-1, 1)
     elif (direction == Direction.R | Direction.B) and (extra == Direction.R):
         dir = [Direction.B, Direction.R, Direction.R]
-        theta = [theta_b, theta_r, theta_rr]
+        theta = [theta_b, theta_r]
+        theta_extra = [0, theta_rr]
         eps = [eps_b, eps_r, 0.0]
         eps_p = [
             permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
             permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
-            permittivity(x+2*dx + s[2] * (theta[2] + EPS) * dx, y) ]
+            permittivity(x+2*dx + s[2] * (theta_extra[1] + EPS) * dx, y) ]
         eps_m = [
             permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
             permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
-            permittivity(x+2*dx + s[2] * (theta[2] - EPS) * dx, y) ]
+            permittivity(x+2*dx + s[2] * (theta_extra[1] - EPS) * dx, y) ]
+        x_ext, y_ext = x - dx, y + dy
+        offset_ext = (-1, 1)
     else:
         raise ValueError("Invalid direction/extra combination for case 3", direction, extra)
-    
-    # last element is not used, but compute for consistency
-    eps_jump = [eps_p[d] - eps_m[d] for d in range(3)]
-    n1_I = [interp(dir[d], theta[d], i, j, n1) for d in range(3)]
-    n2_I = [interp(dir[d], theta[d], i, j, n2) for d in range(3)]
-    a_tau_I = [interp(dir[d], theta[d], i, j, a_tau) for d in range(3)]
-    a_I = [interp(dir[d], theta[d], i, j, a) for d in range(3)]
-    b_I = [interp(dir[d], theta[d], i, j, b) for d in range(3)]
 
+    dr = [dx if dir[d] in (Direction.R, Direction.L) else dy for d in range(3)]
+    eps_jump = [eps_p[d] - eps_m[d] for d in range(3)]
+    n1_I = [interp(dir[d], theta[d], i, j, n1) for d in range(2)]
+    n2_I = [interp(dir[d], theta[d], i, j, n2) for d in range(2)]
+    a_tau_I = [interp(dir[d], theta[d], i, j, a_tau) for d in range(2)]
+    a_I = [interp(dir[d], theta[d], i, j, a) for d in range(2)]
+    b_I = [interp(dir[d], theta[d], i, j, b) for d in range(2)]
+    if extra == Direction.R:
+        n1_I.append(interp(Direction.L, theta_extra[1], i + 2, j, n1))
+        n2_I.append(interp(Direction.L, theta_extra[1], i + 2, j, n2))
+        a_tau_I.append(interp(Direction.L, theta_extra[1], i + 2, j, a_tau))
+        a_I.append(interp(Direction.L, theta_extra[1], i + 2, j, a))
+        b_I.append(interp(Direction.L, theta_extra[1], i + 2, j, b))
+    elif extra == Direction.T:
+        n1_I.append(interp(Direction.B, theta_extra[1], i, j + 2, n1))
+        n2_I.append(interp(Direction.B, theta_extra[1], i, j + 2, n2))
+        a_tau_I.append(interp(Direction.B, theta_extra[1], i, j + 2, a_tau))
+        a_I.append(interp(Direction.B, theta_extra[1], i, j + 2, a))
+        b_I.append(interp(Direction.B, theta_extra[1], i, j + 2, b))
+    elif extra == Direction.L:
+        n1_I.append(interp(Direction.R, theta_extra[1], i - 2, j, n1))
+        n2_I.append(interp(Direction.R, theta_extra[1], i - 2, j, n2))
+        a_tau_I.append(interp(Direction.R, theta_extra[1], i - 2, j, a_tau))
+        a_I.append(interp(Direction.R, theta_extra[1], i - 2, j, a))
+        b_I.append(interp(Direction.R, theta_extra[1], i - 2, j, b))
+    elif extra == Direction.B:
+        n1_I.append(interp(Direction.T, theta_extra[1], i, j - 2, n1))
+        n2_I.append(interp(Direction.T, theta_extra[1], i, j - 2, n2))
+        a_tau_I.append(interp(Direction.T, theta_extra[1], i, j - 2, a_tau))
+        a_I.append(interp(Direction.T, theta_extra[1], i, j - 2, a))
+        b_I.append(interp(Direction.T, theta_extra[1], i, j - 2, b))
+    else:
+        raise ValueError("bad extra direction", extra)
+    
     # algebraic [eps*u_x] and [eps*u_y] 
-    B = [
+    B = np.zeros((3,3))
+    # the direction with no extra cut
+    B[0,0] = (
         s_eta
-        * s[d]
-        * (
-            eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
-            + eps_m[d] * (2 * theta[d] + 1) / (theta[d] * (theta[d] + 1))
-        )
-        for d in range(3)
-    ]
-    C = [
-        -s_eta
-        * s[d]
-        * np.array(
+            * s[0]
+            * (
+                eps_p[0] * (3 - 2 * theta[0] - theta_extra[0]) / ((1 - theta[0]) * (2 - theta[0] - theta_extra[0]))
+                    + eps_m[0] * (2 * theta[0] + 1) / (theta[0] * (theta[0] + 1))
+            )
+    )
+    B[0,1] = 0.0
+    B[0,2] = 0.0
+    # direction with extra cut
+    B[1,0] = 0.0
+    B[1,1] = (
+        s_eta
+            * s[1]
+            * (
+                eps_p[1] * (3 - 2 * theta[1] - theta_extra[1]) / ((1 - theta[1]) * (2 - theta[1] - theta_extra[1]))
+                    + eps_m[1] * (2 * theta[1] + 1) / (theta[1] * (theta[1] + 1))
+            )
+    )
+    B[1,2] = s_eta * s[1] * eps_p[1] * (1-theta[1]) / ((2-theta[1]-theta_extra[1])*(1-theta_extra[1]))
+    # extr cut associated
+    B[2,0] = 0.0
+    B[2,1] = (
+        s_eta
+            * s[2]
+            * (eps_p[2] * (1-theta_extra[1]) / ((2-theta[1]-theta_extra[1])*(1-theta[1])))
+    )
+    B[2,2] = (
+        s_eta
+            * s[2]
+            * (
+                eps_p[2] * (3 - 2 * theta_extra[1] - theta[1]) / ((1 - theta_extra[1]) * (2 - theta[1] - theta_extra[1]))
+                    + eps_m[2] * (2 * theta_extra[1] + 1) / (theta_extra[1] * (theta_extra[1] + 1))
+            )
+    )
+    
+    C = np.zeros((3,5)) # i-1, i, i+1, i+2, i+3
+    # direction with no extra cut
+    C[0] = -s_eta * s[0] * np.array([
+        -eps_m[0] * theta[0] / (1 + theta[0]),
+        eps_m[0] * (1 + theta[0]) / theta[0],
+        eps_p[0] * (2 - theta[0]) / (1 - theta[0]),
+        -eps_p[0] * (1 - theta[0]) / (2 - theta[0]),
+        0
+    ])
+    # direction with extra cut
+    C[1] = -s_eta * s[1] * np.array([
+        -eps_m[1] * theta[1] / (1 + theta[1]),
+        eps_m[1] * (theta[1] + 1) / (theta[1] * (theta[0] + 1)),
+        eps_p[1] * (2-theta[1]-theta_extra[1]) / ((1-theta[1]) * (1-theta_extra[1])),
+        0,
+        0
+    ])
+    # extra cut associated
+    C[2] = s_eta * s[2] * np.array([
+        0,
+        0,
+        -eps_p[2] * (2 - theta[1] - theta_extra[1]) / ((2-theta[1])*(1-theta_extra[1])),
+        -eps_m[2] * (theta_extra[1] + 1) / theta_extra[1],
+        eps_m[2] * theta_extra[1] / (theta_extra[1] + 1)
+    ])
+
+    a_term = np.zeros(3)
+    a_term[0] = -s[0] * a_I[0] * eps_p[0] * (3 - 2 * theta[0]) / ((1 - theta[0]) * (2 - theta[0]))
+    a_term[1] = -s[1] * a_I[1] * eps_p[1] * (3 - 2 * theta[1] - theta_extra[1]) / ((1 - theta[1]) * (2 - theta[1] - theta_extra[1]))
+    a_term[2] = -s[2] * a_I[2] * eps_p[1] * (3 - 2 * theta_extra[1] - theta[1]) / ((1 - theta_extra[1]) * (2 - theta[1] - theta_extra[1]))
+    
+    n_norm = [n1_I[d] if dir[d] in (Direction.R, Direction.L) else n2_I[d] for d in range(3)]
+    n_tang = [-n2_I[d] if dir[d] in (Direction.R, Direction.L) else n1_I[d] for d in range(3)]
+
+    P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
+    grad_tau = [
+        np.array(
             [
-                -eps_m[d] * theta[d] / (1 + theta[d]),
-                eps_m[d] * (1 + theta[d]) / theta[d],
-                eps_p[d] * (2 - theta[d]) / (1 - theta[d]),
-                -eps_p[d] * (1 - theta[d]) / (2 - theta[d]),
+                -2 * x * n2_I[d],
+                x * n1_I[d] - y * n2_I[d],
+                2 * y * n1_I[d],
+                -n2_I[d],
+                n1_I[d],
+                0.0,
             ]
         )
         for d in range(3)
     ]
-    a_term = [
-        -s[d] * a_I[d] * eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
-        for d in range(3)
-    ]
+    grad_coeff = [dr[d] * eps_jump[d] * n_tang[d] * grad_tau[d] @ P_inv for d in range(3) ]
+    a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(3)]
+    b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(3)]
     
     
+    M = np.zeros((3, 3))
+    N = np.zeros((3, 25)) # 5x5 stencil around (i,j)
+    D = np.zeros(3)
+
+    D[:] = [a_tau_term[d] + b_term[d] - a_term[d] for d in range(3)]
+
+    _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
+    M[0, 0] = B[0, 0] - grad_coeff[0][_grad_idx[dir[0]]]
+    M[1, 1] = B[1, 1] - grad_coeff[1][_grad_idx[dir[1]]]
+    M[2, 2] = B[2, 2] - grad_coeff[2][_grad_idx[dir[2]]]
+    M[0, 1] = -grad_coeff[0][_grad_idx[dir[1]]]
+    M[0, 2] = -grad_coeff[0][_grad_idx[dir[2]]]
+    M[1, 0] = -grad_coeff[1][_grad_idx[dir[0]]]
+    M[1, 2] = -grad_coeff[1][_grad_idx[dir[2]]]
+    M[2, 0] = -grad_coeff[2][_grad_idx[dir[0]]]
+    M[2, 1] = -grad_coeff[2][_grad_idx[dir[1]]]
+
+    _dir_step = {
+        Direction.R: (1, 0),
+        Direction.T: (0, 1),
+        Direction.L: (-1, 0),
+        Direction.B: (0, -1),
+    }
+    for d in range(3):
+        N[d, offset(1, 0)] = grad_coeff[d][0] if dir[0] != Direction.R else 0.0
+        N[d, offset(-1, 0)] = grad_coeff[d][1] if dir[0] != Direction.L else 0.0
+        N[d, offset(0, 1)] = grad_coeff[d][2] if dir[1] != Direction.T else 0.0
+        N[d, offset(0, -1)] = grad_coeff[d][3] if dir[1] != Direction.B else 0.0
+        N[d, offset(0, 0)] = grad_coeff[d][4]
+        N[d, offset(*offset_ext)] = grad_coeff[d][5]
+
+        # Place [k] along the direction ray at offsets (-1, 0, 1, 2) from center
+        dx_dir, dy_dir = _dir_step[dir[d]]
+        for k in range(4):
+            N[d, offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[d][k]
+
+    M_inv_d = np.linalg.solve(M, D)
+    M_inv_N = np.linalg.solve(M, N)
+
+    sub_coeff = [eps[0] / theta[0] / bot_x, eps[1] / theta[1] / bot_y]
+    f[i, j] -= M_inv_d[0] * sub_coeff[0] + M_inv_d[1] * sub_coeff[1]
+
+    # Extra stencil entries for directions orthogonal to the current one
+    add_terms = {}
+    if dir[0] != Direction.R:
+        add_terms[(1, 0)] = eps_r / theta_r / bot_x
+    if dir[0] != Direction.L:
+        add_terms[(-1, 0)] = eps_l / theta_l / bot_x
+    if dir[1] != Direction.T:
+        add_terms[(0, 1)] = eps_t / theta_t / bot_y
+    if dir[1] != Direction.B:
+        add_terms[(0, -1)] = eps_b / theta_b / bot_y
+
+    for offset_x in range(-2, 3):
+        for offset_y in range(-2, 3):
+            value = (
+                    M_inv_N[0, offset(offset_x, offset_y)] * sub_coeff[0]
+                    + M_inv_N[1, offset(offset_x, offset_y)] * sub_coeff[1]
+                )
+            if (offset_x, offset_y) == (0, 0):
+                value += (
+                    -(eps_r / theta_r + eps_l / theta_l) / bot_x
+                    - (eps_t / theta_t + eps_b / theta_b) / bot_y
+                )
+            else:
+                value += add_terms.get((offset_x, offset_y), 0.0)
+            rows.append(row_idx)
+            cols.append(index(i + offset_x, j + offset_y))
+            vals.append(value)
 
 
 
@@ -4851,7 +5038,7 @@ def construct_matrix():
                 case 2:
                     extra = case3_extra_dir(direction, i, j)
                     if extra.bit_count() == 0:
-                        coeff_case2(direction, extra, i, j)
+                        coeff_case2(direction, i, j)
                     elif extra.bit_count() == 1:
                         coeff_case3(direction, extra, i, j)
                     else:
@@ -5083,21 +5270,23 @@ def gradient(u: np.ndarray):
                     )
                 case 2:
                     extra = case3_extra_dir(direction, i, j)
-                    if extra is None:
+                    if extra.bit_count() == 0:
                         u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t = (
                             interface_value_case2(direction, i, j, u)
                         )
-                    else:
+                    elif extra.bit_count() == 1:
                         u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t = (
                             interface_value_case3(direction, extra, i, j, u)
                         )
+                    else:
+                        raise ValueError(f"Invalid extra direction {extra} at ({i},{j}), use finer grid.")
                 case 3:
                     u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t = (
                         interface_value_case4(direction, i, j, u)
                     )
                 case _:
-                    raise NotImplementedError(
-                        "All four sides cut at one cell — beyond case 4."
+                    raise ValueError(
+                        f"All four sides cut at one cell {(i,j)}, use finer grid."
                     )
 
             dudx[i, j] = (

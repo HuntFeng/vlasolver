@@ -114,6 +114,97 @@ class Direction(enum.IntFlag):
     B = 1 << 3
 
 
+def algebraic_jump(eta, pt):
+    """Decompose the algebraic jump at a single interface point.
+
+    pt is a dict with keys: axis, u_m, u_p, vars_m, vars_p.
+    Returns the jump decomposed as  B * u_{pm} + (a-coeff) * a + C·u.
+    """
+    grad_P = sv.gradient(P)
+    dudx = grad_P.components[coord.i]
+    dudy = grad_P.components[coord.j]
+
+    if pt["axis"] == "x":
+        beta_ujump_algebra = beta_p * dudx.subs(pt["vars_p"]) - beta_m * dudx.subs(pt["vars_m"])
+    else:
+        beta_ujump_algebra = beta_p * dudy.subs(pt["vars_p"]) - beta_m * dudy.subs(pt["vars_m"])
+
+    if eta < 0:
+        u_pm = pt["u_m"]
+        beta_ujump_algebra = beta_ujump_algebra.subs({pt["u_p"]: u_pm + a})
+    else:
+        u_pm = pt["u_p"]
+        beta_ujump_algebra = beta_ujump_algebra.subs({pt["u_m"]: u_pm - a})
+
+    expanded = beta_ujump_algebra.expand()
+    u_pm_coeff = expanded.coeff(u_pm)
+    collected = u_pm_coeff.collect([beta_p, beta_m])
+    B_mat = sp.Add(*[term.factor() for term in collected.as_ordered_terms()])
+    print("B matrix")
+    display(B_mat)
+
+    a_coeff = expanded.coeff(a).factor()
+    print("a term")
+    display(a_coeff * a)
+
+    rest = (expanded - u_pm_coeff * u_pm - a_coeff * a).expand()
+    collected = rest.collect(flatten(u))
+    C_mat = sp.Add(*[term.factor() for term in collected.as_ordered_terms()])
+    print("C matrix")
+    display(C_mat)
+
+
+def geometric_jump(eta, pt):
+    """Decompose the geometric jump at a single interface point.
+
+    pt is a dict with keys: axis, u_m, u_p, vars_m, vars_p.
+    """
+    grad_P = sv.gradient(P)
+    dudx = grad_P.components[coord.i]
+    dudy = grad_P.components[coord.j]
+
+    if pt["axis"] == "x":
+        if eta < 0:
+            beta_ujump_geom = (
+                b * nx - beta_jump * ny * (-ny * dudx + nx * dudy) - beta_p * a_tau * ny
+            ).subs(pt["vars_m"])
+        else:
+            beta_ujump_geom = (
+                b * nx - beta_jump * ny * (-ny * dudx + nx * dudy) - beta_m * a_tau * ny
+            ).subs(pt["vars_p"])
+    else:
+        if eta < 0:
+            beta_ujump_geom = (
+                b * ny + beta_jump * nx * (-ny * dudx + nx * dudy) + beta_p * a_tau * nx
+            ).subs(pt["vars_m"])
+        else:
+            beta_ujump_geom = (
+                b * ny + beta_jump * nx * (-ny * dudx + nx * dudy) + beta_m * a_tau * nx
+            ).subs(pt["vars_p"])
+
+    expanded = beta_ujump_geom.expand()
+    u_pm = pt["u_m"] if eta < 0 else pt["u_p"]
+
+    u_pm_coeff = expanded.coeff(u_pm).factor()
+    print("u_pm_coeff")
+    display(u_pm_coeff)
+    ab_term = expanded.coeff(a_tau) * a_tau + expanded.coeff(b) * b
+    print("ab_term")
+    display(ab_term)
+    rest = (expanded - u_pm_coeff * u_pm - ab_term).expand()
+    collected = rest.collect(flatten(u))
+    grad_term = sp.Add(*[term.factor() for term in collected.as_ordered_terms()])
+    print("grad_term")
+    display(grad_term)
+
+    grad_ops = sp.Matrix([-2 * x * ny, x * nx - y * ny, 2 * y * nx, -ny, nx, 0]).T
+    u_coeff = (-beta_jump * ny * grad_ops @ A_inv if pt["axis"] == "x"
+               else beta_jump * nx * grad_ops @ A_inv)
+    print("u_coeff factors:")
+    for coeff in u_coeff:
+        display(coeff.subs(pt["vars_m"] if eta < 0 else pt["vars_p"]).expand().factor())
+
+
 def coeff_case3(eta, points):
     """Build the local 3x3 system M [unknowns]^T = N u + d for case 3.
 
@@ -371,10 +462,19 @@ s1_pts_neg = [
 # %%
 print("=== Sub-case 1, eta < 0 ===")
 M, Nu, d = coeff_case3(-1, s1_pts_neg)
+for i, pt in enumerate(s1_pts_neg):
+    print(f"--- Point {i} ---")
+    algebraic_jump(-1, pt)
+    geometric_jump(-1, pt)
 
 # %%
 print("=== Sub-case 1, eta > 0 ===")
 M, Nu, d = coeff_case3(+1, points_for_eta_pos(s1_pts_neg))
+s1_pts_pos = points_for_eta_pos(s1_pts_neg)
+for i, pt in enumerate(s1_pts_pos):
+    print(f"--- Point {i} ---")
+    algebraic_jump(+1, pt)
+    geometric_jump(+1, pt)
 
 
 # %% [markdown]
@@ -461,10 +561,19 @@ s2_pts_neg = [
 # %%
 print("=== Sub-case 2, eta < 0 ===")
 M, Nu, d = coeff_case3(-1, s2_pts_neg)
+for i, pt in enumerate(s2_pts_neg):
+    print(f"--- Point {i} ---")
+    algebraic_jump(-1, pt)
+    geometric_jump(-1, pt)
 
 # %%
 print("=== Sub-case 2, eta > 0 ===")
 M, Nu, d = coeff_case3(+1, points_for_eta_pos(s2_pts_neg))
+s2_pts_pos = points_for_eta_pos(s2_pts_neg)
+for i, pt in enumerate(s2_pts_pos):
+    print(f"--- Point {i} ---")
+    algebraic_jump(+1, pt)
+    geometric_jump(+1, pt)
 
 
 # %% [markdown]
@@ -537,10 +646,19 @@ s3_pts_neg = [
 # %%
 print("=== Sub-case 3, eta < 0 ===")
 M, Nu, d = coeff_case3(-1, s3_pts_neg)
+for i, pt in enumerate(s3_pts_neg):
+    print(f"--- Point {i} ---")
+    algebraic_jump(-1, pt)
+    geometric_jump(-1, pt)
 
 # %%
 print("=== Sub-case 3, eta > 0 ===")
 M, Nu, d = coeff_case3(+1, points_for_eta_pos(s3_pts_neg))
+s3_pts_pos = points_for_eta_pos(s3_pts_neg)
+for i, pt in enumerate(s3_pts_pos):
+    print(f"--- Point {i} ---")
+    algebraic_jump(+1, pt)
+    geometric_jump(+1, pt)
 
 
 # %% [markdown]
@@ -626,10 +744,19 @@ s4_pts_neg = [
 # %%
 print("=== Sub-case 4, eta < 0 ===")
 M, Nu, d = coeff_case3(-1, s4_pts_neg)
+for i, pt in enumerate(s4_pts_neg):
+    print(f"--- Point {i} ---")
+    algebraic_jump(-1, pt)
+    geometric_jump(-1, pt)
 
 # %%
 print("=== Sub-case 4, eta > 0 ===")
 M, Nu, d = coeff_case3(+1, points_for_eta_pos(s4_pts_neg))
+s4_pts_pos = points_for_eta_pos(s4_pts_neg)
+for i, pt in enumerate(s4_pts_pos):
+    print(f"--- Point {i} ---")
+    algebraic_jump(+1, pt)
+    geometric_jump(+1, pt)
 
 
 # %% [markdown]
@@ -710,10 +837,19 @@ s5_pts_neg = [
 # %%
 print("=== Sub-case 5, eta < 0 ===")
 M, Nu, d = coeff_case3(-1, s5_pts_neg)
+for i, pt in enumerate(s5_pts_neg):
+    print(f"--- Point {i} ---")
+    algebraic_jump(-1, pt)
+    geometric_jump(-1, pt)
 
 # %%
 print("=== Sub-case 5, eta > 0 ===")
 M, Nu, d = coeff_case3(+1, points_for_eta_pos(s5_pts_neg))
+s5_pts_pos = points_for_eta_pos(s5_pts_neg)
+for i, pt in enumerate(s5_pts_pos):
+    print(f"--- Point {i} ---")
+    algebraic_jump(+1, pt)
+    geometric_jump(+1, pt)
 
 
 # %% [markdown]
@@ -794,10 +930,19 @@ s6_pts_neg = [
 # %%
 print("=== Sub-case 6, eta < 0 ===")
 M, Nu, d = coeff_case3(-1, s6_pts_neg)
+for i, pt in enumerate(s6_pts_neg):
+    print(f"--- Point {i} ---")
+    algebraic_jump(-1, pt)
+    geometric_jump(-1, pt)
 
 # %%
 print("=== Sub-case 6, eta > 0 ===")
 M, Nu, d = coeff_case3(+1, points_for_eta_pos(s6_pts_neg))
+s6_pts_pos = points_for_eta_pos(s6_pts_neg)
+for i, pt in enumerate(s6_pts_pos):
+    print(f"--- Point {i} ---")
+    algebraic_jump(+1, pt)
+    geometric_jump(+1, pt)
 
 
 # %% [markdown]
@@ -865,10 +1010,19 @@ s7_pts_neg = [
 # %%
 print("=== Sub-case 7, eta < 0 ===")
 M, Nu, d = coeff_case3(-1, s7_pts_neg)
+for i, pt in enumerate(s7_pts_neg):
+    print(f"--- Point {i} ---")
+    algebraic_jump(-1, pt)
+    geometric_jump(-1, pt)
 
 # %%
 print("=== Sub-case 7, eta > 0 ===")
 M, Nu, d = coeff_case3(+1, points_for_eta_pos(s7_pts_neg))
+s7_pts_pos = points_for_eta_pos(s7_pts_neg)
+for i, pt in enumerate(s7_pts_pos):
+    print(f"--- Point {i} ---")
+    algebraic_jump(+1, pt)
+    geometric_jump(+1, pt)
 
 
 # %% [markdown]
@@ -936,9 +1090,18 @@ s8_pts_neg = [
 # %%
 print("=== Sub-case 8, eta < 0 ===")
 M, Nu, d = coeff_case3(-1, s8_pts_neg)
+for i, pt in enumerate(s8_pts_neg):
+    print(f"--- Point {i} ---")
+    algebraic_jump(-1, pt)
+    geometric_jump(-1, pt)
 
 # %%
 print("=== Sub-case 8, eta > 0 ===")
 M, Nu, d = coeff_case3(+1, points_for_eta_pos(s8_pts_neg))
+s8_pts_pos = points_for_eta_pos(s8_pts_neg)
+for i, pt in enumerate(s8_pts_pos):
+    print(f"--- Point {i} ---")
+    algebraic_jump(+1, pt)
+    geometric_jump(+1, pt)
 
 # %%

@@ -1,14 +1,11 @@
-"""
-Poisson solver prototype
-Handles complex shape and piecewise variable permittivity
-"""
-
 import enum
-from typing import NamedTuple
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
+
+
+EPS = 0.5
 
 # Shared zero function — all constant-zero matrix entries.
 _Z = lambda *_: 0.0
@@ -116,6 +113,14 @@ class Direction(enum.IntFlag):
     T = 1 << 1  # 0010
     L = 1 << 2  # 0100
     B = 1 << 3  # 1000
+
+def dirsign(direction: int):
+    if direction == Direction.R or direction == Direction.T:
+        return 1.0
+    elif direction == Direction.L or direction == direction.B:
+        return -1.0
+    else:
+        raise ValueError("Invalid direction for dirsign", direction)
 
 
 _build_dispatch_tables()
@@ -296,7 +301,9 @@ def compute_theta(direction: int, i: int, j: int) -> float:
             -cd.sign * d_eta - np.sign(eta) * np.sqrt(d_eta**2 - 4 * dd_eta * eta)
         ) / (2 * dd_eta)
     if theta < 1e-6 or theta > 1.0 - 1e-6:
-        breakpoint()
+        theta = 1.0
+        # TODO: maybe this is not a good idea
+        # breakpoint()
     return theta
 
 
@@ -324,6 +331,27 @@ def interp(direction: int, theta: float, i: int, j: int, field: np.ndarray) -> f
         )
     return 0.5 * t_matrix @ c_matrix @ points
 
+def compute_P_inv(
+    x: float,
+    y: float,
+    x_r: float,
+    x_l: float,
+    x_ext: float,
+    y_t: float,
+    y_b: float,
+    y_ext: float,
+):
+    P_mat = np.array(
+        [
+            [x_r**2, x_r * y, y**2, x_r, y, 1],  # R
+            [x_l**2, x_l * y, y**2, x_l, y, 1],  # L
+            [x**2, x * y_t, y_t**2, x, y_t, 1],  # T
+            [x**2, x * y_b, y_b**2, x, y_b, 1],  # B
+            [x**2, x * y, y**2, x, y, 1],  # ij
+            [x_ext**2, x_ext * y_ext, y_ext**2, x_ext, y_ext, 1],  # ext
+        ]
+    )
+    return np.linalg.inv(P_mat)
 
 def compute_a_tau_field() -> np.ndarray:
     """Compute tangential derivative of jump condition a at (i, j)"""
@@ -371,9 +399,8 @@ def coeff_case0(i: int, j: int) -> None:
 
 
 def coeff_case1(direction: int, i: int, j: int) -> None:
-    """coeff of u_ij and its neighbors for a case 1 cell"""
-    cd = _CD[direction]
     x, y = center(i, j)
+    row_idx = index(i, j)
     eta = surface(x, y)
     theta = compute_theta(direction, i, j)
     a_tau_I = interp(direction, theta, i, j, a_tau)
@@ -382,104 +409,153 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
     n1_I = interp(direction, theta, i, j, n1)
     n2_I = interp(direction, theta, i, j, n2)
 
-    # theta assignments: one active (theta), rest 1.0
-    theta_l, theta_r, theta_t, theta_b = cd.theta_assign(theta)
+    s = dirsign(direction)
+    is_x_dir = direction in (Direction.R, Direction.L)
+
+    # Theta per direction (only current direction uses actual theta)
+    theta_r = theta if direction == Direction.R else 1.0
+    theta_l = theta if direction == Direction.L else 1.0
+    theta_t = theta if direction == Direction.T else 1.0
+    theta_b = theta if direction == Direction.B else 1.0
+
+    # eps_p/m: permittivity on positive/negative side of the interface
+    if is_x_dir:
+        eps_p = permittivity(x + s * (theta + EPS) * dx, y)
+        eps_m = permittivity(x + s * (theta - EPS) * dx, y)
+    else:
+        eps_p = permittivity(x, y + s * (theta + EPS) * dy)
+        eps_m = permittivity(x, y + s * (theta - EPS) * dy)
+    eps_jump = eps_p - eps_m
+
+    # Geometric correction: extension point per direction
+    _ext = {
+        Direction.R: (x - dx, y - dy, (-1, -1)),
+        Direction.T: (x - dx, y - dy, (-1, -1)),
+        Direction.L: (x + dx, y - dy, (1, -1)),
+        Direction.B: (x - dx, y + dy, (-1, 1)),
+    }
+    x_ext, y_ext, offset_ext = _ext[direction]
+
+    x_r = x + theta_r * dx
+    x_l = x - theta_l * dx
+    y_t = y + theta_t * dy
+    y_b = y - theta_b * dy
     bot_x = (theta_r + theta_l) / 2 * dx**2
     bot_y = (theta_t + theta_b) / 2 * dy**2
-
-    # permittivity at four half-points (uncut faces have theta=1 → h/2 spacing)
     eps_r = permittivity(x + theta_r * dx / 2, y)
     eps_l = permittivity(x - theta_l * dx / 2, y)
     eps_t = permittivity(x, y + theta_t * dy / 2)
     eps_b = permittivity(x, y - theta_b * dy / 2)
 
-    # beta sampling at the interface point
-    px, py, p_axis = cd.probe_loc(x, y, theta)
-    _eps_p, _eps_m, eps_jump, eps_p, eps_m = _sample_beta_legacy(px, py, p_axis, eta)
+    # algebraic [eps*u_x] and [eps*u_y] Eq(30)
+    B = (
+        np.sign(eta)
+        * s
+        * (
+            eps_p * (3 - 2 * theta) / ((1 - theta) * (2 - theta))
+            + eps_m * (2 * theta + 1) / (theta * (theta + 1))
+        )
+    )
+    C = (
+        -np.sign(eta)
+        * s
+        * np.array(
+            [
+                -eps_m * theta / (1 + theta),
+                eps_m * (1 + theta) / theta,
+                eps_p * (2 - theta) / (1 - theta),
+                -eps_p * (1 - theta) / (2 - theta),
+            ]
+        )
+    )
+    a_term = -s * a_I * eps_p * (3 - 2 * theta) / ((1 - theta) * (2 - theta))
 
-    # normal components: n_t = tangential (along interface), n_n = surface-normal
-    n_t = [n1_I, n2_I][cd.n_tang]
-    n_n = [n1_I, n2_I][cd.n_norm]
-
-    # d-vector entry (RHS contribution)
-    d_self = dx if cd.is_x else dy
-    a_tau_term = (-1 if cd.is_x else 1) * a_tau_I * eps_p * n_t * d_self
-    b_term = b_I * n_n * d_self
-    a_term = -cd.sign * a_I * eps_p * _phi(theta)
-    # d = (
-    #     (-1 if cd.is_x else 1) * a_tau_I * eps_p * n_t * d_self
-    #     + b_I * n_n * d_self
-    #     + cd.sign * a_I * eps_p * _phi(theta)
-    # )
-    D = a_tau_term + b_term - a_term
-
-    if eta > 0:
-        eps_p, eps_m = -_eps_m, -_eps_p
-
-    # scalar M (1x1 mass matrix)
-    # M = -cd.sign * (eps_p * _phi(theta) + eps_m * _psi(theta) + eps_jump * n_t**2 * _psi(theta))
-    B = -cd.sign * (eps_p * _phi(theta) + eps_m * _psi(theta))
-    grad_coeff_dir = cd.sign * eps_jump * n_t**2 * _psi(theta)
-    M = B - grad_coeff_dir
-
-    # 7-element N vector (couplings to stencil neighbours)
-    d_other = dy if cd.is_x else dx
-    N = [
-        -cd.sign * (eps_jump * n_t**2 + eps_m) * (1 + theta) / theta
-        - eps_jump * n1_I * n2_I * theta * d_self / d_other,
-        -cd.sign * eps_p * (theta - 2) / (theta - 1),
-        cd.sign * eps_p * (theta - 1) / (theta - 2),
-        cd.sign * (eps_jump * n_t**2 + eps_m) * theta / (1 + theta)
-        + eps_jump * n1_I * n2_I * theta * d_self / d_other,
-        eps_jump * n1_I * n2_I * (2 * theta + 1) * d_self / (2 * d_other),
-        -eps_jump * n1_I * n2_I * d_self / (2 * d_other),
-        -eps_jump * n1_I * n2_I * theta * d_self / d_other,
-    ]
-
-    # print(f"(i,j)={(i,j)}")
-    # print(f"eta={eta}")
-    # print(f"direction={direction}")
-    # print(f"M:\n{M}")
-    # print(f"D:\n{D}")
-    # # print(f"N:\n{N}")
-    # print()
-
-    # --- Shortley-Weller assembly ---
-    _eps = {"r": eps_r, "l": eps_l, "t": eps_t, "b": eps_b}
-    _theta = {"r": theta_r, "l": theta_l, "t": theta_t, "b": theta_b}
-    _bot = {"r": bot_x, "l": bot_x, "t": bot_y, "b": bot_y}
-    slot_names = ["l", "r", "t", "b"]
-    active = slot_names[cd.slot]
-    eps_a = _eps[active]
-    theta_a = _theta[active]
-    bot_a = _bot[active]
-
-    fac = 1.0 / M * eps_a / theta_a / bot_a
-    f[i, j] -= D * fac
-
-    # uncut-face neighbour corrections
-    uncut_map = {}
-    for di_f, dj_f, eps_name in CutDir.uncut_faces(cd.face):
-        s = eps_name[4]  # 'r', 'l', 't', 'b'
-        uncut_map[(di_f, dj_f)] = _eps[s] / _theta[s] / _bot[s]
-
-    # Shortley-Weller diagonal: negative sum of all four flux terms
-    sw_diag = -(
-        eps_r / theta_r / bot_x
-        + eps_l / theta_l / bot_x
-        + eps_t / theta_t / bot_y
-        + eps_b / theta_b / bot_y
+    # geometric [eps*u_x] and [eps*u_y] Eq(34)
+    P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
+    grad_tau = np.array(
+        [-2 * x * n2_I, x * n1_I - y * n2_I, 2 * y * n1_I, -n2_I, n1_I, 0.0]
     )
 
-    row_idx = index(i, j)
-    rows.extend([row_idx] * 7)
-    for k, (di, dj) in enumerate(cd.offsets):
-        cols.append(index(i + di, j + dj))
-        val = N[k] * fac
-        val += uncut_map.get((di, dj), 0.0)
-        if k == 0:
-            val += sw_diag
-        vals.append(val)
+    if is_x_dir:
+        grad_coeff = -dx * eps_jump * n2_I * grad_tau @ P_inv
+        a_tau_term = -dx * a_tau_I * eps_p * n2_I
+        b_term = dx * b_I * n1_I
+    else:
+        grad_coeff = dy * eps_jump * n1_I * grad_tau @ P_inv
+        a_tau_term = dy * a_tau_I * eps_p * n1_I
+        b_term = dy * b_I * n2_I
+
+    d = a_tau_term + b_term - a_term
+
+    _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
+    grad_coeff_dir = grad_coeff[_grad_idx[direction]]
+    M = B - grad_coeff_dir
+
+    offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
+    N = np.zeros(25)
+    N[offset(1, 0)] = grad_coeff[0] if direction != Direction.R else 0.0
+    N[offset(-1, 0)] = grad_coeff[1] if direction != Direction.L else 0.0
+    N[offset(0, 1)] = grad_coeff[2] if direction != Direction.T else 0.0
+    N[offset(0, -1)] = grad_coeff[3] if direction != Direction.B else 0.0
+    N[offset(0, 0)] = grad_coeff[4]
+    N[offset(*offset_ext)] = grad_coeff[5]
+
+    # Place C[k] along the direction ray at offsets (-1, 0, 1, 2) from center
+    _dir_step = {
+        Direction.R: (1, 0),
+        Direction.T: (0, 1),
+        Direction.L: (-1, 0),
+        Direction.B: (0, -1),
+    }
+    dx_dir, dy_dir = _dir_step[direction]
+    for k in range(4):
+        N[offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[k]
+
+    M_inv_N = N / M
+    M_inv_d = d / M
+
+    # Substitution coefficient: eps in current direction / theta / denominator
+    _eps_dir = {
+        Direction.R: eps_r,
+        Direction.L: eps_l,
+        Direction.T: eps_t,
+        Direction.B: eps_b,
+    }
+    _theta_dir = {
+        Direction.R: theta_r,
+        Direction.L: theta_l,
+        Direction.T: theta_t,
+        Direction.B: theta_b,
+    }
+    sub_coeff = (
+        _eps_dir[direction] / _theta_dir[direction] / (bot_x if is_x_dir else bot_y)
+    )
+    f[i, j] -= M_inv_d * sub_coeff
+
+    # Extra stencil entries for directions orthogonal to the current one
+    add_terms = {}
+    if direction != Direction.R:
+        add_terms[(1, 0)] = eps_r / theta_r / bot_x
+    if direction != Direction.L:
+        add_terms[(-1, 0)] = eps_l / theta_l / bot_x
+    if direction != Direction.T:
+        add_terms[(0, 1)] = eps_t / theta_t / bot_y
+    if direction != Direction.B:
+        add_terms[(0, -1)] = eps_b / theta_b / bot_y
+
+    for offset_x in range(-2, 3):
+        for offset_y in range(-2, 3):
+            value = M_inv_N[offset(offset_x, offset_y)] * sub_coeff
+            if (offset_x, offset_y) == (0, 0):
+                value += (
+                    -(eps_r / theta_r + eps_l / theta_l) / bot_x
+                    - (eps_t / theta_t + eps_b / theta_b) / bot_y
+                )
+            else:
+                value += add_terms.get((offset_x, offset_y), 0.0)
+            rows.append(row_idx)
+            cols.append(index(i + offset_x, j + offset_y))
+            vals.append(value)
 
 
 def _solve_case2_local(direction: int, i: int, j: int):
@@ -622,29 +698,6 @@ def _solve_case2_local(direction: int, i: int, j: int):
         1, cd_y, cd_x, theta_y, theta_x, n1_y, n2_y, eps_p_y, eps_m_y, eps_jump_y
     )
 
-    print(f"(i,j)={(i,j)}")
-    print(f"eta={eta}")
-    print(f"direction={_FACE_NAME[cd_x.face]}|{_FACE_NAME[cd_y.face]}")
-    # print(f"theta_x={theta_x}, theta_y={theta_y}")
-    # print(f"eps_jump_x={eps_jump_x}, eps_jump_y={eps_jump_y}")
-    # print(f"n1_x={n1_x}, n2_x={n2_x}, n1_y={n1_y}, n2_y={n2_y}")
-    # n_t = [n1_x, n2_x][cd_x.n_tang]
-    # B_x = cd_x.sign * (eps_p_x * _phi(theta_x) + eps_m_x * _psi(theta_x))
-    # grad_coeff_x =cd_x.sign * eps_jump_x * n_t**2 * _psi(theta_x)
-    # n_t = [n1_y, n2_y][cd_y.n_tang]
-    # B_y = cd_y.sign * (eps_p_y * _phi(theta_y) + eps_m_y * _psi(theta_y))
-    # print(f"B_x={B_x}, grad_coeff_x={grad_coeff_x}")
-    # print(f"_phi(theta_x)={_phi(theta_x)}")
-    # print(f"_psi(theta_x)={_psi(theta_x)}")
-    # grad_coeff_y =cd_y.sign * eps_jump_y * n_t**2 * _psi(theta_y)
-    # print(f"B_y={B_y}, grad_coeff_y={grad_coeff_y}")
-    # print(f"_phi(theta_y)={_phi(theta_y)}")
-    # print(f"_psi(theta_y)={_psi(theta_y)}")
-    print(f"M:\n{M}")
-    print(f"D:\n{d}")
-    print(f"N:\n{N}")
-    print()
-
     M_inv_d = np.linalg.solve(M, d)
     M_inv_N = np.linalg.solve(M, N)
 
@@ -667,25 +720,197 @@ def _solve_case2_local(direction: int, i: int, j: int):
 
 def coeff_case2(direction: int, i: int, j: int) -> None:
     """coeff of u_ij and its neighbors for a case 2 cell"""
-    M_inv_d, M_inv_N, all_offsets, sw_idx, geom = _solve_case2_local(direction, i, j)
-    _assemble_case_n(
-        i,
-        j,
-        sw_idx,
-        M_inv_d,
-        M_inv_N,
-        all_offsets,
-        geom["eps_r"],
-        geom["eps_l"],
-        geom["eps_t"],
-        geom["eps_b"],
-        geom["theta_R"],
-        geom["theta_T"],
-        geom["theta_L"],
-        geom["theta_B"],
-        geom["bot_x"],
-        geom["bot_y"],
-    )
+    x, y = center(i, j)
+    eta = surface(x, y)
+    row_idx = index(i, j)  # laplacian matrix row index
+
+    D = np.zeros(2)
+    M = np.zeros((2, 2))
+    N = np.zeros((2, 25))
+
+    # used to traverse N matrix
+    offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
+
+    theta_r = compute_theta(Direction.R, i, j)
+    theta_t = compute_theta(Direction.T, i, j)
+    theta_l = compute_theta(Direction.L, i, j)
+    theta_b = compute_theta(Direction.B, i, j)
+
+    x_r = x + theta_r * dx
+    x_l = x - theta_l * dx
+    y_t = y + theta_t * dy
+    y_b = y - theta_b * dy
+
+    eps_r = permittivity(x + theta_r * dx / 2, y)
+    eps_l = permittivity(x - theta_l * dx / 2, y)
+    eps_t = permittivity(x, y + theta_t * dy / 2)
+    eps_b = permittivity(x, y - theta_b * dy / 2)
+    if direction == Direction.R | Direction.T:
+        dir = [Direction.R, Direction.T]
+        theta = [theta_r, theta_t]  # (x, y)
+        eps = [eps_r, eps_t]
+    elif direction == Direction.L | Direction.T:
+        dir = [Direction.L, Direction.T]
+        theta = [theta_l, theta_t]  # (x, y)
+        eps = [eps_l, eps_t]
+    elif direction == Direction.L | Direction.B:
+        dir = [Direction.L, Direction.B]
+        theta = [theta_l, theta_b]  # (x, y)
+        eps = [eps_l, eps_b]
+    elif direction == Direction.R | Direction.B:
+        dir = [Direction.R, Direction.B]
+        theta = [theta_r, theta_b]  # (x, y)
+        eps = [eps_r, eps_b]
+
+    _ext = {
+        Direction.R | Direction.T: (x - dx, y - dy, (-1, -1)),
+        Direction.T | Direction.L: (x + dx, y - dy, (1, -1)),
+        Direction.L | Direction.B: (x + dx, y + dy, (1, 1)),
+        Direction.B | Direction.R: (x - dx, y + dy, (-1, 1)),
+    }
+    x_ext, y_ext, offset_ext = _ext[direction]
+
+    s_eta = np.sign(eta)
+    s = [dirsign(dir[d]) for d in range(2)]
+
+    dr = [dx, dy]
+    bot_x = (theta_r + theta_l) / 2 * dx**2
+    bot_y = (theta_t + theta_b) / 2 * dy**2
+
+
+    eps_p = [
+        permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
+        permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
+    ]
+    eps_m = [
+        permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
+        permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
+    ]
+    eps_jump = [eps_p[d] - eps_m[d] for d in range(2)]
+
+    # normal evaluated at x_R and x_y
+    n1_I = np.array([interp(dir[d], theta[d], i, j, n1) for d in range(2)])
+    n2_I = np.array([interp(dir[d], theta[d], i, j, n2) for d in range(2)])
+
+    # a_yau at x and y
+    a_tau_I = [interp(dir[d], theta[d], i, j, a_tau) for d in range(2)]
+
+    # jump conditions at x_x and x_y
+    a_I = [interp(dir[d], theta[d], i, j, a) for d in range(2)]
+    b_I = [interp(dir[d], theta[d], i, j, b) for d in range(2)]
+
+    # algebraic [eps*u_x] and [eps*u_y] Eq(30)
+    B = [
+        (
+            s_eta
+            * s[d]
+            * (
+                eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
+                + eps_m[d] * (2 * theta[d] + 1) / (theta[d] * (theta[d] + 1))
+            )
+        )
+        for d in range(2)
+    ]
+    C = [
+        (
+            -s_eta
+            * s[d]
+            * np.array(
+                [
+                    -eps_m[d] * theta[d] / (1 + theta[d]),
+                    eps_m[d] * (1 + theta[d]) / theta[d],
+                    eps_p[d] * (2 - theta[d]) / (1 - theta[d]),
+                    -eps_p[d] * (1 - theta[d]) / (2 - theta[d]),
+                ]
+            )
+        )
+        for d in range(2)
+    ]
+    a_term = [
+        -s[d] * a_I[d] * eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
+        for d in range(2)
+    ]
+
+    P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
+    grad_tau = [
+        np.array(
+            [
+                -2 * x * n2_I[d],
+                x * n1_I[d] - y * n2_I[d],
+                2 * y * n1_I[d],
+                -n2_I[d],
+                n1_I[d],
+                0.0,
+            ]
+        )
+        for d in range(2)
+    ]
+    n_norm = [n1_I[0], n2_I[1]]
+    n_tang = [-n2_I[0], n1_I[1]]
+    grad_coeff = [dr[d] * eps_jump[d] * n_tang[d] * grad_tau[d] @ P_inv for d in range(2) ]
+    a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(2)]
+    b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(2)]
+
+    D[:] = [ a_tau_term[d] + b_term[d] - a_term[d] for d in range(2) ]
+
+    _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
+    M[0, 0] = B[0] - grad_coeff[0][_grad_idx[dir[0]]]
+    M[1, 1] = B[1] - grad_coeff[1][_grad_idx[dir[1]]]
+    M[0, 1] = -grad_coeff[0][_grad_idx[dir[1]]]
+    M[1, 0] = -grad_coeff[1][_grad_idx[dir[0]]]
+
+    _dir_step = {
+        Direction.R: (1, 0),
+        Direction.T: (0, 1),
+        Direction.L: (-1, 0),
+        Direction.B: (0, -1),
+    }
+    for d in range(2):
+        N[d, offset(1, 0)] = grad_coeff[d][0] if dir[0] != Direction.R else 0.0
+        N[d, offset(-1, 0)] = grad_coeff[d][1] if dir[0] != Direction.L else 0.0
+        N[d, offset(0, 1)] = grad_coeff[d][2] if dir[1] != Direction.T else 0.0
+        N[d, offset(0, -1)] = grad_coeff[d][3] if dir[1] != Direction.B else 0.0
+        N[d, offset(0, 0)] = grad_coeff[d][4]
+        N[d, offset(*offset_ext)] = grad_coeff[d][5]
+
+        # Place [k] along the direction ray at offsets (-1, 0, 1, 2) from center
+        dx_dir, dy_dir = _dir_step[dir[d]]
+        for k in range(4):
+            N[d, offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[d][k]
+
+    M_inv_d = np.linalg.solve(M, D)
+    M_inv_N = np.linalg.solve(M, N)
+
+    sub_coeff = [ eps[0] / theta[0] / bot_x, eps[1] / theta[1] / bot_y ]
+    f[i, j] -= M_inv_d[0] * sub_coeff[0] + M_inv_d[1] * sub_coeff[1]
+
+    # Extra stencil entries for directions orthogonal to the current one
+    add_terms = {}
+    if dir[0] != Direction.R:
+        add_terms[(1, 0)] = eps_r / theta_r / bot_x
+    if dir[0] != Direction.L:
+        add_terms[(-1, 0)] = eps_l / theta_l / bot_x
+    if dir[1] != Direction.T:
+        add_terms[(0, 1)] = eps_t / theta_t / bot_y
+    if dir[1] != Direction.B:
+        add_terms[(0, -1)] = eps_b / theta_b / bot_y
+
+    for offset_x in range(-2, 3):
+        for offset_y in range(-2, 3):
+            value = (
+                    M_inv_N[0, offset(offset_x, offset_y)] * sub_coeff[0]
+                    + M_inv_N[1, offset(offset_x, offset_y)] * sub_coeff[1]
+                )
+            if (offset_x, offset_y) == (0, 0):
+                value += (
+                    -(eps_r / theta_r + eps_l / theta_l) / bot_x
+                    - (eps_t / theta_t + eps_b / theta_b) / bot_y
+                )
+            else:
+                value += add_terms.get((offset_x, offset_y), 0.0)
+            rows.append(row_idx)
+            cols.append(index(i + offset_x, j + offset_y))
+            vals.append(value)
 
 
 # ---------------------------------------------------------------------------
@@ -1071,67 +1296,184 @@ def _case4_geometry(direction: int, i: int, j: int):
 
 
 def coeff_case4(direction: int, i: int, j: int) -> None:
-    """Add the case-4 row contributions for grid point (i,j).
+    """coeff of u_ij and its neighbors for a case 4 cell (3 cut interfaces)."""
+    x, y = center(i, j)
+    eta = surface(x, y)
+    row_idx = index(i, j)
 
-    `direction` has exactly three of R/T/L/B bits set. The four sub-cases
-    map 1-to-1 to the four cells in derivation_case4.ju.py:
+    offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
 
-        R|T|L -> sub-case 1     R|T|B -> sub-case 2
-        R|B|L -> sub-case 3     T|B|L -> sub-case 4
+    theta_r = compute_theta(Direction.R, i, j)
+    theta_t = compute_theta(Direction.T, i, j)
+    theta_l = compute_theta(Direction.L, i, j)
+    theta_b = compute_theta(Direction.B, i, j)
 
-    The 3x3 system is M [u_*1, u_*2, u_*3]^T = N u_stencil + d, where the
-    three unknowns are the interface ghost values at the three corner
-    interface points. The exact M / N / d for each sub-case must be filled
-    in from the symbolic derivation in derivation_case4.ju.py.
-    """
-    x_, y_ = center(i, j)
-    geom = _case4_geometry(direction, i, j)
-    eta = geom["eta"]
+    x_r = x + theta_r * dx
+    x_l = x - theta_l * dx
+    y_t = y + theta_t * dy
+    y_b = y - theta_b * dy
 
-    sub_case_table = {
-        int(Direction.R | Direction.T | Direction.L): 1,
-        int(Direction.R | Direction.T | Direction.B): 2,
-        int(Direction.R | Direction.B | Direction.L): 3,
-        int(Direction.T | Direction.B | Direction.L): 4,
+    eps_r = permittivity(x + theta_r * dx / 2, y)
+    eps_l = permittivity(x - theta_l * dx / 2, y)
+    eps_t = permittivity(x, y + theta_t * dy / 2)
+    eps_b = permittivity(x, y - theta_b * dy / 2)
+    if direction == Direction.R | Direction.T | Direction.L:
+        dir = [Direction.R, Direction.T, Direction.L]
+        theta = [theta_r, theta_t, theta_l]
+        eps = [eps_r, eps_t, eps_l]
+    elif direction == Direction.L | Direction.T | Direction.B:
+        dir = [Direction.L, Direction.T, Direction.B]
+        theta = [theta_l, theta_t, theta_b]
+        eps = [eps_l, eps_t, eps_b]
+    elif direction == Direction.L | Direction.B | Direction.R:
+        dir = [Direction.L, Direction.B, Direction.R]
+        theta = [theta_l, theta_b, theta_r]
+        eps = [eps_l, eps_b, eps_r]
+    elif direction == Direction.R | Direction.B | Direction.T:
+        dir = [Direction.R, Direction.B, Direction.T]
+        theta = [theta_r, theta_b, theta_t]
+        eps = [eps_r, eps_b, eps_t]
+
+    _ext = {
+        Direction.R | Direction.T | Direction.L: (x - dx, y - dy, (-1, -1)),
+        Direction.R | Direction.T | Direction.B: (x + dx, y - dy, (1, -1)),
+        Direction.R | Direction.B | Direction.L: (x + dx, y + dy, (1, 1)),
+        Direction.T | Direction.B | Direction.L: (x - dx, y + dy, (-1, 1)),
     }
-    sub_case = sub_case_table.get(int(direction))
-    if sub_case is None:
-        raise ValueError(f"Invalid direction for case 4: {direction!r}")
+    x_ext, y_ext, offset_ext = _ext[direction]
 
-    # Shortley-Weller half-segment widths (uncut side has theta = 1).
-    theta_R = geom["theta_R"]
-    theta_T = geom["theta_T"]
-    theta_L = geom["theta_L"]
-    theta_B = geom["theta_B"]
-    bot_x = (theta_R + theta_L) / 2 * dx**2
-    bot_y = (theta_T + theta_B) / 2 * dy**2
+    s_eta = np.sign(eta)
+    s = [dirsign(dir[d]) for d in range(3)]
 
-    eps_r = permittivity(x_ + theta_R * dx / 2, y_)
-    eps_l = permittivity(x_ - theta_L * dx / 2, y_)
-    eps_t = permittivity(x_, y_ + theta_T * dy / 2)
-    eps_b = permittivity(x_, y_ - theta_B * dy / 2)
+    is_x = [d in (Direction.R, Direction.L) for d in dir]
+    dr = [dx if is_x[d] else dy for d in range(3)]
+    bot_x = (theta_r + theta_l) / 2 * dx**2
+    bot_y = (theta_t + theta_b) / 2 * dy**2
 
-    M_inv_d, M_inv_N, all_offsets = _solve_case4_local(sub_case, eta, direction, geom)
+    eps_p = []
+    eps_m = []
+    for d in range(3):
+        if is_x[d]:
+            eps_p.append(permittivity(x + s[d] * (theta[d] + EPS) * dx, y))
+            eps_m.append(permittivity(x + s[d] * (theta[d] - EPS) * dx, y))
+        else:
+            eps_p.append(permittivity(x, y + s[d] * (theta[d] + EPS) * dy))
+            eps_m.append(permittivity(x, y + s[d] * (theta[d] - EPS) * dy))
+    eps_jump = [eps_p[d] - eps_m[d] for d in range(3)]
 
-    sw_idx = _CASE4_SW_INDEX[sub_case]
-    _assemble_case_n(
-        i,
-        j,
-        sw_idx,
-        M_inv_d,
-        M_inv_N,
-        all_offsets,
-        eps_r,
-        eps_l,
-        eps_t,
-        eps_b,
-        theta_R,
-        theta_T,
-        theta_L,
-        theta_B,
-        bot_x,
-        bot_y,
-    )
+    n1_I = np.array([interp(dir[d], theta[d], i, j, n1) for d in range(3)])
+    n2_I = np.array([interp(dir[d], theta[d], i, j, n2) for d in range(3)])
+    a_tau_I = [interp(dir[d], theta[d], i, j, a_tau) for d in range(3)]
+    a_I = [interp(dir[d], theta[d], i, j, a) for d in range(3)]
+    b_I = [interp(dir[d], theta[d], i, j, b) for d in range(3)]
+
+    B = [
+        s_eta
+        * s[d]
+        * (
+            eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
+            + eps_m[d] * (2 * theta[d] + 1) / (theta[d] * (theta[d] + 1))
+        )
+        for d in range(3)
+    ]
+    C = [
+        -s_eta
+        * s[d]
+        * np.array(
+            [
+                -eps_m[d] * theta[d] / (1 + theta[d]),
+                eps_m[d] * (1 + theta[d]) / theta[d],
+                eps_p[d] * (2 - theta[d]) / (1 - theta[d]),
+                -eps_p[d] * (1 - theta[d]) / (2 - theta[d]),
+            ]
+        )
+        for d in range(3)
+    ]
+    a_term = [
+        -s[d] * a_I[d] * eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
+        for d in range(3)
+    ]
+
+    P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
+    grad_tau = [
+        np.array(
+            [
+                -2 * x * n2_I[d],
+                x * n1_I[d] - y * n2_I[d],
+                2 * y * n1_I[d],
+                -n2_I[d],
+                n1_I[d],
+                0.0,
+            ]
+        )
+        for d in range(3)
+    ]
+    n_norm = [n1_I[d] if is_x[d] else n2_I[d] for d in range(3)]
+    n_tang = [-n2_I[d] if is_x[d] else n1_I[d] for d in range(3)]
+    grad_coeff = [dr[d] * eps_jump[d] * n_tang[d] * grad_tau[d] @ P_inv for d in range(3)]
+    a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(3)]
+    b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(3)]
+
+    D = np.array([a_tau_term[d] + b_term[d] - a_term[d] for d in range(3)])
+
+    _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
+    M = np.zeros((3, 3))
+    for d in range(3):
+        M[d, d] = B[d] - grad_coeff[d][_grad_idx[dir[d]]]
+        for e in range(3):
+            if d != e:
+                M[d, e] = -grad_coeff[d][_grad_idx[dir[e]]]
+
+    N = np.zeros((3, 25))
+    _dir_step = {
+        Direction.R: (1, 0),
+        Direction.T: (0, 1),
+        Direction.L: (-1, 0),
+        Direction.B: (0, -1),
+    }
+    for d in range(3):
+        N[d, offset(1, 0)] = grad_coeff[d][0] if Direction.R not in dir else 0.0
+        N[d, offset(-1, 0)] = grad_coeff[d][1] if Direction.L not in dir else 0.0
+        N[d, offset(0, 1)] = grad_coeff[d][2] if Direction.T not in dir else 0.0
+        N[d, offset(0, -1)] = grad_coeff[d][3] if Direction.B not in dir else 0.0
+        N[d, offset(0, 0)] = grad_coeff[d][4]
+        N[d, offset(*offset_ext)] = grad_coeff[d][5]
+
+        dx_dir, dy_dir = _dir_step[dir[d]]
+        for k in range(4):
+            N[d, offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[d][k]
+
+    M_inv_d = np.linalg.solve(M, D)
+    M_inv_N = np.linalg.solve(M, N)
+
+    sub_coeff = [eps[d] / theta[d] / (bot_x if is_x[d] else bot_y) for d in range(3)]
+    f[i, j] -= sum(M_inv_d[d] * sub_coeff[d] for d in range(3))
+
+    add_terms = {}
+    if Direction.R not in dir:
+        add_terms[(1, 0)] = eps_r / theta_r / bot_x
+    if Direction.L not in dir:
+        add_terms[(-1, 0)] = eps_l / theta_l / bot_x
+    if Direction.T not in dir:
+        add_terms[(0, 1)] = eps_t / theta_t / bot_y
+    if Direction.B not in dir:
+        add_terms[(0, -1)] = eps_b / theta_b / bot_y
+
+    for offset_x in range(-2, 3):
+        for offset_y in range(-2, 3):
+            value = sum(
+                M_inv_N[d, offset(offset_x, offset_y)] * sub_coeff[d] for d in range(3)
+            )
+            if (offset_x, offset_y) == (0, 0):
+                value += (
+                    -(eps_r / theta_r + eps_l / theta_l) / bot_x
+                    - (eps_t / theta_t + eps_b / theta_b) / bot_y
+                )
+            else:
+                value += add_terms.get((offset_x, offset_y), 0.0)
+            rows.append(row_idx)
+            cols.append(index(i + offset_x, j + offset_y))
+            vals.append(value)
 
 
 # ---------------------------------------------------------------------------
@@ -5018,8 +5360,7 @@ def convergence_test3():
         A = construct_matrix()
         u = spsolve(A, f.flatten())
         u = u.reshape((nx, ny))
-        # dudx, dudy = gradient(u)
-        dudx, dudy = np.zeros_like(u), np.zeros_like(u)
+        dudx, dudy = gradient(u)
         errors_u[i] = np.linalg.norm((u - u_exact)[2:-2, 2:-2].flat, np.inf)
         errors_du[i] = np.linalg.norm(
             np.append(
@@ -5359,5 +5700,5 @@ if __name__ == "__main__":
     # convergence_test1()
     # convergence_test2()
     convergence_test3()
-    # convergence_test4()
-    # convergence_test5()
+    convergence_test4()
+    convergence_test5()

@@ -411,7 +411,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
     #     + b_I * n_n * d_self
     #     + cd.sign * a_I * eps_p * _phi(theta)
     # )
-    D = a_tau_term + b_term - a_term
+    d = a_tau_term + b_term - a_term
 
     if eta > 0:
         eps_p, eps_m = -_eps_m, -_eps_p
@@ -436,14 +436,6 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
         -eps_jump * n1_I * n2_I * theta * d_self / d_other,
     ]
 
-    # print(f"(i,j)={(i,j)}")
-    # print(f"eta={eta}")
-    # print(f"direction={direction}")
-    # print(f"M:\n{M}")
-    # print(f"D:\n{D}")
-    # # print(f"N:\n{N}")
-    # print()
-
     # --- Shortley-Weller assembly ---
     _eps = {"r": eps_r, "l": eps_l, "t": eps_t, "b": eps_b}
     _theta = {"r": theta_r, "l": theta_l, "t": theta_t, "b": theta_b}
@@ -455,7 +447,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
     bot_a = _bot[active]
 
     fac = 1.0 / M * eps_a / theta_a / bot_a
-    f[i, j] -= D * fac
+    f[i, j] -= d * fac
 
     # uncut-face neighbour corrections
     uncut_map = {}
@@ -625,21 +617,7 @@ def _solve_case2_local(direction: int, i: int, j: int):
     print(f"(i,j)={(i,j)}")
     print(f"eta={eta}")
     print(f"direction={_FACE_NAME[cd_x.face]}|{_FACE_NAME[cd_y.face]}")
-    # print(f"theta_x={theta_x}, theta_y={theta_y}")
-    # print(f"eps_jump_x={eps_jump_x}, eps_jump_y={eps_jump_y}")
-    # print(f"n1_x={n1_x}, n2_x={n2_x}, n1_y={n1_y}, n2_y={n2_y}")
-    # n_t = [n1_x, n2_x][cd_x.n_tang]
-    # B_x = cd_x.sign * (eps_p_x * _phi(theta_x) + eps_m_x * _psi(theta_x))
-    # grad_coeff_x =cd_x.sign * eps_jump_x * n_t**2 * _psi(theta_x)
-    # n_t = [n1_y, n2_y][cd_y.n_tang]
-    # B_y = cd_y.sign * (eps_p_y * _phi(theta_y) + eps_m_y * _psi(theta_y))
-    # print(f"B_x={B_x}, grad_coeff_x={grad_coeff_x}")
-    # print(f"_phi(theta_x)={_phi(theta_x)}")
-    # print(f"_psi(theta_x)={_psi(theta_x)}")
-    # grad_coeff_y =cd_y.sign * eps_jump_y * n_t**2 * _psi(theta_y)
-    # print(f"B_y={B_y}, grad_coeff_y={grad_coeff_y}")
-    # print(f"_phi(theta_y)={_phi(theta_y)}")
-    # print(f"_psi(theta_y)={_psi(theta_y)}")
+    print(f"theta_x={theta_x}, theta_y={theta_y}")
     print(f"M:\n{M}")
     print(f"D:\n{d}")
     print(f"N:\n{N}")
@@ -4993,7 +4971,7 @@ def convergence_test3():
     errors_u = np.zeros(n_range.size)
     errors_du = np.zeros(n_range.size)
 
-    for i, n in enumerate(n_range):
+    for i, n in enumerate(n_range[3:4]):
         nx, ny = n, n
         dx, dy = 1.0 / nx, 1.0 / ny
         x = np.arange(dx / 2, 1.0 + dx / 2, dx)
@@ -5018,8 +4996,7 @@ def convergence_test3():
         A = construct_matrix()
         u = spsolve(A, f.flatten())
         u = u.reshape((nx, ny))
-        # dudx, dudy = gradient(u)
-        dudx, dudy = np.zeros_like(u), np.zeros_like(u)
+        dudx, dudy = gradient(u)
         errors_u[i] = np.linalg.norm((u - u_exact)[2:-2, 2:-2].flat, np.inf)
         errors_du[i] = np.linalg.norm(
             np.append(

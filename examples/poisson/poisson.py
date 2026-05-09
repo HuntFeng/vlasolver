@@ -3,6 +3,7 @@ import enum
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
+np.set_printoptions(legacy="1.25")  # no type info when printing
 
 EPS = 0.5
 
@@ -470,8 +471,10 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
 
     # geometric [eps*u_x] and [eps*u_y] Eq(34)
     P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
+    x_I = x + s * theta * dx if is_x_dir else x
+    y_I = y + s * theta * dy if not is_x_dir else y
     grad_tau = np.array(
-        [-2 * x * n2_I, x * n1_I - y * n2_I, 2 * y * n1_I, -n2_I, n1_I, 0.0]
+        [-2 * x_I * n2_I, x_I * n1_I - y_I * n2_I, 2 * y_I * n1_I, -n2_I, n1_I, 0.0]
     )
 
     if is_x_dir:
@@ -483,7 +486,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
         a_tau_term = dy * a_tau_I * eps_p * n1_I
         b_term = dy * b_I * n2_I
 
-    d = a_tau_term + b_term - a_term
+    D = a_tau_term + b_term - a_term
 
     _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
     grad_coeff_dir = grad_coeff[_grad_idx[direction]]
@@ -509,8 +512,17 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
     for k in range(4):
         N[offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[k]
 
+
+    # print(f"(i,j)={(i,j)}")
+    # print(f"eta={eta}")
+    # print(f"direction={direction}")
+    # print(f"M:\n{M}")
+    # print(f"D:\n{D}")
+    # # print(f"N:\n{N}")
+    # print()
+
     M_inv_N = N / M
-    M_inv_d = d / M
+    M_inv_d = D / M
 
     # Substitution coefficient: eps in current direction / theta / denominator
     _eps_dir = {
@@ -784,7 +796,9 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
         permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
         permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
     ]
-    eps_jump = [eps_p[d] - eps_m[d] for d in range(2)]
+    eps_jump = np.array([eps_p[d] - eps_m[d] for d in range(2)])
+    if eta > 0:
+        eps_jump = -eps_jump
 
     # normal evaluated at x and y
     n1_I = np.array([interp(dir[d], theta[d], i, j, n1) for d in range(2)])
@@ -830,12 +844,15 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
     ]
 
     P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
+    x_I = np.array([x + s[0] * theta[0] * dx, x])
+    y_I = np.array([y, y + s[1] * theta[1] * dy])
+    
     grad_tau = [
         np.array(
             [
-                -2 * x * n2_I[d],
-                x * n1_I[d] - y * n2_I[d],
-                2 * y * n1_I[d],
+                -2 * x_I[d] * n2_I[d],
+                x_I[d] * n1_I[d] - y_I[d] * n2_I[d],
+                2 * y_I[d] * n1_I[d],
                 -n2_I[d],
                 n1_I[d],
                 0.0,
@@ -1102,7 +1119,7 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     s_eta = np.sign(eta)
     row_idx = index(i, j)
 
-    offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
+    offset = lambda ox, oy: (ox + 3) * 7 + (oy + 3)
 
     theta_r = compute_theta(Direction.R, i, j)
     theta_t = compute_theta(Direction.T, i, j)
@@ -1386,21 +1403,28 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     
     
     M = np.zeros((3, 3))
-    N = np.zeros((3, 25)) # 5x5 stencil around (i,j)
+    N = np.zeros((3, 49)) # 7x7 stencil around (i,j)
     D = np.zeros(3)
 
     D[:] = [a_tau_term[d] + b_term[d] - a_term[d] for d in range(3)]
 
     _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
-    M[0, 0] = B[0, 0] - grad_coeff[0][_grad_idx[dir[0]]]
-    M[1, 1] = B[1, 1] - grad_coeff[1][_grad_idx[dir[1]]]
-    M[2, 2] = B[2, 2] - grad_coeff[2][_grad_idx[dir[2]]]
-    M[0, 1] = -grad_coeff[0][_grad_idx[dir[1]]]
-    M[0, 2] = -grad_coeff[0][_grad_idx[dir[2]]]
-    M[1, 0] = -grad_coeff[1][_grad_idx[dir[0]]]
-    M[1, 2] = -grad_coeff[1][_grad_idx[dir[2]]]
-    M[2, 0] = -grad_coeff[2][_grad_idx[dir[0]]]
-    M[2, 1] = -grad_coeff[2][_grad_idx[dir[1]]]
+    # M[0, 0] = B[0, 0] - grad_coeff[0][_grad_idx[dir[0]]]
+    # M[1, 1] = B[1, 1] - grad_coeff[1][_grad_idx[dir[1]]]
+    # M[2, 2] = B[2, 2] - grad_coeff[2][_grad_idx[dir[2]]]
+    # M[0, 1] = -grad_coeff[0][_grad_idx[dir[1]]]
+    # M[0, 2] = -grad_coeff[0][_grad_idx[dir[2]]]
+    # M[1, 0] = -grad_coeff[1][_grad_idx[dir[0]]]
+    # M[1, 2] = -grad_coeff[1][_grad_idx[dir[2]]]
+    # M[2, 0] = -grad_coeff[2][_grad_idx[dir[0]]]
+    # M[2, 1] = -grad_coeff[2][_grad_idx[dir[1]]]
+    M = B
+    M[0, 0] -= grad_coeff[0][_grad_idx[dir[0]]]
+    M[0, 1] -= grad_coeff[0][_grad_idx[dir[1]]]
+    M[1, 0] -= grad_coeff[1][_grad_idx[dir[0]]]
+    M[1, 1] -= grad_coeff[1][_grad_idx[dir[1]]]
+    M[2, 0] -= grad_coeff[2][_grad_idx[dir[0]]]
+    M[2, 1] -= grad_coeff[2][_grad_idx[dir[1]]]
 
     _dir_step = {
         Direction.R: (1, 0),
@@ -1418,7 +1442,7 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
 
         # Place [k] along the direction ray at offsets (-1, 0, 1, 2) from center
         dx_dir, dy_dir = _dir_step[dir[d]]
-        for k in range(4):
+        for k in range(5):
             N[d, offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[d][k]
 
     M_inv_d = np.linalg.solve(M, D)
@@ -1438,8 +1462,8 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     if dir[1] != Direction.B:
         add_terms[(0, -1)] = eps_b / theta_b / bot_y
 
-    for offset_x in range(-2, 3):
-        for offset_y in range(-2, 3):
+    for offset_x in range(-3, 4):
+        for offset_y in range(-3, 4):
             value = (
                     M_inv_N[0, offset(offset_x, offset_y)] * sub_coeff[0]
                     + M_inv_N[1, offset(offset_x, offset_y)] * sub_coeff[1]
@@ -1668,6 +1692,7 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
         for e in range(3):
             if d != e:
                 M[d, e] = -grad_coeff[d][_grad_idx[dir[e]]]
+
 
     N = np.zeros((3, 25))
     _dir_step = {
@@ -5948,6 +5973,6 @@ def convergence_test5():
 if __name__ == "__main__":
     # convergence_test1()
     # convergence_test2()
-    # convergence_test3()
-    convergence_test4()
+    convergence_test3()
+    # convergence_test4()
     # convergence_test5()

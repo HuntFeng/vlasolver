@@ -22,7 +22,7 @@ from IPython.display import display
 import enum
 from typing import Literal
 
-# %% jupyter={"source_hidden": true}
+# %%
 uT, uB, uL, uR, uc, u_ext = sp.symbols("u_T u_B u_L u_R u_c u_ext")
 uT_p, uB_p, uL_p, uR_p, uc_p, u_ext_p = sp.symbols(
     "u_T^+ u_B^+ u_L^+ u_R^+ u_c^+ u_ext^+"
@@ -66,23 +66,23 @@ beta_jump, beta_p, beta_m = sp.symbols("[\\beta], beta^+, beta^-")
 # nx, ny = sp.symbols("n_x n_y", cls=sp.Function)
 # a, a_tau, b = sp.symbols("a, a_{\\tau}, b", cls=sp.Function)
 
-A = sp.Matrix(
+P_mat = sp.Matrix(
     [
+        [xR**2, xR * y_j, y_j**2, xR, y_j, 1],
+        [xL**2, xL * y_j, y_j**2, xL, y_j, 1],
         [x_i**2, x_i * yT, yT**2, x_i, yT, 1],
         [x_i**2, x_i * yB, yB**2, x_i, yB, 1],
-        [xL**2, xL * y_j, y_j**2, xL, y_j, 1],
-        [xR**2, xR * y_j, y_j**2, xR, y_j, 1],
         [x_i**2, x_i * y_j, y_j**2, x_i, y_j, 1],
         [x_ext**2, x_ext * y_ext, y_ext**2, x_ext, y_ext, 1],
     ]
 )
-A_inv = A.inv()
-P_coeff = A_inv @ sp.Matrix([uT, uB, uL, uR, uc, u_ext])
+P_mat_inv = P_mat.inv()
+P_coeff = P_mat_inv @ sp.Matrix([uR, uL, uT, uB, uc, u_ext])
 A, B, C, D, E, F = P_coeff
 P = A * x**2 + B * x * y + C * y**2 + D * x + E * y + F
 
 
-# %% jupyter={"source_hidden": true}
+# %%
 class Direction(enum.IntFlag):
     R = 1 << 0
     T = 1 << 1
@@ -299,11 +299,87 @@ def coeff_case2(
     print("d[1]")
     display(d[1])
 
+def geometric_jump(
+    eta: Literal[1, -1],
+    direction: int,
+    vars_x_p: dict,
+    vars_x_m: dict,
+    vars_y_p: dict,
+    vars_y_m: dict,
+):
+    grad_P = sv.gradient(P)
+    dudx = grad_P.components[coord.i]
+    dudy = grad_P.components[coord.j]
+
+    if eta < 0:
+        beta_ux_jump_geometry = (
+            b * nx - beta_jump * ny * (-ny * dudx + nx * dudy) - beta_p * a_tau * ny
+        ).subs(vars_x_m)
+    else:
+        beta_ux_jump_geometry = (
+            b * nx - beta_jump * ny * (-ny * dudx + nx * dudy) - beta_m * a_tau * ny
+        ).subs(vars_x_p)
+    beta_ux_jump_algebra = beta_p * dudx.subs(vars_x_p) - beta_m * dudx.subs(vars_x_m)
+    equality_x = beta_ux_jump_algebra - beta_ux_jump_geometry
+    equality_x *= dx
+
+    if eta < 0:
+        beta_uy_jump_geometry = (
+            b * ny + beta_jump * nx * (-ny * dudx + nx * dudy) + beta_p * a_tau * nx
+        ).subs(vars_y_m)
+    else:
+        beta_uy_jump_geometry = (
+            b * ny + beta_jump * nx * (-ny * dudx + nx * dudy) + beta_m * a_tau * nx
+        ).subs(vars_y_p)
+    beta_uy_jump_algebra = beta_p * dudy.subs(vars_y_p) - beta_m * dudy.subs(vars_y_m)
+    
+    expanded_x = beta_ux_jump_geometry.expand()
+    expanded_y = beta_uy_jump_geometry.expand()
+
+    u_pm_x = 0
+    u_pm_y = 0
+    if dir == Direction.R | Direction.T:
+        u_pm_x = uR_m if eta < 0 else uR_p
+        u_pm_y = uT_m if eta < 0 else uT_p
+    if dir == Direction.T | Direction.L:
+        u_pm_x = uL_m if eta < 0 else uL_p
+        u_pm_y = uT_m if eta < 0 else uT_p
+    if dir == Direction.L | Direction.B:
+        u_pm_x = uL_m if eta < 0 else uL_p
+        u_pm_y = uB_m if eta < 0 else uB_p
+    if dir == Direction.B | Direction.R:
+        u_pm_x = uR_m if eta < 0 else uR_p
+        u_pm_y = uB_m if eta < 0 else uB_p
+
+
+    for i, expanded in enumerate([expanded_x, expanded_y]):
+        print(f"{"x" if i==0 else "y"} direction")
+        u_pm = u_pm_x if i==0 else u_pm_y
+        u_pm_coeff = expanded.coeff(u_pm).factor()
+        print("u_p_coeff")
+        display(u_pm_coeff)
+        ab_term = expanded.coeff(a_tau) * a_tau + expanded.coeff(b) * b
+        print("ab_term")
+        display(ab_term)
+        rest = (expanded - u_pm_coeff * u_pm - ab_term).expand()
+        collected = rest.collect(flatten(u))
+        grad_term = sp.Add(*[term.factor() for term in collected.as_ordered_terms()])
+        print("grad_term")
+        display(grad_term)
+
+    grad_ops = sp.Matrix([-2 * x * ny, x * nx - y * ny, 2 * y * nx, -ny, nx, 0]).T
+    u_coeff = -beta_jump * ny * grad_ops @ P_mat_inv
+    print("eval at x direction, order R,L,T,B,c,ext")
+    for coeff in u_coeff:
+        display(coeff.subs(vars_x_m).expand().factor())
+    print("eval at y direction, order R,L,T,B,c,ext")
+    for coeff in u_coeff:
+        display(coeff.subs(vars_y_m).expand().factor())
 
 # %% [markdown]
 # ## $\eta < 0$
 
-# %% jupyter={"source_hidden": true}
+# %%
 case2_right_vars_m = {  # top right
     x: x_i + theta_R * dx,
     y: y_j,
@@ -380,8 +456,16 @@ coeff_case2(
     vars_y_p=case2_top_vars_p,
     vars_y_m=case2_top_vars_m,
 )
+geometric_jump(
+    -1,
+    Direction.R | Direction.T,
+    vars_x_p=case2_right_vars_p,
+    vars_x_m=case2_right_vars_m,
+    vars_y_p=case2_top_vars_p,
+    vars_y_m=case2_top_vars_m,
+)
 
-# %% jupyter={"source_hidden": true}
+# %%
 case2_left_vars_m = {  # left top
     x: x_i - theta_L * dx,
     y: y_j,
@@ -618,7 +702,7 @@ coeff_case2(
 # %% [markdown]
 # ## $\eta > 0$
 
-# %% jupyter={"source_hidden": true}
+# %%
 case2_right_vars_p = {  # top right
     x: x_i + theta_R * dx,
     y: y_j,
@@ -687,8 +771,17 @@ case2_top_vars_m = {
     u_ext: u[2][2],
 }
 
-coeff_case2(
-    1,
+# coeff_case2(
+#     1,
+#     Direction.R | Direction.T,
+#     vars_x_p=case2_right_vars_p,
+#     vars_x_m=case2_right_vars_m,
+#     vars_y_p=case2_top_vars_p,
+#     vars_y_m=case2_top_vars_m,
+# )
+
+geometric_jump(
+    -1,
     Direction.R | Direction.T,
     vars_x_p=case2_right_vars_p,
     vars_x_m=case2_right_vars_m,

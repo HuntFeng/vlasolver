@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 np.set_printoptions(legacy="1.25")  # no type info when printing
 
-EPS = 0.5
+EPS = 0.01
 
 # Shared zero function — all constant-zero matrix entries.
 _Z = lambda *_: 0.0
@@ -512,14 +512,6 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
     for k in range(4):
         N[offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[k]
 
-
-    # print(f"(i,j)={(i,j)}")
-    # print(f"eta={eta}")
-    # print(f"direction={direction}")
-    # print(f"M:\n{M}")
-    # print(f"D:\n{D}")
-    # # print(f"N:\n{N}")
-    # print()
 
     M_inv_N = N / M
     M_inv_d = D / M
@@ -1167,6 +1159,8 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
             permittivity(x+2*dx + s[2] * (theta_extra[1] - EPS) * dx, y) ]
         x_ext, y_ext = x - dx, y - dy
         offset_ext = (-1, -1)
+        x_I = [x, x + s[1] * theta[1] * dx, x + s[2] * (theta_extra[1] - 2) * dx]
+        y_I = [y + s[0] * theta[0] * dy, y, y]
     elif (direction == Direction.T | Direction.R) and (extra == Direction.T):
         dir = [Direction.R, Direction.T, Direction.T]
         theta = [theta_r, theta_t]
@@ -1182,6 +1176,8 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
             permittivity(x, y+2*dy + s[2] * (theta_extra[1] - EPS) * dy) ]
         x_ext, y_ext = x - dx, y - dy
         offset_ext = (-1, -1)
+        x_I = [x + s[0] * theta[0] * dx, x, x]
+        y_I = [y, y + s[1] * theta[1] * dy, y + s[2] * (theta_extra[1] - 2) * dy]
     elif (direction == Direction.T | Direction.L) and (extra == Direction.T):
         dir = [Direction.L, Direction.T, Direction.T]
         theta = [theta_l, theta_t]
@@ -1197,6 +1193,8 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
             permittivity(x, y+2*dy + s[2] * (theta_extra[1] - EPS) * dy) ]
         x_ext, y_ext = x + dx, y - dy
         offset_ext = (1, -1)
+        x_I = [x + s[0] * theta[0] * dx, x, x]
+        y_I = [y, y + s[1] * theta[1] * dy, y + s[2] * (theta_extra[1] - 2) * dy]
     elif (direction == Direction.T | Direction.L) and (extra == Direction.L):
         dir = [Direction.T, Direction.L, Direction.L]
         theta = [theta_t, theta_l]
@@ -1212,6 +1210,8 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
             permittivity(x-2*dx + s[2] * (theta_extra[1] - EPS) * dx, y) ]
         x_ext, y_ext = x + dx, y - dy
         offset_ext = (1, -1)
+        x_I = [x, x + s[1] * theta[1] * dx, x + s[2] * (theta_extra[1] - 2) * dx]
+        y_I = [y + s[0] * theta[0] * dy, y, y]
     elif (direction == Direction.L | Direction.B) and (extra == Direction.L):
         dir = [Direction.B, Direction.L, Direction.L]
         theta = [theta_b, theta_l]
@@ -1227,6 +1227,8 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
             permittivity(x-2*dx + s[2] * (theta_extra[1] - EPS) * dx, y) ]
         x_ext, y_ext = x + dx, y + dy
         offset_ext = (1, 1)
+        x_I = [x, x + s[1] * theta[1] * dx, x + s[2] * (theta_extra[1] - 2) * dx]
+        y_I = [y + s[0] * theta[0] * dy, y, y]
     elif (direction == Direction.L | Direction.B) and (extra == Direction.B):
         dir = [Direction.L, Direction.B, Direction.B]
         theta = [theta_l, theta_b]
@@ -1242,6 +1244,8 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
             permittivity(x, y-2*dy + s[2] * (theta_extra[1] - EPS) * dy) ]
         x_ext, y_ext = x + dx, y + dy
         offset_ext = (1, 1)
+        x_I = [x + s[0] * theta[0] * dx, x, x]
+        y_I = [y, y + s[1] * theta[1] * dy, y + s[2] * (theta_extra[1] - 2) * dy]
     elif (direction == Direction.R | Direction.B) and (extra == Direction.B):
         dir = [Direction.R, Direction.B, Direction.B]
         theta = [theta_r, theta_b]
@@ -1257,6 +1261,8 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
             permittivity(x, y-2*dy + s[2] * (theta_extra[1] - EPS) * dy) ]
         x_ext, y_ext = x - dx, y + dy
         offset_ext = (-1, 1)
+        x_I = [x + s[0] * theta[0] * dx, x, x]
+        y_I = [y, y + s[1] * theta[1] * dy, y + s[2] * (theta_extra[1] - 2) * dy]
     elif (direction == Direction.R | Direction.B) and (extra == Direction.R):
         dir = [Direction.B, Direction.R, Direction.R]
         theta = [theta_b, theta_r]
@@ -1272,11 +1278,15 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
             permittivity(x+2*dx + s[2] * (theta_extra[1] - EPS) * dx, y) ]
         x_ext, y_ext = x - dx, y + dy
         offset_ext = (-1, 1)
+        x_I = [x, x + s[1] * theta[1] * dx, x + s[2] * (theta_extra[1] - 2) * dx]
+        y_I = [y + s[0] * theta[0] * dy, y, y]
     else:
         raise ValueError("Invalid direction/extra combination for case 3", direction, extra)
 
     dr = [dx if dir[d] in (Direction.R, Direction.L) else dy for d in range(3)]
-    eps_jump = [eps_p[d] - eps_m[d] for d in range(3)]
+    eps_jump = np.array([eps_p[d] - eps_m[d] for d in range(3)])
+    if (eta > 0):
+        eps_jump = -eps_jump
     n1_I = [interp(dir[d], theta[d], i, j, n1) for d in range(2)]
     n2_I = [interp(dir[d], theta[d], i, j, n2) for d in range(2)]
     a_tau_I = [interp(dir[d], theta[d], i, j, a_tau) for d in range(2)]
@@ -1387,9 +1397,9 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     grad_tau = [
         np.array(
             [
-                -2 * x * n2_I[d],
-                x * n1_I[d] - y * n2_I[d],
-                2 * y * n1_I[d],
+                -2 * x_I[d] * n2_I[d],
+                x_I[d] * n1_I[d] - y_I[d] * n2_I[d],
+                2 * y_I[d] * n1_I[d],
                 -n2_I[d],
                 n1_I[d],
                 0.0,
@@ -1589,24 +1599,34 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
         dir = [Direction.R, Direction.T, Direction.L]
         theta = [theta_r, theta_t, theta_l]
         eps = [eps_r, eps_t, eps_l]
+        x_I = [x + theta_r * dx, x, x - theta_l * dx]
+        y_I = [y, y + theta_t * dy, y]
     elif direction == Direction.L | Direction.T | Direction.B:
         dir = [Direction.L, Direction.T, Direction.B]
         theta = [theta_l, theta_t, theta_b]
         eps = [eps_l, eps_t, eps_b]
+        x_I = [x - theta_l * dx, x, x]
+        y_I = [y, y + theta_t * dy, y - theta_b * dy]
     elif direction == Direction.L | Direction.B | Direction.R:
         dir = [Direction.L, Direction.B, Direction.R]
         theta = [theta_l, theta_b, theta_r]
         eps = [eps_l, eps_b, eps_r]
+        x_I = [x - theta_l * dx, x, x + theta_r * dx]
+        y_I = [y, y - theta_b * dy, y]
     elif direction == Direction.R | Direction.B | Direction.T:
         dir = [Direction.R, Direction.B, Direction.T]
         theta = [theta_r, theta_b, theta_t]
         eps = [eps_r, eps_b, eps_t]
+        x_I = [x + theta_r * dx, x, x]
+        y_I = [y, y - theta_b * dy, y + theta_t * dy]
+    else:
+        raise ValueError("Invalid direction for case 4", direction)
 
     _ext = {
         Direction.R | Direction.T | Direction.L: (x - dx, y - dy, (-1, -1)),
-        Direction.R | Direction.T | Direction.B: (x + dx, y - dy, (1, -1)),
+        Direction.R | Direction.T | Direction.B: (x - dx, y + dy, (-1, 1)),
         Direction.R | Direction.B | Direction.L: (x + dx, y + dy, (1, 1)),
-        Direction.T | Direction.B | Direction.L: (x - dx, y + dy, (-1, 1)),
+        Direction.T | Direction.B | Direction.L: (x + dx, y - dy, (1, -1)),
     }
     x_ext, y_ext, offset_ext = _ext[direction]
 
@@ -1627,7 +1647,9 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
         else:
             eps_p.append(permittivity(x, y + s[d] * (theta[d] + EPS) * dy))
             eps_m.append(permittivity(x, y + s[d] * (theta[d] - EPS) * dy))
-    eps_jump = [eps_p[d] - eps_m[d] for d in range(3)]
+    eps_jump = np.array([eps_p[d] - eps_m[d] for d in range(3)])
+    if eta > 0:
+        eps_jump = - eps_jump
 
     n1_I = np.array([interp(dir[d], theta[d], i, j, n1) for d in range(3)])
     n2_I = np.array([interp(dir[d], theta[d], i, j, n2) for d in range(3)])
@@ -1667,9 +1689,9 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
     grad_tau = [
         np.array(
             [
-                -2 * x * n2_I[d],
-                x * n1_I[d] - y * n2_I[d],
-                2 * y * n1_I[d],
+                -2 * x_I[d] * n2_I[d],
+                x_I[d] * n1_I[d] - y_I[d] * n2_I[d],
+                2 * y_I[d] * n1_I[d],
                 -n2_I[d],
                 n1_I[d],
                 0.0,
@@ -1688,10 +1710,9 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
     _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
     M = np.zeros((3, 3))
     for d in range(3):
-        M[d, d] = B[d] - grad_coeff[d][_grad_idx[dir[d]]]
+        M[d, d] = B[d]
         for e in range(3):
-            if d != e:
-                M[d, e] = -grad_coeff[d][_grad_idx[dir[e]]]
+            M[d, e] -= grad_coeff[d][_grad_idx[dir[e]]]
 
 
     N = np.zeros((3, 25))
@@ -5034,7 +5055,6 @@ def construct_matrix():
                 rows.append(index(i, j))
                 cols.append(index(i, j))
                 vals.append(1.0)
-                # print(u_exact[i, j])
                 f[i, j] = u_exact[i, j]  # dirichlet bc
                 continue
 
@@ -5973,6 +5993,6 @@ def convergence_test5():
 if __name__ == "__main__":
     # convergence_test1()
     # convergence_test2()
-    convergence_test3()
-    # convergence_test4()
+    # convergence_test3()
+    convergence_test4()
     # convergence_test5()

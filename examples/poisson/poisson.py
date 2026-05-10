@@ -25,88 +25,11 @@ def _psi(th):
     return (2 * th + 1) / (th * (th + 1))
 
 
-def _phi_coupled(th1, th2):
-    """Coupled phi: (2*th1 + th2 - 3) / ((th1-1)*(th1+th2-2))."""
-    return (2 * th1 + th2 - 3) / ((th1 - 1) * (th1 + th2 - 2))
-
-
-def _phi_mirror(th1, th2):
-    """Mirror phi: (th1 + 2*th2 - 3) / ((th2-1)*(th1+th2-2))."""
-    return (th1 + 2 * th2 - 3) / ((th2 - 1) * (th1 + th2 - 2))
-
-
-def _couple_off_fwd(th1, th2):
-    """Forward off-diagonal coupling: (th1-1) / ((th2-1)*(th1+th2-2))."""
-    return (th1 - 1) / ((th2 - 1) * (th1 + th2 - 2))
-
-
-def _couple_off_rev(th1, th2):
-    """Reverse off-diagonal coupling: (th2-1) / ((th1-1)*(th1+th2-2))."""
-    return (th2 - 1) / ((th1 - 1) * (th1 + th2 - 2))
-
-
-def _couple_avg(th1, th2):
-    """Average coupling: (th1+th2-2) / ((th1-1)*(th2-1))."""
-    return (th1 + th2 - 2) / ((th1 - 1) * (th2 - 1))
-
-
-# Evaluator dispatch tables
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import spsolve
 
 np.set_printoptions(legacy="1.25")  # no type info when printing
 
-
-# ---------------------------------------------------------------------------
-# Case 3 / Case 4 evaluators — hardcoded M/N/d formulas live above.
-# ---------------------------------------------------------------------------
-
-
-# Map face name -> row index of the corresponding ghost in the local 3-vector.
-_CASE3_SW_INDEX = {
-    1: {"R": 0, "T": 2},
-    2: {"R": 0, "T": 1},
-    3: {"T": 0, "L": 1},
-    4: {"T": 0, "L": 1},
-    5: {"L": 0, "B": 1},
-    6: {"L": 0, "B": 1},
-    7: {"B": 0, "R": 1},
-    8: {"B": 0, "R": 1},
-}
-_CASE4_SW_INDEX = {
-    1: {"R": 0, "T": 1, "L": 2},
-    2: {"R": 0, "T": 1, "B": 2},
-    3: {"R": 0, "B": 1, "L": 2},
-    4: {"T": 0, "B": 1, "L": 2},
-}
-
-# Dispatch tables built once Direction is defined (see _build_dispatch_tables
-# below; called right after class Direction).
-_CASE3_SUB = {}
-_CASE4_SUB = {}
-
-
-def _build_dispatch_tables():
-    _CASE3_SUB.update(
-        {
-            (Direction.R | Direction.T, Direction.R): 1,
-            (Direction.R | Direction.T, Direction.T): 2,
-            (Direction.L | Direction.T, Direction.T): 3,
-            (Direction.L | Direction.T, Direction.L): 4,
-            (Direction.L | Direction.B, Direction.L): 5,
-            (Direction.L | Direction.B, Direction.B): 6,
-            (Direction.R | Direction.B, Direction.B): 7,
-            (Direction.R | Direction.B, Direction.R): 8,
-        }
-    )
-    _CASE4_SUB.update(
-        {
-            int(Direction.R | Direction.T | Direction.L): 1,
-            int(Direction.R | Direction.T | Direction.B): 2,
-            int(Direction.R | Direction.B | Direction.L): 3,
-            int(Direction.T | Direction.B | Direction.L): 4,
-        }
-    )
 
 
 class Direction(enum.IntFlag):
@@ -124,8 +47,6 @@ def dirsign(direction: int, is_extra=False):
     else:
         raise ValueError("Invalid direction for dirsign", direction)
 
-
-_build_dispatch_tables()
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +144,7 @@ class CutDir:
     # -- beta probe location --------------------------------------------------
 
     def probe_loc(self, x: float, y: float, theta: float):
-        """Return (x_loc, y_loc, axis_str) for _sample_beta_legacy at the interface point."""
+        """Return (x_loc, y_loc, axis_str) for the interface point."""
         if self.is_x:
             return (x + self.sign * theta * dx, y, "x")
         else:
@@ -402,6 +323,82 @@ def coeff_case0(i: int, j: int) -> None:
     )
 
 
+def _per_iface_algebraic(s_eta, s, eps_p, eps_m, theta, a_I):
+    """Return (B, C, a_term) for a single uncoupled interface."""
+    B_val = s_eta * s * (eps_p * _phi(theta) + eps_m * _psi(theta))
+    C_arr = -s_eta * s * np.array(
+        [
+            -eps_m * theta / (1 + theta),
+            eps_m * (1 + theta) / theta,
+            eps_p * (2 - theta) / (1 - theta),
+            -eps_p * (1 - theta) / (2 - theta),
+        ]
+    )
+    a_val = -s * a_I * eps_p * _phi(theta)
+    return B_val, C_arr, a_val
+
+
+def _assemble_MND(
+    n_intf,
+    B,
+    C,
+    a_term,
+    grad_coeff,
+    a_tau_term,
+    b_term,
+    dirs,
+    offset,
+    offset_ext,
+    stencil_size,
+    gate_x_dirs=None,
+    gate_y_dirs=None,
+):
+    """Assemble M, N, D for an n_intf x n_intf local system.
+
+    gate_x_dirs / gate_y_dirs control which cut directions gate out grad_coeff
+    entries in N at x-axis / y-axis neighbour positions. When None they default
+    to ``dirs``, which is correct for cases 1, 2 and 4. Case 3 passes separate
+    sets to match its distinct gating logic.
+    """
+    if gate_x_dirs is None:
+        gate_x_dirs = dirs
+    if gate_y_dirs is None:
+        gate_y_dirs = dirs
+
+    D = np.array([a_tau_term[d] + b_term[d] - a_term[d] for d in range(n_intf)])
+
+    if isinstance(B, np.ndarray) and B.ndim == 2:
+        M = B.copy()
+    else:
+        M = np.diag(B)
+
+    _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
+    for d in range(n_intf):
+        for e in range(n_intf):
+            M[d, e] -= grad_coeff[d][_grad_idx[dirs[e]]]
+
+    N = np.zeros((n_intf, stencil_size))
+    _dir_step = {
+        Direction.R: (1, 0),
+        Direction.T: (0, 1),
+        Direction.L: (-1, 0),
+        Direction.B: (0, -1),
+    }
+    for d in range(n_intf):
+        N[d, offset(1, 0)] = grad_coeff[d][0] if Direction.R not in gate_x_dirs else 0.0
+        N[d, offset(-1, 0)] = grad_coeff[d][1] if Direction.L not in gate_x_dirs else 0.0
+        N[d, offset(0, 1)] = grad_coeff[d][2] if Direction.T not in gate_y_dirs else 0.0
+        N[d, offset(0, -1)] = grad_coeff[d][3] if Direction.B not in gate_y_dirs else 0.0
+        N[d, offset(0, 0)] = grad_coeff[d][4]
+        N[d, offset(*offset_ext)] = grad_coeff[d][5]
+
+        dx_dir, dy_dir = _dir_step[dirs[d]]
+        for k in range(len(C[d])):
+            N[d, offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[d][k]
+
+    return M, N, D
+
+
 def coeff_case1(direction: int, i: int, j: int) -> None:
     x, y = center(i, j)
     row_idx = index(i, j)
@@ -454,27 +451,8 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
     eps_b = permittivity(x, y - theta_b * dy / 2)
 
     # algebraic [eps*u_x] and [eps*u_y] Eq(30)
-    B = (
-        np.sign(eta)
-        * s
-        * (
-            eps_p * (3 - 2 * theta) / ((1 - theta) * (2 - theta))
-            + eps_m * (2 * theta + 1) / (theta * (theta + 1))
-        )
-    )
-    C = (
-        -np.sign(eta)
-        * s
-        * np.array(
-            [
-                -eps_m * theta / (1 + theta),
-                eps_m * (1 + theta) / theta,
-                eps_p * (2 - theta) / (1 - theta),
-                -eps_p * (1 - theta) / (2 - theta),
-            ]
-        )
-    )
-    a_term = -s * a_I * eps_p * (3 - 2 * theta) / ((1 - theta) * (2 - theta))
+    s_eta = np.sign(eta)
+    B_val, C_arr, a_term = _per_iface_algebraic(s_eta, s, eps_p, eps_m, theta, a_I)
 
     # geometric [eps*u_x] and [eps*u_y] Eq(34)
     P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
@@ -493,34 +471,13 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
         a_tau_term = dy * a_tau_I * eps_p * n1_I
         b_term = dy * b_I * n2_I
 
-    D = a_tau_term + b_term - a_term
-
-    _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
-    grad_coeff_dir = grad_coeff[_grad_idx[direction]]
-    M = B - grad_coeff_dir
-
     offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
-    N = np.zeros(25)
-    N[offset(1, 0)] = grad_coeff[0] if direction != Direction.R else 0.0
-    N[offset(-1, 0)] = grad_coeff[1] if direction != Direction.L else 0.0
-    N[offset(0, 1)] = grad_coeff[2] if direction != Direction.T else 0.0
-    N[offset(0, -1)] = grad_coeff[3] if direction != Direction.B else 0.0
-    N[offset(0, 0)] = grad_coeff[4]
-    N[offset(*offset_ext)] = grad_coeff[5]
-
-    # Place C[k] along the direction ray at offsets (-1, 0, 1, 2) from center
-    _dir_step = {
-        Direction.R: (1, 0),
-        Direction.T: (0, 1),
-        Direction.L: (-1, 0),
-        Direction.B: (0, -1),
-    }
-    dx_dir, dy_dir = _dir_step[direction]
-    for k in range(4):
-        N[offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[k]
-
-    M_inv_N = N / M
-    M_inv_d = D / M
+    M, N, D = _assemble_MND(
+        1, [B_val], [C_arr], [a_term], [grad_coeff], [a_tau_term], [b_term],
+        [direction], offset, offset_ext, 25,
+    )
+    M_inv_d = np.linalg.solve(M, D)[0]
+    M_inv_N = np.linalg.solve(M, N)[0]
 
     # Substitution coefficient: eps in current direction / theta / denominator
     _eps_dir = {
@@ -566,177 +523,12 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             vals.append(value)
 
 
-def _solve_case2_local(direction: int, i: int, j: int):
-    """Build and solve the 2x2 local M / d / N system for a case-2 corner.
-
-    Returns (M_inv_d, M_inv_N, all_offsets, sw_idx, geom) where geom holds
-    theta_*, eps_*, bot_* for Shortley-Weller assembly.
-    """
-    x_, y_ = center(i, j)
-    eta = surface(x_, y_)
-
-    cd_x = _CD[direction & (Direction.R | Direction.L)]
-    cd_y = _CD[direction & (Direction.T | Direction.B)]
-
-    theta_x = compute_theta(cd_x.face, i, j)
-    theta_y = compute_theta(cd_y.face, i, j)
-
-    theta_l = theta_x if cd_x.face == Direction.L else 1.0
-    theta_r = theta_x if cd_x.face == Direction.R else 1.0
-    theta_t = theta_y if cd_y.face == Direction.T else 1.0
-    theta_b = theta_y if cd_y.face == Direction.B else 1.0
-
-    def _interp(cd, theta):
-        return (
-            interp(cd.face, theta, i, j, n1),
-            interp(cd.face, theta, i, j, n2),
-            interp(cd.face, theta, i, j, a),
-            interp(cd.face, theta, i, j, b),
-            interp(cd.face, theta, i, j, a_tau),
-        )
-
-    n1_x, n2_x, a_x, b_x, a_tau_x = _interp(cd_x, theta_x)
-    n1_y, n2_y, a_y, b_y, a_tau_y = _interp(cd_y, theta_y)
-
-    # Beta sampling at each interface point.
-    px, py, _ = cd_x.probe_loc(x_, y_, theta_x)
-    bp_x, bm_x, bj_x = _eval_beta_at_iface(px, py, "x" if cd_x.is_x else "y")
-    px, py, _ = cd_y.probe_loc(x_, y_, theta_y)
-    bp_y, bm_y, bj_y = _eval_beta_at_iface(px, py, "x" if cd_y.is_x else "y")
-
-    def _d_row(cd, theta, n1_v, n2_v, a_v, b_v, a_tau_v, eps_p_d):
-        n_t = [n1_v, n2_v][cd.n_tang]
-        n_n = [n1_v, n2_v][cd.n_norm]
-        d_self = dx if cd.is_x else dy
-        return (
-            (-1 if cd.is_x else 1) * a_tau_v * eps_p_d * n_t * d_self
-            + b_v * n_n * d_self
-            + cd.sign * a_v * eps_p_d * _phi(theta)
-        )
-
-    eps_p_d_x = bm_x if eta > 0 else bp_x
-    eps_p_d_y = bm_y if eta > 0 else bp_y
-    d = np.zeros(2)
-    d[0] = _d_row(cd_x, theta_x, n1_x, n2_x, a_x, b_x, a_tau_x, eps_p_d_x)
-    d[1] = _d_row(cd_y, theta_y, n1_y, n2_y, a_y, b_y, a_tau_y, eps_p_d_y)
-
-    if eta > 0:
-        eps_p_x, eps_m_x = -bm_x, -bp_x
-        eps_p_y, eps_m_y = -bm_y, -bp_y
-    else:
-        eps_p_x, eps_m_x = bp_x, bm_x
-        eps_p_y, eps_m_y = bp_y, bm_y
-
-    eps_jump_x = bj_x
-    eps_jump_y = bj_y
-
-    def _M_diag(cd, theta, n1_v, n2_v, eps_p, eps_m, eps_jump):
-        n_t = [n1_v, n2_v][cd.n_tang]
-        return -cd.sign * (
-            eps_p * _phi(theta) + eps_m * _psi(theta) + eps_jump * n_t**2 * _psi(theta)
-        )
-
-    M = np.zeros((2, 2))
-    M[0, 0] = _M_diag(cd_x, theta_x, n1_x, n2_x, eps_p_x, eps_m_x, eps_jump_x)
-    M[1, 1] = _M_diag(cd_y, theta_y, n1_y, n2_y, eps_p_y, eps_m_y, eps_jump_y)
-    M[0, 1] = cd_y.sign * eps_jump_x * n1_x * n2_x * dx / (dy * theta_y * (theta_y + 1))
-    M[1, 0] = cd_x.sign * eps_jump_y * n1_y * n2_y * dy / (dx * theta_x * (theta_x + 1))
-
-    # N (2 x 25) — full 5x5 stencil.
-    N = np.zeros((2, 25))
-    all_offsets = [(ox, oy) for ox in range(-2, 3) for oy in range(-2, 3)]
-
-    def _col(ox, oy):
-        return (ox + 2) * 5 + (oy + 2)
-
-    def _fill_N_row(
-        r, cd_p, cd_o, theta_p, theta_o, n1_v, n2_v, eps_p, eps_m, eps_jump
-    ):
-        n_t = [n1_v, n2_v][cd_p.n_tang]
-        d_self = dx if cd_p.is_x else dy
-        d_other = dy if cd_p.is_x else dx
-        off = cd_p.offsets
-
-        # k=0 : self
-        N[r, _col(*off[0])] = (
-            -cd_p.sign * (eps_jump * n_t**2 + eps_m) * (1 + theta_p) / theta_p
-            - cd_o.sign
-            * eps_jump
-            * n1_v
-            * n2_v
-            * d_self
-            / d_other
-            * (theta_o * theta_p + theta_o - 1)
-            / theta_o
-        )
-        # k=1 : forward 1
-        N[r, _col(*off[1])] = -cd_p.sign * eps_p * (theta_p - 2) / (theta_p - 1)
-        # k=2 : forward 2
-        N[r, _col(*off[2])] = cd_p.sign * eps_p * (theta_p - 1) / (theta_p - 2)
-        # k=3 : backward
-        N[r, _col(*off[3])] = (
-            cd_p.sign * (eps_jump * n_t**2 + eps_m) * theta_p / (1 + theta_p)
-            + cd_o.sign * eps_jump * n1_v * n2_v * theta_p * d_self / d_other
-        )
-        # k=4/5 : combined cross-term — k=4 when cd_o.sign > 0, else k=5.
-        k_comb = 4 if cd_o.sign > 0 else 5
-        N[r, _col(*off[k_comb])] = (
-            cd_o.sign
-            * eps_jump
-            * n1_v
-            * n2_v
-            * d_self
-            / d_other
-            * (theta_o / (theta_o + 1) + theta_p)
-        )
-        # k=6 : corner — offset component along cd_o's axis scaled by cd_o.sign.
-        di, dj = off[6]
-        if cd_o.is_x:
-            di *= cd_o.sign
-        else:
-            dj *= cd_o.sign
-        N[r, _col(di, dj)] = (
-            -cd_o.sign * eps_jump * n1_v * n2_v * theta_p * d_self / d_other
-        )
-
-    _fill_N_row(
-        0, cd_x, cd_y, theta_x, theta_y, n1_x, n2_x, eps_p_x, eps_m_x, eps_jump_x
-    )
-    _fill_N_row(
-        1, cd_y, cd_x, theta_y, theta_x, n1_y, n2_y, eps_p_y, eps_m_y, eps_jump_y
-    )
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-
-    sw_idx = {_FACE_NAME[cd_x.face]: 0, _FACE_NAME[cd_y.face]: 1}
-    geom = {
-        "theta_R": theta_r,
-        "theta_T": theta_t,
-        "theta_L": theta_l,
-        "theta_B": theta_b,
-        "eps_r": permittivity(x_ + theta_r * dx / 2, y_),
-        "eps_l": permittivity(x_ - theta_l * dx / 2, y_),
-        "eps_t": permittivity(x_, y_ + theta_t * dy / 2),
-        "eps_b": permittivity(x_, y_ - theta_b * dy / 2),
-        "bot_x": (theta_r + theta_l) / 2 * dx**2,
-        "bot_y": (theta_t + theta_b) / 2 * dy**2,
-    }
-
-    return M_inv_d, M_inv_N, all_offsets, sw_idx, geom
-
-
 def coeff_case2(direction: int, i: int, j: int) -> None:
     """coeff of u_ij and its neighbors for a case 2 cell"""
     x, y = center(i, j)
     eta = surface(x, y)
     row_idx = index(i, j)  # laplacian matrix row index
 
-    D = np.zeros(2)
-    M = np.zeros((2, 2))
-    N = np.zeros((2, 25))
-
-    # used to traverse N matrix
     offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
 
     theta_r = compute_theta(Direction.R, i, j)
@@ -809,40 +601,14 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
     b_I = [interp(dir[d], theta[d], i, j, b) for d in range(2)]
 
     # algebraic [eps*u_x] and [eps*u_y] Eq(30)
-    B = [
-        (
-            s_eta
-            * s[d]
-            * (
-                eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
-                + eps_m[d] * (2 * theta[d] + 1) / (theta[d] * (theta[d] + 1))
-            )
+    B, C, a_term = [], [], []
+    for d in range(2):
+        B_d, C_d, a_d = _per_iface_algebraic(
+            s_eta, s[d], eps_p[d], eps_m[d], theta[d], a_I[d]
         )
-        for d in range(2)
-    ]
-    C = [
-        (
-            -s_eta
-            * s[d]
-            * np.array(
-                [
-                    -eps_m[d] * theta[d] / (1 + theta[d]),
-                    eps_m[d] * (1 + theta[d]) / theta[d],
-                    eps_p[d] * (2 - theta[d]) / (1 - theta[d]),
-                    -eps_p[d] * (1 - theta[d]) / (2 - theta[d]),
-                ]
-            )
-        )
-        for d in range(2)
-    ]
-    a_term = [
-        -s[d]
-        * a_I[d]
-        * eps_p[d]
-        * (3 - 2 * theta[d])
-        / ((1 - theta[d]) * (2 - theta[d]))
-        for d in range(2)
-    ]
+        B.append(B_d)
+        C.append(C_d)
+        a_term.append(a_d)
 
     P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
     x_I = np.array([x + s[0] * theta[0] * dx, x])
@@ -869,33 +635,9 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
     a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(2)]
     b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(2)]
 
-    D[:] = [a_tau_term[d] + b_term[d] - a_term[d] for d in range(2)]
-
-    _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
-    M[0, 0] = B[0] - grad_coeff[0][_grad_idx[dir[0]]]
-    M[1, 1] = B[1] - grad_coeff[1][_grad_idx[dir[1]]]
-    M[0, 1] = -grad_coeff[0][_grad_idx[dir[1]]]
-    M[1, 0] = -grad_coeff[1][_grad_idx[dir[0]]]
-
-    _dir_step = {
-        Direction.R: (1, 0),
-        Direction.T: (0, 1),
-        Direction.L: (-1, 0),
-        Direction.B: (0, -1),
-    }
-    for d in range(2):
-        N[d, offset(1, 0)] = grad_coeff[d][0] if Direction.R not in dir else 0.0
-        N[d, offset(-1, 0)] = grad_coeff[d][1] if Direction.L not in dir else 0.0
-        N[d, offset(0, 1)] = grad_coeff[d][2] if Direction.T not in dir else 0.0
-        N[d, offset(0, -1)] = grad_coeff[d][3] if Direction.B not in dir else 0.0
-        N[d, offset(0, 0)] = grad_coeff[d][4]
-        N[d, offset(*offset_ext)] = grad_coeff[d][5]
-
-        # Place [k] along the direction ray at offsets (-1, 0, 1, 2) from center
-        dx_dir, dy_dir = _dir_step[dir[d]]
-        for k in range(4):
-            N[d, offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[d][k]
-
+    M, N, D = _assemble_MND(
+        2, B, C, a_term, grad_coeff, a_tau_term, b_term, dir, offset, offset_ext, 25,
+    )
     M_inv_d = np.linalg.solve(M, D)
     M_inv_N = np.linalg.solve(M, N)
 
@@ -996,132 +738,7 @@ def case3_extra_dir(direction: int, i: int, j: int) -> int:
     # return extras
 
 
-def _case3_geometry(direction: int, extra: int, i: int, j: int):
-    """Compute geometry/normals/jumps at the three interface points.
 
-    Returns a dict with theta_*, theta_*_extra (the lowercase one), normals
-    n1_*, n2_* at each of the three interface points, jump conditions
-    a, b, a_tau at each, plus eps_p / eps_m / eps_jump (with eta-sign
-    handling matching coeff_case2).
-    """
-    x_, y_ = center(i, j)
-    eta = surface(x_, y_)
-
-    theta_R = compute_theta(Direction.R, i, j) if (direction & Direction.R) else 1.0
-    theta_T = compute_theta(Direction.T, i, j) if (direction & Direction.T) else 1.0
-    theta_L = compute_theta(Direction.L, i, j) if (direction & Direction.L) else 1.0
-    theta_B = compute_theta(Direction.B, i, j) if (direction & Direction.B) else 1.0
-
-    # theta for the extra interface — measured from the OUTER end of its
-    # segment, matching the derivation file convention:
-    #   xr = x_{i+2} - theta_r*dx,  xl = x_{i-2} + theta_l*dx
-    #   xt = y_{j+2} - theta_t*dy,  xb = y_{j-2} + theta_b*dy
-    if extra == Direction.R:
-        theta_extra = compute_theta(Direction.R, i + 1, j)  # within [(i+1,j),(i+2,j)]
-    elif extra == Direction.T:
-        theta_extra = compute_theta(Direction.T, i, j + 1)
-    elif extra == Direction.L:
-        theta_extra = compute_theta(Direction.L, i - 1, j)
-    elif extra == Direction.B:
-        theta_extra = compute_theta(Direction.B, i, j - 1)
-    else:
-        raise ValueError("bad extra direction", extra)
-
-    # Normals, a_tau, a, b at the three interface points.
-    def _at(d, ti, tj, theta):
-        return (
-            interp(d, theta, ti, tj, n1),
-            interp(d, theta, ti, tj, n2),
-            interp(d, theta, ti, tj, a),
-            interp(d, theta, ti, tj, b),
-            interp(d, theta, ti, tj, a_tau),
-        )
-
-    geom = {
-        "theta_R": theta_R,
-        "theta_T": theta_T,
-        "theta_L": theta_L,
-        "theta_B": theta_B,
-        # Paper convention: theta_r/t/l/b is measured from the OUTER end of
-        # the outer segment ([x_{i+2}, x_{i+1}] etc.), but `compute_theta`
-        # always returns the forward fraction from the inner end. Convert.
-        "theta_extra": 1.0 - theta_extra,
-        "extra": extra,
-    }
-    if direction & Direction.R:
-        geom["n1_R"], geom["n2_R"], geom["a_R"], geom["b_R"], geom["a_tau_R"] = _at(
-            Direction.R, i, j, theta_R
-        )
-        geom["loc_R"] = (x_ + theta_R * dx, y_)
-    if direction & Direction.T:
-        geom["n1_T"], geom["n2_T"], geom["a_T"], geom["b_T"], geom["a_tau_T"] = _at(
-            Direction.T, i, j, theta_T
-        )
-        geom["loc_T"] = (x_, y_ + theta_T * dy)
-    if direction & Direction.L:
-        geom["n1_L"], geom["n2_L"], geom["a_L"], geom["b_L"], geom["a_tau_L"] = _at(
-            Direction.L, i, j, theta_L
-        )
-        geom["loc_L"] = (x_ - theta_L * dx, y_)
-    if direction & Direction.B:
-        geom["n1_B"], geom["n2_B"], geom["a_B"], geom["b_B"], geom["a_tau_B"] = _at(
-            Direction.B, i, j, theta_B
-        )
-        geom["loc_B"] = (x_, y_ - theta_B * dy)
-
-    # Extra interface point: interpolate from grid points one cell out, and
-    # store its absolute (x, y) using the paper's outer-fraction convention.
-    if extra == Direction.R:
-        geom["n1_x"], geom["n2_x"], geom["a_x"], geom["b_x"], geom["a_tau_x"] = _at(
-            Direction.R, i + 1, j, theta_extra
-        )
-        geom["loc_extra"] = (x_ + 2 * dx - geom["theta_extra"] * dx, y_)
-    elif extra == Direction.T:
-        geom["n1_x"], geom["n2_x"], geom["a_x"], geom["b_x"], geom["a_tau_x"] = _at(
-            Direction.T, i, j + 1, theta_extra
-        )
-        geom["loc_extra"] = (x_, y_ + 2 * dy - geom["theta_extra"] * dy)
-    elif extra == Direction.L:
-        geom["n1_x"], geom["n2_x"], geom["a_x"], geom["b_x"], geom["a_tau_x"] = _at(
-            Direction.L, i - 1, j, theta_extra
-        )
-        geom["loc_extra"] = (x_ - 2 * dx + geom["theta_extra"] * dx, y_)
-    elif extra == Direction.B:
-        geom["n1_x"], geom["n2_x"], geom["a_x"], geom["b_x"], geom["a_tau_x"] = _at(
-            Direction.B, i, j - 1, theta_extra
-        )
-        geom["loc_extra"] = (x_, y_ - 2 * dy + geom["theta_extra"] * dy)
-
-    # Permittivities and eta-sign handling — same convention as coeff_case2.
-    if eta > 0:
-        _eps_p = permittivity(x_, y_)
-        # use the diagonally-opposite-corner point in the +/- region
-        if direction == (Direction.R | Direction.T):
-            _eps_m = permittivity(x_ + dx, y_ + dy)
-        elif direction == (Direction.L | Direction.T):
-            _eps_m = permittivity(x_ - dx, y_ + dy)
-        elif direction == (Direction.R | Direction.B):
-            _eps_m = permittivity(x_ + dx, y_ - dy)
-        else:  # L|B
-            _eps_m = permittivity(x_ - dx, y_ - dy)
-        eps_jump = _eps_p - _eps_m
-        eps_p, eps_m = _eps_m, _eps_p
-    else:
-        if direction == (Direction.R | Direction.T):
-            _eps_p = permittivity(x_ + dx, y_ + dy)
-        elif direction == (Direction.L | Direction.T):
-            _eps_p = permittivity(x_ - dx, y_ + dy)
-        elif direction == (Direction.R | Direction.B):
-            _eps_p = permittivity(x_ + dx, y_ - dy)
-        else:
-            _eps_p = permittivity(x_ - dx, y_ - dy)
-        _eps_m = permittivity(x_, y_)
-        eps_jump = _eps_p - _eps_m
-        eps_p, eps_m = _eps_p, _eps_m
-
-    geom["eps"] = (_eps_p, _eps_m, eps_jump, eps_p, eps_m)
-    geom["eta"] = eta
-    return geom
 
 
 def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
@@ -1512,40 +1129,10 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(3)]
     b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(3)]
 
-    M = np.zeros((3, 3))
-    N = np.zeros((3, 49))  # 7x7 stencil around (i,j)
-    D = np.zeros(3)
-
-    D[:] = [a_tau_term[d] + b_term[d] - a_term[d] for d in range(3)]
-
-    _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
-    M = B
-    M[0, 0] -= grad_coeff[0][_grad_idx[dir[0]]]
-    M[0, 1] -= grad_coeff[0][_grad_idx[dir[1]]]
-    M[1, 0] -= grad_coeff[1][_grad_idx[dir[0]]]
-    M[1, 1] -= grad_coeff[1][_grad_idx[dir[1]]]
-    M[2, 0] -= grad_coeff[2][_grad_idx[dir[0]]]
-    M[2, 1] -= grad_coeff[2][_grad_idx[dir[1]]]
-
-    _dir_step = {
-        Direction.R: (1, 0),
-        Direction.T: (0, 1),
-        Direction.L: (-1, 0),
-        Direction.B: (0, -1),
-    }
-    for d in range(3):
-        N[d, offset(1, 0)] = grad_coeff[d][0] if dir[0] != Direction.R else 0.0
-        N[d, offset(-1, 0)] = grad_coeff[d][1] if dir[0] != Direction.L else 0.0
-        N[d, offset(0, 1)] = grad_coeff[d][2] if dir[1] != Direction.T else 0.0
-        N[d, offset(0, -1)] = grad_coeff[d][3] if dir[1] != Direction.B else 0.0
-        N[d, offset(0, 0)] = grad_coeff[d][4]
-        N[d, offset(*offset_ext)] = grad_coeff[d][5]
-
-        # Place [k] along the direction ray at offsets (-1, 0, 1, 2) from center
-        dx_dir, dy_dir = _dir_step[dir[d]]
-        for k in range(5):
-            N[d, offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[d][k]
-
+    M, N, D = _assemble_MND(
+        3, B, C, a_term, grad_coeff, a_tau_term, b_term, dir, offset, offset_ext, 49,
+        gate_x_dirs={dir[0]}, gate_y_dirs={dir[1]},
+    )
     M_inv_d = np.linalg.solve(M, D)
     M_inv_N = np.linalg.solve(M, N)
 
@@ -1580,87 +1167,6 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
             cols.append(index(i + offset_x, j + offset_y))
             vals.append(value)
 
-
-def _case4_geometry(direction: int, i: int, j: int):
-    """Compute geometry/normals/jumps at the three corner interfaces.
-
-    `direction` is a 3-bit value (any 3 of R,T,L,B). The uncut side gets
-    theta = 1.0. Returns the same kind of dict as `_case3_geometry` minus the
-    'extra' fields.
-    """
-    x_, y_ = center(i, j)
-    eta = surface(x_, y_)
-
-    theta_R = compute_theta(Direction.R, i, j) if (direction & Direction.R) else 1.0
-    theta_T = compute_theta(Direction.T, i, j) if (direction & Direction.T) else 1.0
-    theta_L = compute_theta(Direction.L, i, j) if (direction & Direction.L) else 1.0
-    theta_B = compute_theta(Direction.B, i, j) if (direction & Direction.B) else 1.0
-
-    def _at(d, theta):
-        return (
-            interp(d, theta, i, j, n1),
-            interp(d, theta, i, j, n2),
-            interp(d, theta, i, j, a),
-            interp(d, theta, i, j, b),
-            interp(d, theta, i, j, a_tau),
-        )
-
-    geom = {
-        "theta_R": theta_R,
-        "theta_T": theta_T,
-        "theta_L": theta_L,
-        "theta_B": theta_B,
-    }
-    if direction & Direction.R:
-        geom["n1_R"], geom["n2_R"], geom["a_R"], geom["b_R"], geom["a_tau_R"] = _at(
-            Direction.R, theta_R
-        )
-        geom["loc_R"] = (x_ + theta_R * dx, y_)
-    if direction & Direction.T:
-        geom["n1_T"], geom["n2_T"], geom["a_T"], geom["b_T"], geom["a_tau_T"] = _at(
-            Direction.T, theta_T
-        )
-        geom["loc_T"] = (x_, y_ + theta_T * dy)
-    if direction & Direction.L:
-        geom["n1_L"], geom["n2_L"], geom["a_L"], geom["b_L"], geom["a_tau_L"] = _at(
-            Direction.L, theta_L
-        )
-        geom["loc_L"] = (x_ - theta_L * dx, y_)
-    if direction & Direction.B:
-        geom["n1_B"], geom["n2_B"], geom["a_B"], geom["b_B"], geom["a_tau_B"] = _at(
-            Direction.B, theta_B
-        )
-        geom["loc_B"] = (x_, y_ - theta_B * dy)
-
-    # Permittivity sign convention follows coeff_case2 / coeff_case3:
-    # the "diagonal" point used for eps_p / eps_m is the corner that sits
-    # in the opposite region from (i,j). For case 4 we pick a Ω^+ corner
-    # adjacent to two of the three cut sides.
-    if direction == (Direction.R | Direction.T | Direction.L):
-        diag = (x_ + dx, y_ + dy)  # any +x or +y neighbour is in Omega^+
-    elif direction == (Direction.R | Direction.T | Direction.B):
-        diag = (x_ + dx, y_ + dy)
-    elif direction == (Direction.R | Direction.B | Direction.L):
-        diag = (x_ + dx, y_ - dy)
-    elif direction == (Direction.T | Direction.B | Direction.L):
-        diag = (x_ - dx, y_ + dy)
-    else:
-        raise ValueError("Invalid direction for case 4", direction)
-
-    if eta > 0:
-        _eps_p = permittivity(x_, y_)
-        _eps_m = permittivity(*diag)
-        eps_jump = _eps_p - _eps_m
-        eps_p, eps_m = _eps_m, _eps_p
-    else:
-        _eps_p = permittivity(*diag)
-        _eps_m = permittivity(x_, y_)
-        eps_jump = _eps_p - _eps_m
-        eps_p, eps_m = _eps_p, _eps_m
-
-    geom["eps"] = (_eps_p, _eps_m, eps_jump, eps_p, eps_m)
-    geom["eta"] = eta
-    return geom
 
 
 def coeff_case4(direction: int, i: int, j: int) -> None:
@@ -1747,36 +1253,14 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
     a_I = [interp(dir[d], theta[d], i, j, a) for d in range(3)]
     b_I = [interp(dir[d], theta[d], i, j, b) for d in range(3)]
 
-    B = [
-        s_eta
-        * s[d]
-        * (
-            eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
-            + eps_m[d] * (2 * theta[d] + 1) / (theta[d] * (theta[d] + 1))
+    B, C, a_term = [], [], []
+    for d in range(3):
+        B_d, C_d, a_d = _per_iface_algebraic(
+            s_eta, s[d], eps_p[d], eps_m[d], theta[d], a_I[d]
         )
-        for d in range(3)
-    ]
-    C = [
-        -s_eta
-        * s[d]
-        * np.array(
-            [
-                -eps_m[d] * theta[d] / (1 + theta[d]),
-                eps_m[d] * (1 + theta[d]) / theta[d],
-                eps_p[d] * (2 - theta[d]) / (1 - theta[d]),
-                -eps_p[d] * (1 - theta[d]) / (2 - theta[d]),
-            ]
-        )
-        for d in range(3)
-    ]
-    a_term = [
-        -s[d]
-        * a_I[d]
-        * eps_p[d]
-        * (3 - 2 * theta[d])
-        / ((1 - theta[d]) * (2 - theta[d]))
-        for d in range(3)
-    ]
+        B.append(B_d)
+        C.append(C_d)
+        a_term.append(a_d)
 
     # geometric [eps*u_x] and [eps*u_y]
     P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
@@ -1801,34 +1285,9 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
     a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(3)]
     b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(3)]
 
-    D = np.array([a_tau_term[d] + b_term[d] - a_term[d] for d in range(3)])
-
-    _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
-    M = np.zeros((3, 3))
-    for d in range(3):
-        M[d, d] = B[d]
-        for e in range(3):
-            M[d, e] -= grad_coeff[d][_grad_idx[dir[e]]]
-
-    N = np.zeros((3, 25))
-    _dir_step = {
-        Direction.R: (1, 0),
-        Direction.T: (0, 1),
-        Direction.L: (-1, 0),
-        Direction.B: (0, -1),
-    }
-    for d in range(3):
-        N[d, offset(1, 0)] = grad_coeff[d][0] if Direction.R not in dir else 0.0
-        N[d, offset(-1, 0)] = grad_coeff[d][1] if Direction.L not in dir else 0.0
-        N[d, offset(0, 1)] = grad_coeff[d][2] if Direction.T not in dir else 0.0
-        N[d, offset(0, -1)] = grad_coeff[d][3] if Direction.B not in dir else 0.0
-        N[d, offset(0, 0)] = grad_coeff[d][4]
-        N[d, offset(*offset_ext)] = grad_coeff[d][5]
-
-        dx_dir, dy_dir = _dir_step[dir[d]]
-        for k in range(4):
-            N[d, offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[d][k]
-
+    M, N, D = _assemble_MND(
+        3, B, C, a_term, grad_coeff, a_tau_term, b_term, dir, offset, offset_ext, 25,
+    )
     M_inv_d = np.linalg.solve(M, D)
     M_inv_N = np.linalg.solve(M, N)
 
@@ -1860,3286 +1319,6 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
             rows.append(row_idx)
             cols.append(index(i + offset_x, j + offset_y))
             vals.append(value)
-
-
-# ---------------------------------------------------------------------------
-# Local 3x3 solve and Shortley-Weller assembly (shared by case 3 and case 4)
-# ---------------------------------------------------------------------------
-
-
-def _row_geom_data(geom, iface):
-    """Return (n1, n2, a, b, a_tau) for one row's interface label."""
-    if iface == "extra":
-        return (geom["n1_x"], geom["n2_x"], geom["a_x"], geom["b_x"], geom["a_tau_x"])
-    return (
-        geom[f"n1_{iface}"],
-        geom[f"n2_{iface}"],
-        geom[f"a_{iface}"],
-        geom[f"b_{iface}"],
-        geom[f"a_tau_{iface}"],
-    )
-
-
-def _sample_beta_legacy(x_loc, y_loc, axis, eta):
-    """Per-interface beta sampling for case 1 / case 2.
-
-    Returns (_eps_p, _eps_m, eps_jump, eps_p, eps_m) following the same
-    convention used inline by the original case 1 / case 2 code:
-        _eps_p / _eps_m : beta on Omega+ / Omega- side of the interface.
-        eps_jump        : _eps_p - _eps_m.
-        eps_p / eps_m   : the d-expression names — for eta > 0 the original
-                          code applies a "swap" so that eps_p ends up holding
-                          the value of beta on the side opposite the home
-                          grid point. We replicate that here.
-    """
-    _eps_p, _eps_m, eps_jump = _eval_beta_at_iface(x_loc, y_loc, axis)
-    if eta > 0:
-        eps_p, eps_m = _eps_m, _eps_p
-    else:
-        eps_p, eps_m = _eps_p, _eps_m
-    return _eps_p, _eps_m, eps_jump, eps_p, eps_m
-
-
-def _eval_beta_at_iface(x_loc, y_loc, axis):
-    """Sample (beta_p, beta_m, beta_jump) at an interface point.
-
-    `axis` is the Cartesian direction the interface segment lies on
-    ('x' for xR/xL/xr/xl, 'y' for xT/xB/xt/xb). We probe `permittivity`
-    a tiny distance to either side along that axis; the probe whose
-    level-set value is positive is Omega^+, the other is Omega^-.
-
-    For piecewise-constant beta this reduces to the same value as the
-    coarser sampling we used to do; for variable beta it removes the
-    O(h) sampling error introduced by evaluating beta one cell away
-    from the interface.
-    """
-    if axis == "x":
-        eps_off = 0.01 * dx
-        p_plus = (x_loc + eps_off, y_loc)
-        p_minus = (x_loc - eps_off, y_loc)
-    else:
-        eps_off = 0.01 * dy
-        p_plus = (x_loc, y_loc + eps_off)
-        p_minus = (x_loc, y_loc - eps_off)
-    # Decide which probe is Omega^+ by the sign of the level set there.
-    if surface(*p_plus) > 0:
-        bp = permittivity(*p_plus)
-        bm = permittivity(*p_minus)
-    else:
-        bp = permittivity(*p_minus)
-        bm = permittivity(*p_plus)
-    return bp, bm, bp - bm
-
-
-_AXIS_OF_FACE = {"R": "x", "L": "x", "T": "y", "B": "y"}
-
-
-def _iface_axis(label, extra):
-    """Cartesian axis of a row's interface segment ('x' or 'y')."""
-    if label == "extra":
-        if extra in (Direction.R, Direction.L):
-            return "x"
-        return "y"  # extra is Direction.T or Direction.B
-    return _AXIS_OF_FACE[label]
-
-
-def _row_betas(geom, row_ifaces, extra=None):
-    """Build a list of per-row (bp, bm, bj) by sampling beta at each
-    row's own interface point."""
-    out = []
-    for iface in row_ifaces:
-        if iface == "extra":
-            x_loc, y_loc = geom["loc_extra"]
-        else:
-            x_loc, y_loc = geom[f"loc_{iface}"]
-        axis = _iface_axis(iface, extra)
-        out.append(_eval_beta_at_iface(x_loc, y_loc, axis))
-    return out
-
-
-def _solve_case3_local(sub_case, eta, direction, extra, geom):
-    eta_sign = -1 if eta < 0 else +1
-    func = CASE3_FUNCS[(sub_case, eta_sign)]
-
-    theta_inputs = {
-        "R": geom["theta_R"],
-        "T": geom["theta_T"],
-        "L": geom["theta_L"],
-        "B": geom["theta_B"],
-        "r": 1.0,
-        "t": 1.0,
-        "l": 1.0,
-        "b": 1.0,
-    }
-    if extra == Direction.R:
-        theta_inputs["r"] = geom["theta_extra"]
-    elif extra == Direction.T:
-        theta_inputs["t"] = geom["theta_extra"]
-    elif extra == Direction.L:
-        theta_inputs["l"] = geom["theta_extra"]
-    elif extra == Direction.B:
-        theta_inputs["b"] = geom["theta_extra"]
-
-    betas_per_row = _row_betas(
-        geom, CASE3_ROW_IFACES[(sub_case, eta_sign)], extra=extra
-    )
-    return func(geom, theta_inputs, betas_per_row)
-
-
-def _solve_case4_local(sub_case, eta, direction, geom):
-    eta_sign = -1 if eta < 0 else +1
-    func = CASE4_FUNCS[(sub_case, eta_sign)]
-
-    theta_inputs = {
-        "R": geom["theta_R"],
-        "T": geom["theta_T"],
-        "L": geom["theta_L"],
-        "B": geom["theta_B"],
-        "r": 1.0,
-        "t": 1.0,
-        "l": 1.0,
-        "b": 1.0,
-    }
-    betas_per_row = _row_betas(geom, CASE4_ROW_IFACES[(sub_case, eta_sign)])
-    return func(geom, theta_inputs, betas_per_row)
-
-
-# Generated case functions
-
-
-def _case3_sc1_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 1, eta < 0.  Row 1 is extra (R,T corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "extra")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "T")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-1, -1),
-        (-1, +0),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+1, +0),
-        (+2, -1),
-        (+2, +0),
-        (+2, +1),
-        (+3, -1),
-        (+3, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = bp_0 * _phi_coupled(R, r) - _psi(R) * (bj_0 * n2_0**2 + bm_0)
-    M[0, 1] = bp_0 * _couple_off_fwd(R, r)
-    M[0, 2] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
-    M[1, 0] = -bp_1 * _couple_off_rev(R, r)
-    M[1, 1] = -bp_1 * _phi_mirror(R, r) + _psi(r) * (bj_1 * n2_1**2 + bm_1)
-    M[2, 0] = bj_2 * dy * n1_2 * n2_2 / (dx * R * (R + 1))
-    M[2, 2] = bp_2 * -_phi(T) - _psi(T) * (bj_2 * n1_2**2 + bm_2)
-
-    d = np.zeros(3)
-    d[0] = (
-        -a_tau_0 * bp_0 * dx * n2_0 - a_0 * bp_0 * _couple_avg(R, r) + b_0 * dx * n1_0
-    )
-    d[1] = (
-        -a_tau_1 * bp_1 * dx * n2_1 + a_1 * bp_1 * _couple_avg(R, r) + b_1 * dx * n1_1
-    )
-    d[2] = a_tau_2 * bp_2 * dy * n1_2 - a_2 * bp_2 * -_phi(T) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 0] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
-    N[0, 1] = (
-        R
-        * (
-            bj_0 * dx * n1_0 * n2_0 * R
-            + bj_0 * dx * n1_0 * n2_0
-            + bj_0 * dy * n2_0**2
-            + bm_0 * dy
-        )
-        / (dy * (R + 1))
-    )  # (-1, +0)
-    N[0, 2] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
-    N[0, 3] = -(
-        bj_0 * dx * n1_0 * n2_0 * R**2 * T
-        + bj_0 * dx * n1_0 * n2_0 * R * T
-        - bj_0 * dx * n1_0 * n2_0 * R
-        + bj_0 * dy * n2_0**2 * R * T
-        + bj_0 * dy * n2_0**2 * T
-        + bm_0 * dy * R * T
-        + bm_0 * dy * T
-    ) / (dy * R * T)  # (+0, +0)
-    N[0, 6] = bp_0 * _couple_avg(R, r)  # (+1, +0)
-    N[1, 6] = -bp_1 * _couple_avg(R, r)  # (+1, +0)
-    N[1, 7] = (1 / 2) * bj_1 * dx * n1_1 * n2_1 * (2 * r + 1) / dy  # (+2, -1)
-    N[1, 8] = -(
-        bj_1 * dx * n1_1 * n2_1 * r**2
-        - bj_1 * dy * n2_1**2 * r
-        - bj_1 * dy * n2_1**2
-        - bm_1 * dy * r
-        - bm_1 * dy
-    ) / (dy * r)  # (+2, +0)
-    N[1, 9] = -1 / 2 * bj_1 * dx * n1_1 * n2_1 / dy  # (+2, +1)
-    N[1, 10] = -bj_1 * dx * n1_1 * n2_1 * r / dy  # (+3, -1)
-    N[1, 11] = (
-        r
-        * (
-            bj_1 * dx * n1_1 * n2_1 * r
-            + bj_1 * dx * n1_1 * n2_1
-            - bj_1 * dy * n2_1**2
-            - bm_1 * dy
-        )
-        / (dy * (r + 1))
-    )  # (+3, +0)
-    N[2, 0] = -bj_2 * dy * n1_2 * n2_2 * T / dx  # (-1, -1)
-    N[2, 1] = bj_2 * dy * n1_2 * n2_2 * (R * T + R + T) / (dx * (R + 1))  # (-1, +0)
-    N[2, 2] = (
-        T
-        * (
-            bj_2 * dx * n1_2**2
-            + bj_2 * dy * n1_2 * n2_2 * T
-            + bj_2 * dy * n1_2 * n2_2
-            + bm_2 * dx
-        )
-        / (dx * (T + 1))
-    )  # (+0, -1)
-    N[2, 3] = -(
-        bj_2 * dx * n1_2**2 * R * T
-        + bj_2 * dx * n1_2**2 * R
-        + bj_2 * dy * n1_2 * n2_2 * R * T**2
-        + bj_2 * dy * n1_2 * n2_2 * R * T
-        - bj_2 * dy * n1_2 * n2_2 * T
-        + bm_2 * dx * R * T
-        + bm_2 * dx * R
-    ) / (dx * R * T)  # (+0, +0)
-    N[2, 4] = -bp_2 * (T - 2) / (T - 1)  # (+0, +1)
-    N[2, 5] = bp_2 * (T - 1) / (T - 2)  # (+0, +2)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc1_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 1, eta > 0.  Row 1 is extra (R,T corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "extra")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "T")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-1, -1),
-        (-1, +0),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+1, +0),
-        (+2, -1),
-        (+2, +0),
-        (+2, +1),
-        (+3, -1),
-        (+3, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = -bm_0 * _phi_coupled(R, r) - _psi(R) * (bj_0 * n2_0**2 - bp_0)
-    M[0, 1] = -bm_0 * _couple_off_fwd(R, r)
-    M[0, 2] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
-    M[1, 0] = bm_1 * _couple_off_rev(R, r)
-    M[1, 1] = bm_1 * _phi_mirror(R, r) + _psi(r) * (bj_1 * n2_1**2 - bp_1)
-    M[2, 0] = bj_2 * dy * n1_2 * n2_2 / (dx * R * (R + 1))
-    M[2, 2] = -bm_2 * -_phi(T) - _psi(T) * (bj_2 * n1_2**2 - bp_2)
-
-    d = np.zeros(3)
-    d[0] = (
-        -a_tau_0 * bm_0 * dx * n2_0 - a_0 * bm_0 * _couple_avg(R, r) + b_0 * dx * n1_0
-    )
-    d[1] = (
-        -a_tau_1 * bm_1 * dx * n2_1 + a_1 * bm_1 * _couple_avg(R, r) + b_1 * dx * n1_1
-    )
-    d[2] = a_tau_2 * bm_2 * dy * n1_2 - a_2 * bm_2 * -_phi(T) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 0] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
-    N[0, 1] = (
-        R
-        * (
-            bj_0 * dx * n1_0 * n2_0 * R
-            + bj_0 * dx * n1_0 * n2_0
-            + bj_0 * dy * n2_0**2
-            - bp_0 * dy
-        )
-        / (dy * (R + 1))
-    )  # (-1, +0)
-    N[0, 2] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
-    N[0, 3] = -(
-        bj_0 * dx * n1_0 * n2_0 * R**2 * T
-        + bj_0 * dx * n1_0 * n2_0 * R * T
-        - bj_0 * dx * n1_0 * n2_0 * R
-        + bj_0 * dy * n2_0**2 * R * T
-        + bj_0 * dy * n2_0**2 * T
-        - bp_0 * dy * R * T
-        - bp_0 * dy * T
-    ) / (dy * R * T)  # (+0, +0)
-    N[0, 6] = -bm_0 * _couple_avg(R, r)  # (+1, +0)
-    N[1, 6] = bm_1 * _couple_avg(R, r)  # (+1, +0)
-    N[1, 7] = (1 / 2) * bj_1 * dx * n1_1 * n2_1 * (2 * r + 1) / dy  # (+2, -1)
-    N[1, 8] = -(
-        bj_1 * dx * n1_1 * n2_1 * r**2
-        - bj_1 * dy * n2_1**2 * r
-        - bj_1 * dy * n2_1**2
-        + bp_1 * dy * r
-        + bp_1 * dy
-    ) / (dy * r)  # (+2, +0)
-    N[1, 9] = -1 / 2 * bj_1 * dx * n1_1 * n2_1 / dy  # (+2, +1)
-    N[1, 10] = -bj_1 * dx * n1_1 * n2_1 * r / dy  # (+3, -1)
-    N[1, 11] = (
-        r
-        * (
-            bj_1 * dx * n1_1 * n2_1 * r
-            + bj_1 * dx * n1_1 * n2_1
-            - bj_1 * dy * n2_1**2
-            + bp_1 * dy
-        )
-        / (dy * (r + 1))
-    )  # (+3, +0)
-    N[2, 0] = -bj_2 * dy * n1_2 * n2_2 * T / dx  # (-1, -1)
-    N[2, 1] = bj_2 * dy * n1_2 * n2_2 * (R * T + R + T) / (dx * (R + 1))  # (-1, +0)
-    N[2, 2] = (
-        T
-        * (
-            bj_2 * dx * n1_2**2
-            + bj_2 * dy * n1_2 * n2_2 * T
-            + bj_2 * dy * n1_2 * n2_2
-            - bp_2 * dx
-        )
-        / (dx * (T + 1))
-    )  # (+0, -1)
-    N[2, 3] = -(
-        bj_2 * dx * n1_2**2 * R * T
-        + bj_2 * dx * n1_2**2 * R
-        + bj_2 * dy * n1_2 * n2_2 * R * T**2
-        + bj_2 * dy * n1_2 * n2_2 * R * T
-        - bj_2 * dy * n1_2 * n2_2 * T
-        - bp_2 * dx * R * T
-        - bp_2 * dx * R
-    ) / (dx * R * T)  # (+0, +0)
-    N[2, 4] = bm_2 * (T - 2) / (T - 1)  # (+0, +1)
-    N[2, 5] = -bm_2 * (T - 1) / (T - 2)  # (+0, +2)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc2_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 2, eta < 0.  Row 2 is extra (R,T corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-1, -1),
-        (-1, +0),
-        (-1, +2),
-        (-1, +3),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+0, +3),
-        (+1, +0),
-        (+1, +2),
-        (+2, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = bp_0 * -_phi(R) - _psi(R) * (bj_0 * n2_0**2 + bm_0)
-    M[0, 1] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
-    M[1, 0] = bj_1 * dy * n1_1 * n2_1 / (dx * R * (R + 1))
-    M[1, 1] = bp_1 * _phi_coupled(T, t) - _psi(T) * (bj_1 * n1_1**2 + bm_1)
-    M[1, 2] = bp_1 * _couple_off_fwd(T, t)
-    M[2, 2] = -bp_2 * _couple_off_rev(T, t)
-
-    d = np.zeros(3)
-    d[0] = -a_tau_0 * bp_0 * dx * n2_0 - a_0 * bp_0 * -_phi(R) + b_0 * dx * n1_0
-    d[1] = a_tau_1 * bp_1 * dy * n1_1 - a_1 * bp_1 * _couple_avg(T, t) + b_1 * dy * n2_1
-    d[2] = a_tau_2 * bp_2 * dy * n1_2 + a_2 * bp_2 * _couple_avg(T, t) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 0] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
-    N[0, 1] = (
-        R
-        * (
-            bj_0 * dx * n1_0 * n2_0 * R
-            + bj_0 * dx * n1_0 * n2_0
-            + bj_0 * dy * n2_0**2
-            + bm_0 * dy
-        )
-        / (dy * (R + 1))
-    )  # (-1, +0)
-    N[0, 4] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
-    N[0, 5] = -(
-        bj_0 * dx * n1_0 * n2_0 * R**2 * T
-        + bj_0 * dx * n1_0 * n2_0 * R * T
-        - bj_0 * dx * n1_0 * n2_0 * R
-        + bj_0 * dy * n2_0**2 * R * T
-        + bj_0 * dy * n2_0**2 * T
-        + bm_0 * dy * R * T
-        + bm_0 * dy * T
-    ) / (dy * R * T)  # (+0, +0)
-    N[0, 9] = -bp_0 * (R - 2) / (R - 1)  # (+1, +0)
-    N[0, 11] = bp_0 * (R - 1) / (R - 2)  # (+2, +0)
-    N[1, 0] = -bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, -1)
-    N[1, 1] = bj_1 * dy * n1_1 * n2_1 * (R * T + R + T) / (dx * (R + 1))  # (-1, +0)
-    N[1, 4] = (
-        T
-        * (
-            bj_1 * dx * n1_1**2
-            + bj_1 * dy * n1_1 * n2_1 * T
-            + bj_1 * dy * n1_1 * n2_1
-            + bm_1 * dx
-        )
-        / (dx * (T + 1))
-    )  # (+0, -1)
-    N[1, 5] = -(
-        bj_1 * dx * n1_1**2 * R * T
-        + bj_1 * dx * n1_1**2 * R
-        + bj_1 * dy * n1_1 * n2_1 * R * T**2
-        + bj_1 * dy * n1_1 * n2_1 * R * T
-        - bj_1 * dy * n1_1 * n2_1 * T
-        + bm_1 * dx * R * T
-        + bm_1 * dx * R
-    ) / (dx * R * T)  # (+0, +0)
-    N[1, 6] = bp_1 * _couple_avg(T, t)  # (+0, +1)
-    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * t + 1) / dx  # (-1, +2)
-    N[2, 3] = -bj_2 * dy * n1_2 * n2_2 * t / dx  # (-1, +3)
-    N[2, 6] = -bp_2 * _couple_avg(T, t)  # (+0, +1)
-    N[2, 7] = (
-        bj_2 * dx * n1_2**2 * t
-        + bj_2 * dx * n1_2**2
-        - bj_2 * dy * n1_2 * n2_2 * t**2
-        + bm_2 * dx * t
-        + bm_2 * dx
-    ) / (dx * t)  # (+0, +2)
-    N[2, 8] = (
-        -t
-        * (
-            bj_2 * dx * n1_2**2
-            - bj_2 * dy * n1_2 * n2_2 * t
-            - bj_2 * dy * n1_2 * n2_2
-            + bm_2 * dx
-        )
-        / (dx * (t + 1))
-    )  # (+0, +3)
-    N[2, 10] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, +2)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc2_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 2, eta > 0.  Row 2 is extra (R,T corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-1, -1),
-        (-1, +0),
-        (-1, +2),
-        (-1, +3),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+0, +3),
-        (+1, +0),
-        (+1, +2),
-        (+2, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = -bm_0 * -_phi(R) - _psi(R) * (bj_0 * n2_0**2 - bp_0)
-    M[0, 1] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
-    M[1, 0] = bj_1 * dy * n1_1 * n2_1 / (dx * R * (R + 1))
-    M[1, 1] = -bm_1 * _phi_coupled(T, t) - _psi(T) * (bj_1 * n1_1**2 - bp_1)
-    M[1, 2] = -bm_1 * _couple_off_fwd(T, t)
-    M[2, 2] = bm_2 * _couple_off_rev(T, t)
-
-    d = np.zeros(3)
-    d[0] = -a_tau_0 * bm_0 * dx * n2_0 - a_0 * bm_0 * -_phi(R) + b_0 * dx * n1_0
-    d[1] = a_tau_1 * bm_1 * dy * n1_1 - a_1 * bm_1 * _couple_avg(T, t) + b_1 * dy * n2_1
-    d[2] = a_tau_2 * bm_2 * dy * n1_2 + a_2 * bm_2 * _couple_avg(T, t) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 0] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
-    N[0, 1] = (
-        R
-        * (
-            bj_0 * dx * n1_0 * n2_0 * R
-            + bj_0 * dx * n1_0 * n2_0
-            + bj_0 * dy * n2_0**2
-            - bp_0 * dy
-        )
-        / (dy * (R + 1))
-    )  # (-1, +0)
-    N[0, 4] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
-    N[0, 5] = -(
-        bj_0 * dx * n1_0 * n2_0 * R**2 * T
-        + bj_0 * dx * n1_0 * n2_0 * R * T
-        - bj_0 * dx * n1_0 * n2_0 * R
-        + bj_0 * dy * n2_0**2 * R * T
-        + bj_0 * dy * n2_0**2 * T
-        - bp_0 * dy * R * T
-        - bp_0 * dy * T
-    ) / (dy * R * T)  # (+0, +0)
-    N[0, 9] = bm_0 * (R - 2) / (R - 1)  # (+1, +0)
-    N[0, 11] = -bm_0 * (R - 1) / (R - 2)  # (+2, +0)
-    N[1, 0] = -bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, -1)
-    N[1, 1] = bj_1 * dy * n1_1 * n2_1 * (R * T + R + T) / (dx * (R + 1))  # (-1, +0)
-    N[1, 4] = (
-        T
-        * (
-            bj_1 * dx * n1_1**2
-            + bj_1 * dy * n1_1 * n2_1 * T
-            + bj_1 * dy * n1_1 * n2_1
-            - bp_1 * dx
-        )
-        / (dx * (T + 1))
-    )  # (+0, -1)
-    N[1, 5] = -(
-        bj_1 * dx * n1_1**2 * R * T
-        + bj_1 * dx * n1_1**2 * R
-        + bj_1 * dy * n1_1 * n2_1 * R * T**2
-        + bj_1 * dy * n1_1 * n2_1 * R * T
-        - bj_1 * dy * n1_1 * n2_1 * T
-        - bp_1 * dx * R * T
-        - bp_1 * dx * R
-    ) / (dx * R * T)  # (+0, +0)
-    N[1, 6] = -bm_1 * _couple_avg(T, t)  # (+0, +1)
-    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * t + 1) / dx  # (-1, +2)
-    N[2, 3] = -bj_2 * dy * n1_2 * n2_2 * t / dx  # (-1, +3)
-    N[2, 6] = bm_2 * _couple_avg(T, t)  # (+0, +1)
-    N[2, 7] = (
-        bj_2 * dx * n1_2**2 * t
-        + bj_2 * dx * n1_2**2
-        - bj_2 * dy * n1_2 * n2_2 * t**2
-        - bp_2 * dx * t
-        - bp_2 * dx
-    ) / (dx * t)  # (+0, +2)
-    N[2, 8] = (
-        -t
-        * (
-            bj_2 * dx * n1_2**2
-            - bj_2 * dy * n1_2 * n2_2 * t
-            - bj_2 * dy * n1_2 * n2_2
-            - bp_2 * dx
-        )
-        / (dx * (t + 1))
-    )  # (+0, +3)
-    N[2, 10] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, +2)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc3_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 3, eta < 0.  Row 2 is extra (T,L corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "L")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-2, +0),
-        (-1, +0),
-        (-1, +2),
-        (-1, +3),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+0, +3),
-        (+1, -1),
-        (+1, +0),
-        (+1, +2),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = bp_0 * _phi_coupled(T, t) - _psi(T) * (bj_0 * n1_0**2 + bm_0)
-    M[0, 1] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
-    M[0, 2] = bp_0 * _couple_off_fwd(T, t)
-    M[1, 0] = bj_1 * dx * n1_1 * n2_1 / (dy * T * (T + 1))
-    M[1, 1] = -bp_1 * -_phi(L) + _psi(L) * (bj_1 * n2_1**2 + bm_1)
-    M[2, 0] = -bp_2 * _couple_off_rev(T, t)
-    M[2, 2] = -bp_2 * _phi_mirror(T, t) + _psi(t) * (bj_2 * n1_2**2 + bm_2)
-
-    d = np.zeros(3)
-    d[0] = a_tau_0 * bp_0 * dy * n1_0 - a_0 * bp_0 * _couple_avg(T, t) + b_0 * dy * n2_0
-    d[1] = -a_tau_1 * bp_1 * dx * n2_1 + a_1 * bp_1 * -_phi(L) + b_1 * dx * n1_1
-    d[2] = a_tau_2 * bp_2 * dy * n1_2 + a_2 * bp_2 * _couple_avg(T, t) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 4] = (
-        T
-        * (
-            bj_0 * dx * n1_0**2
-            - bj_0 * dy * n1_0 * n2_0 * T
-            - bj_0 * dy * n1_0 * n2_0
-            + bm_0 * dx
-        )
-        / (dx * (T + 1))
-    )  # (+0, -1)
-    N[0, 5] = -(
-        bj_0 * dx * n1_0**2 * L * T
-        + bj_0 * dx * n1_0**2 * L
-        - bj_0 * dy * n1_0 * n2_0 * L * T**2
-        - bj_0 * dy * n1_0 * n2_0 * L * T
-        + bj_0 * dy * n1_0 * n2_0 * T
-        + bm_0 * dx * L * T
-        + bm_0 * dx * L
-    ) / (dx * L * T)  # (+0, +0)
-    N[0, 6] = bp_0 * _couple_avg(T, t)  # (+0, +1)
-    N[0, 9] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
-    N[0, 10] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
-    N[1, 0] = -bp_1 * (L - 1) / (L - 2)  # (-2, +0)
-    N[1, 1] = bp_1 * (L - 2) / (L - 1)  # (-1, +0)
-    N[1, 4] = bj_1 * dx * n1_1 * n2_1 * (L * T + L + T) / (dy * (T + 1))  # (+0, -1)
-    N[1, 5] = -(
-        bj_1 * dx * n1_1 * n2_1 * L**2 * T
-        + bj_1 * dx * n1_1 * n2_1 * L * T
-        - bj_1 * dx * n1_1 * n2_1 * L
-        - bj_1 * dy * n2_1**2 * L * T
-        - bj_1 * dy * n2_1**2 * T
-        - bm_1 * dy * L * T
-        - bm_1 * dy * T
-    ) / (dy * L * T)  # (+0, +0)
-    N[1, 9] = -bj_1 * dx * n1_1 * n2_1 * L / dy  # (+1, -1)
-    N[1, 10] = (
-        L
-        * (
-            bj_1 * dx * n1_1 * n2_1 * L
-            + bj_1 * dx * n1_1 * n2_1
-            - bj_1 * dy * n2_1**2
-            - bm_1 * dy
-        )
-        / (dy * (L + 1))
-    )  # (+1, +0)
-    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * t + 1) / dx  # (-1, +2)
-    N[2, 3] = -bj_2 * dy * n1_2 * n2_2 * t / dx  # (-1, +3)
-    N[2, 6] = -bp_2 * _couple_avg(T, t)  # (+0, +1)
-    N[2, 7] = (
-        bj_2 * dx * n1_2**2 * t
-        + bj_2 * dx * n1_2**2
-        - bj_2 * dy * n1_2 * n2_2 * t**2
-        + bm_2 * dx * t
-        + bm_2 * dx
-    ) / (dx * t)  # (+0, +2)
-    N[2, 8] = (
-        -t
-        * (
-            bj_2 * dx * n1_2**2
-            - bj_2 * dy * n1_2 * n2_2 * t
-            - bj_2 * dy * n1_2 * n2_2
-            + bm_2 * dx
-        )
-        / (dx * (t + 1))
-    )  # (+0, +3)
-    N[2, 11] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, +2)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc3_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 3, eta > 0.  Row 2 is extra (T,L corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "L")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-2, +0),
-        (-1, +0),
-        (-1, +2),
-        (-1, +3),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+0, +3),
-        (+1, -1),
-        (+1, +0),
-        (+1, +2),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = -bm_0 * _phi_coupled(T, t) - _psi(T) * (bj_0 * n1_0**2 - bp_0)
-    M[0, 1] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
-    M[0, 2] = -bm_0 * _couple_off_fwd(T, t)
-    M[1, 0] = bj_1 * dx * n1_1 * n2_1 / (dy * T * (T + 1))
-    M[1, 1] = bm_1 * -_phi(L) + _psi(L) * (bj_1 * n2_1**2 - bp_1)
-    M[2, 0] = bm_2 * _couple_off_rev(T, t)
-    M[2, 2] = bm_2 * _phi_mirror(T, t) + _psi(t) * (bj_2 * n1_2**2 - bp_2)
-
-    d = np.zeros(3)
-    d[0] = a_tau_0 * bm_0 * dy * n1_0 - a_0 * bm_0 * _couple_avg(T, t) + b_0 * dy * n2_0
-    d[1] = -a_tau_1 * bm_1 * dx * n2_1 + a_1 * bm_1 * -_phi(L) + b_1 * dx * n1_1
-    d[2] = a_tau_2 * bm_2 * dy * n1_2 + a_2 * bm_2 * _couple_avg(T, t) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 4] = (
-        T
-        * (
-            bj_0 * dx * n1_0**2
-            - bj_0 * dy * n1_0 * n2_0 * T
-            - bj_0 * dy * n1_0 * n2_0
-            - bp_0 * dx
-        )
-        / (dx * (T + 1))
-    )  # (+0, -1)
-    N[0, 5] = -(
-        bj_0 * dx * n1_0**2 * L * T
-        + bj_0 * dx * n1_0**2 * L
-        - bj_0 * dy * n1_0 * n2_0 * L * T**2
-        - bj_0 * dy * n1_0 * n2_0 * L * T
-        + bj_0 * dy * n1_0 * n2_0 * T
-        - bp_0 * dx * L * T
-        - bp_0 * dx * L
-    ) / (dx * L * T)  # (+0, +0)
-    N[0, 6] = -bm_0 * _couple_avg(T, t)  # (+0, +1)
-    N[0, 9] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
-    N[0, 10] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
-    N[1, 0] = bm_1 * (L - 1) / (L - 2)  # (-2, +0)
-    N[1, 1] = -bm_1 * (L - 2) / (L - 1)  # (-1, +0)
-    N[1, 4] = bj_1 * dx * n1_1 * n2_1 * (L * T + L + T) / (dy * (T + 1))  # (+0, -1)
-    N[1, 5] = -(
-        bj_1 * dx * n1_1 * n2_1 * L**2 * T
-        + bj_1 * dx * n1_1 * n2_1 * L * T
-        - bj_1 * dx * n1_1 * n2_1 * L
-        - bj_1 * dy * n2_1**2 * L * T
-        - bj_1 * dy * n2_1**2 * T
-        + bp_1 * dy * L * T
-        + bp_1 * dy * T
-    ) / (dy * L * T)  # (+0, +0)
-    N[1, 9] = -bj_1 * dx * n1_1 * n2_1 * L / dy  # (+1, -1)
-    N[1, 10] = (
-        L
-        * (
-            bj_1 * dx * n1_1 * n2_1 * L
-            + bj_1 * dx * n1_1 * n2_1
-            - bj_1 * dy * n2_1**2
-            + bp_1 * dy
-        )
-        / (dy * (L + 1))
-    )  # (+1, +0)
-    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * t + 1) / dx  # (-1, +2)
-    N[2, 3] = -bj_2 * dy * n1_2 * n2_2 * t / dx  # (-1, +3)
-    N[2, 6] = bm_2 * _couple_avg(T, t)  # (+0, +1)
-    N[2, 7] = (
-        bj_2 * dx * n1_2**2 * t
-        + bj_2 * dx * n1_2**2
-        - bj_2 * dy * n1_2 * n2_2 * t**2
-        - bp_2 * dx * t
-        - bp_2 * dx
-    ) / (dx * t)  # (+0, +2)
-    N[2, 8] = (
-        -t
-        * (
-            bj_2 * dx * n1_2**2
-            - bj_2 * dy * n1_2 * n2_2 * t
-            - bj_2 * dy * n1_2 * n2_2
-            - bp_2 * dx
-        )
-        / (dx * (t + 1))
-    )  # (+0, +3)
-    N[2, 11] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, +2)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc4_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 4, eta < 0.  Row 2 is extra (T,L corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "L")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-3, -1),
-        (-3, +0),
-        (-2, -1),
-        (-2, +0),
-        (-2, +1),
-        (-1, +0),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+1, -1),
-        (+1, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = bp_0 * -_phi(T) - _psi(T) * (bj_0 * n1_0**2 + bm_0)
-    M[0, 1] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
-    M[1, 0] = bj_1 * dx * n1_1 * n2_1 / (dy * T * (T + 1))
-    M[1, 1] = -bp_1 * _phi_coupled(L, l) + _psi(L) * (bj_1 * n2_1**2 + bm_1)
-    M[1, 2] = -bp_1 * _couple_off_fwd(L, l)
-    M[2, 2] = bp_2 * _couple_off_rev(L, l)
-
-    d = np.zeros(3)
-    d[0] = a_tau_0 * bp_0 * dy * n1_0 - a_0 * bp_0 * -_phi(T) + b_0 * dy * n2_0
-    d[1] = (
-        -a_tau_1 * bp_1 * dx * n2_1 + a_1 * bp_1 * _couple_avg(L, l) + b_1 * dx * n1_1
-    )
-    d[2] = (
-        -a_tau_2 * bp_2 * dx * n2_2 - a_2 * bp_2 * _couple_avg(L, l) + b_2 * dx * n1_2
-    )
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 6] = (
-        T
-        * (
-            bj_0 * dx * n1_0**2
-            - bj_0 * dy * n1_0 * n2_0 * T
-            - bj_0 * dy * n1_0 * n2_0
-            + bm_0 * dx
-        )
-        / (dx * (T + 1))
-    )  # (+0, -1)
-    N[0, 7] = -(
-        bj_0 * dx * n1_0**2 * L * T
-        + bj_0 * dx * n1_0**2 * L
-        - bj_0 * dy * n1_0 * n2_0 * L * T**2
-        - bj_0 * dy * n1_0 * n2_0 * L * T
-        + bj_0 * dy * n1_0 * n2_0 * T
-        + bm_0 * dx * L * T
-        + bm_0 * dx * L
-    ) / (dx * L * T)  # (+0, +0)
-    N[0, 8] = -bp_0 * (T - 2) / (T - 1)  # (+0, +1)
-    N[0, 9] = bp_0 * (T - 1) / (T - 2)  # (+0, +2)
-    N[0, 10] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
-    N[0, 11] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
-    N[1, 5] = -bp_1 * _couple_avg(L, l)  # (-1, +0)
-    N[1, 6] = bj_1 * dx * n1_1 * n2_1 * (L * T + L + T) / (dy * (T + 1))  # (+0, -1)
-    N[1, 7] = -(
-        bj_1 * dx * n1_1 * n2_1 * L**2 * T
-        + bj_1 * dx * n1_1 * n2_1 * L * T
-        - bj_1 * dx * n1_1 * n2_1 * L
-        - bj_1 * dy * n2_1**2 * L * T
-        - bj_1 * dy * n2_1**2 * T
-        - bm_1 * dy * L * T
-        - bm_1 * dy * T
-    ) / (dy * L * T)  # (+0, +0)
-    N[1, 10] = -bj_1 * dx * n1_1 * n2_1 * L / dy  # (+1, -1)
-    N[1, 11] = (
-        L
-        * (
-            bj_1 * dx * n1_1 * n2_1 * L
-            + bj_1 * dx * n1_1 * n2_1
-            - bj_1 * dy * n2_1**2
-            - bm_1 * dy
-        )
-        / (dy * (L + 1))
-    )  # (+1, +0)
-    N[2, 0] = -bj_2 * dx * n1_2 * n2_2 * l / dy  # (-3, -1)
-    N[2, 1] = (
-        l
-        * (
-            bj_2 * dx * n1_2 * n2_2 * l
-            + bj_2 * dx * n1_2 * n2_2
-            + bj_2 * dy * n2_2**2
-            + bm_2 * dy
-        )
-        / (dy * (l + 1))
-    )  # (-3, +0)
-    N[2, 2] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * l + 1) / dy  # (-2, -1)
-    N[2, 3] = -(
-        bj_2 * dx * n1_2 * n2_2 * l**2
-        + bj_2 * dy * n2_2**2 * l
-        + bj_2 * dy * n2_2**2
-        + bm_2 * dy * l
-        + bm_2 * dy
-    ) / (dy * l)  # (-2, +0)
-    N[2, 4] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (-2, +1)
-    N[2, 5] = bp_2 * _couple_avg(L, l)  # (-1, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc4_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 4, eta > 0.  Row 2 is extra (T,L corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "L")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-3, -1),
-        (-3, +0),
-        (-2, -1),
-        (-2, +0),
-        (-2, +1),
-        (-1, +0),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+1, -1),
-        (+1, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = -bm_0 * -_phi(T) - _psi(T) * (bj_0 * n1_0**2 - bp_0)
-    M[0, 1] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
-    M[1, 0] = bj_1 * dx * n1_1 * n2_1 / (dy * T * (T + 1))
-    M[1, 1] = bm_1 * _phi_coupled(L, l) + _psi(L) * (bj_1 * n2_1**2 - bp_1)
-    M[1, 2] = bm_1 * _couple_off_fwd(L, l)
-    M[2, 2] = -bm_2 * _couple_off_rev(L, l)
-
-    d = np.zeros(3)
-    d[0] = a_tau_0 * bm_0 * dy * n1_0 - a_0 * bm_0 * -_phi(T) + b_0 * dy * n2_0
-    d[1] = (
-        -a_tau_1 * bm_1 * dx * n2_1 + a_1 * bm_1 * _couple_avg(L, l) + b_1 * dx * n1_1
-    )
-    d[2] = (
-        -a_tau_2 * bm_2 * dx * n2_2 - a_2 * bm_2 * _couple_avg(L, l) + b_2 * dx * n1_2
-    )
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 6] = (
-        T
-        * (
-            bj_0 * dx * n1_0**2
-            - bj_0 * dy * n1_0 * n2_0 * T
-            - bj_0 * dy * n1_0 * n2_0
-            - bp_0 * dx
-        )
-        / (dx * (T + 1))
-    )  # (+0, -1)
-    N[0, 7] = -(
-        bj_0 * dx * n1_0**2 * L * T
-        + bj_0 * dx * n1_0**2 * L
-        - bj_0 * dy * n1_0 * n2_0 * L * T**2
-        - bj_0 * dy * n1_0 * n2_0 * L * T
-        + bj_0 * dy * n1_0 * n2_0 * T
-        - bp_0 * dx * L * T
-        - bp_0 * dx * L
-    ) / (dx * L * T)  # (+0, +0)
-    N[0, 8] = bm_0 * (T - 2) / (T - 1)  # (+0, +1)
-    N[0, 9] = -bm_0 * (T - 1) / (T - 2)  # (+0, +2)
-    N[0, 10] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
-    N[0, 11] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
-    N[1, 5] = bm_1 * _couple_avg(L, l)  # (-1, +0)
-    N[1, 6] = bj_1 * dx * n1_1 * n2_1 * (L * T + L + T) / (dy * (T + 1))  # (+0, -1)
-    N[1, 7] = -(
-        bj_1 * dx * n1_1 * n2_1 * L**2 * T
-        + bj_1 * dx * n1_1 * n2_1 * L * T
-        - bj_1 * dx * n1_1 * n2_1 * L
-        - bj_1 * dy * n2_1**2 * L * T
-        - bj_1 * dy * n2_1**2 * T
-        + bp_1 * dy * L * T
-        + bp_1 * dy * T
-    ) / (dy * L * T)  # (+0, +0)
-    N[1, 10] = -bj_1 * dx * n1_1 * n2_1 * L / dy  # (+1, -1)
-    N[1, 11] = (
-        L
-        * (
-            bj_1 * dx * n1_1 * n2_1 * L
-            + bj_1 * dx * n1_1 * n2_1
-            - bj_1 * dy * n2_1**2
-            + bp_1 * dy
-        )
-        / (dy * (L + 1))
-    )  # (+1, +0)
-    N[2, 0] = -bj_2 * dx * n1_2 * n2_2 * l / dy  # (-3, -1)
-    N[2, 1] = (
-        l
-        * (
-            bj_2 * dx * n1_2 * n2_2 * l
-            + bj_2 * dx * n1_2 * n2_2
-            + bj_2 * dy * n2_2**2
-            - bp_2 * dy
-        )
-        / (dy * (l + 1))
-    )  # (-3, +0)
-    N[2, 2] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * l + 1) / dy  # (-2, -1)
-    N[2, 3] = -(
-        bj_2 * dx * n1_2 * n2_2 * l**2
-        + bj_2 * dy * n2_2**2 * l
-        + bj_2 * dy * n2_2**2
-        - bp_2 * dy * l
-        - bp_2 * dy
-    ) / (dy * l)  # (-2, +0)
-    N[2, 4] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (-2, +1)
-    N[2, 5] = -bm_2 * _couple_avg(L, l)  # (-1, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc5_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 5, eta < 0.  Row 2 is extra (L,B corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "L")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-3, -1),
-        (-3, +0),
-        (-2, -1),
-        (-2, +0),
-        (-2, +1),
-        (-1, +0),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+1, +0),
-        (+1, +1),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = -bp_0 * _phi_coupled(L, l) + _psi(L) * (bj_0 * n2_0**2 + bm_0)
-    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
-    M[0, 2] = -bp_0 * _couple_off_fwd(L, l)
-    M[1, 0] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
-    M[1, 1] = -bp_1 * -_phi(B) + _psi(B) * (bj_1 * n1_1**2 + bm_1)
-    M[2, 0] = bp_2 * _couple_off_rev(L, l)
-    M[2, 2] = bp_2 * _phi_mirror(L, l) - _psi(l) * (bj_2 * n2_2**2 + bm_2)
-
-    d = np.zeros(3)
-    d[0] = (
-        -a_tau_0 * bp_0 * dx * n2_0 + a_0 * bp_0 * _couple_avg(L, l) + b_0 * dx * n1_0
-    )
-    d[1] = a_tau_1 * bp_1 * dy * n1_1 + a_1 * bp_1 * -_phi(B) + b_1 * dy * n2_1
-    d[2] = (
-        -a_tau_2 * bp_2 * dx * n2_2 - a_2 * bp_2 * _couple_avg(L, l) + b_2 * dx * n1_2
-    )
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 5] = -bp_0 * _couple_avg(L, l)  # (-1, +0)
-    N[0, 8] = (
-        bj_0 * dx * n1_0 * n2_0 * B * L**2
-        + bj_0 * dx * n1_0 * n2_0 * B * L
-        - bj_0 * dx * n1_0 * n2_0 * L
-        + bj_0 * dy * n2_0**2 * B * L
-        + bj_0 * dy * n2_0**2 * B
-        + bm_0 * dy * B * L
-        + bm_0 * dy * B
-    ) / (dy * B * L)  # (+0, +0)
-    N[0, 9] = -bj_0 * dx * n1_0 * n2_0 * (B * L + B + L) / (dy * (B + 1))  # (+0, +1)
-    N[0, 10] = (
-        -L
-        * (
-            bj_0 * dx * n1_0 * n2_0 * L
-            + bj_0 * dx * n1_0 * n2_0
-            + bj_0 * dy * n2_0**2
-            + bm_0 * dy
-        )
-        / (dy * (L + 1))
-    )  # (+1, +0)
-    N[0, 11] = bj_0 * dx * n1_0 * n2_0 * L / dy  # (+1, +1)
-    N[1, 6] = -bp_1 * (B - 1) / (B - 2)  # (+0, -2)
-    N[1, 7] = bp_1 * (B - 2) / (B - 1)  # (+0, -1)
-    N[1, 8] = (
-        bj_1 * dx * n1_1**2 * B * L
-        + bj_1 * dx * n1_1**2 * L
-        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
-        + bj_1 * dy * n1_1 * n2_1 * B * L
-        - bj_1 * dy * n1_1 * n2_1 * B
-        + bm_1 * dx * B * L
-        + bm_1 * dx * L
-    ) / (dx * B * L)  # (+0, +0)
-    N[1, 9] = (
-        -B
-        * (
-            bj_1 * dx * n1_1**2
-            + bj_1 * dy * n1_1 * n2_1 * B
-            + bj_1 * dy * n1_1 * n2_1
-            + bm_1 * dx
-        )
-        / (dx * (B + 1))
-    )  # (+0, +1)
-    N[1, 10] = -bj_1 * dy * n1_1 * n2_1 * (B * L + B + L) / (dx * (L + 1))  # (+1, +0)
-    N[1, 11] = bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, +1)
-    N[2, 0] = -bj_2 * dx * n1_2 * n2_2 * l / dy  # (-3, -1)
-    N[2, 1] = (
-        l
-        * (
-            bj_2 * dx * n1_2 * n2_2 * l
-            + bj_2 * dx * n1_2 * n2_2
-            + bj_2 * dy * n2_2**2
-            + bm_2 * dy
-        )
-        / (dy * (l + 1))
-    )  # (-3, +0)
-    N[2, 2] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * l + 1) / dy  # (-2, -1)
-    N[2, 3] = -(
-        bj_2 * dx * n1_2 * n2_2 * l**2
-        + bj_2 * dy * n2_2**2 * l
-        + bj_2 * dy * n2_2**2
-        + bm_2 * dy * l
-        + bm_2 * dy
-    ) / (dy * l)  # (-2, +0)
-    N[2, 4] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (-2, +1)
-    N[2, 5] = bp_2 * _couple_avg(L, l)  # (-1, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc5_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 5, eta > 0.  Row 2 is extra (L,B corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "L")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-3, -1),
-        (-3, +0),
-        (-2, -1),
-        (-2, +0),
-        (-2, +1),
-        (-1, +0),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+1, +0),
-        (+1, +1),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = bm_0 * _phi_coupled(L, l) + _psi(L) * (bj_0 * n2_0**2 - bp_0)
-    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
-    M[0, 2] = bm_0 * _couple_off_fwd(L, l)
-    M[1, 0] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
-    M[1, 1] = bm_1 * -_phi(B) + _psi(B) * (bj_1 * n1_1**2 - bp_1)
-    M[2, 0] = -bm_2 * _couple_off_rev(L, l)
-    M[2, 2] = -bm_2 * _phi_mirror(L, l) - _psi(l) * (bj_2 * n2_2**2 - bp_2)
-
-    d = np.zeros(3)
-    d[0] = (
-        -a_tau_0 * bm_0 * dx * n2_0 + a_0 * bm_0 * _couple_avg(L, l) + b_0 * dx * n1_0
-    )
-    d[1] = a_tau_1 * bm_1 * dy * n1_1 + a_1 * bm_1 * -_phi(B) + b_1 * dy * n2_1
-    d[2] = (
-        -a_tau_2 * bm_2 * dx * n2_2 - a_2 * bm_2 * _couple_avg(L, l) + b_2 * dx * n1_2
-    )
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 5] = bm_0 * _couple_avg(L, l)  # (-1, +0)
-    N[0, 8] = (
-        bj_0 * dx * n1_0 * n2_0 * B * L**2
-        + bj_0 * dx * n1_0 * n2_0 * B * L
-        - bj_0 * dx * n1_0 * n2_0 * L
-        + bj_0 * dy * n2_0**2 * B * L
-        + bj_0 * dy * n2_0**2 * B
-        - bp_0 * dy * B * L
-        - bp_0 * dy * B
-    ) / (dy * B * L)  # (+0, +0)
-    N[0, 9] = -bj_0 * dx * n1_0 * n2_0 * (B * L + B + L) / (dy * (B + 1))  # (+0, +1)
-    N[0, 10] = (
-        -L
-        * (
-            bj_0 * dx * n1_0 * n2_0 * L
-            + bj_0 * dx * n1_0 * n2_0
-            + bj_0 * dy * n2_0**2
-            - bp_0 * dy
-        )
-        / (dy * (L + 1))
-    )  # (+1, +0)
-    N[0, 11] = bj_0 * dx * n1_0 * n2_0 * L / dy  # (+1, +1)
-    N[1, 6] = bm_1 * (B - 1) / (B - 2)  # (+0, -2)
-    N[1, 7] = -bm_1 * (B - 2) / (B - 1)  # (+0, -1)
-    N[1, 8] = (
-        bj_1 * dx * n1_1**2 * B * L
-        + bj_1 * dx * n1_1**2 * L
-        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
-        + bj_1 * dy * n1_1 * n2_1 * B * L
-        - bj_1 * dy * n1_1 * n2_1 * B
-        - bp_1 * dx * B * L
-        - bp_1 * dx * L
-    ) / (dx * B * L)  # (+0, +0)
-    N[1, 9] = (
-        -B
-        * (
-            bj_1 * dx * n1_1**2
-            + bj_1 * dy * n1_1 * n2_1 * B
-            + bj_1 * dy * n1_1 * n2_1
-            - bp_1 * dx
-        )
-        / (dx * (B + 1))
-    )  # (+0, +1)
-    N[1, 10] = -bj_1 * dy * n1_1 * n2_1 * (B * L + B + L) / (dx * (L + 1))  # (+1, +0)
-    N[1, 11] = bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, +1)
-    N[2, 0] = -bj_2 * dx * n1_2 * n2_2 * l / dy  # (-3, -1)
-    N[2, 1] = (
-        l
-        * (
-            bj_2 * dx * n1_2 * n2_2 * l
-            + bj_2 * dx * n1_2 * n2_2
-            + bj_2 * dy * n2_2**2
-            - bp_2 * dy
-        )
-        / (dy * (l + 1))
-    )  # (-3, +0)
-    N[2, 2] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * l + 1) / dy  # (-2, -1)
-    N[2, 3] = -(
-        bj_2 * dx * n1_2 * n2_2 * l**2
-        + bj_2 * dy * n2_2**2 * l
-        + bj_2 * dy * n2_2**2
-        - bp_2 * dy * l
-        - bp_2 * dy
-    ) / (dy * l)  # (-2, +0)
-    N[2, 4] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (-2, +1)
-    N[2, 5] = -bm_2 * _couple_avg(L, l)  # (-1, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc6_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 6, eta < 0.  Row 2 is extra (L,B corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "L")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-2, +0),
-        (-1, -3),
-        (-1, -2),
-        (-1, +0),
-        (+0, -3),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+1, -2),
-        (+1, +0),
-        (+1, +1),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = -bp_0 * -_phi(L) + _psi(L) * (bj_0 * n2_0**2 + bm_0)
-    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
-    M[1, 0] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
-    M[1, 1] = -bp_1 * _phi_coupled(B, b) + _psi(B) * (bj_1 * n1_1**2 + bm_1)
-    M[1, 2] = -bp_1 * _couple_off_fwd(B, b)
-    M[2, 2] = bp_2 * _couple_off_rev(B, b)
-
-    d = np.zeros(3)
-    d[0] = -a_tau_0 * bp_0 * dx * n2_0 + a_0 * bp_0 * -_phi(L) + b_0 * dx * n1_0
-    d[1] = a_tau_1 * bp_1 * dy * n1_1 + a_1 * bp_1 * _couple_avg(B, b) + b_1 * dy * n2_1
-    d[2] = a_tau_2 * bp_2 * dy * n1_2 - a_2 * bp_2 * _couple_avg(B, b) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 0] = -bp_0 * (L - 1) / (L - 2)  # (-2, +0)
-    N[0, 3] = bp_0 * (L - 2) / (L - 1)  # (-1, +0)
-    N[0, 7] = (
-        bj_0 * dx * n1_0 * n2_0 * B * L**2
-        + bj_0 * dx * n1_0 * n2_0 * B * L
-        - bj_0 * dx * n1_0 * n2_0 * L
-        + bj_0 * dy * n2_0**2 * B * L
-        + bj_0 * dy * n2_0**2 * B
-        + bm_0 * dy * B * L
-        + bm_0 * dy * B
-    ) / (dy * B * L)  # (+0, +0)
-    N[0, 8] = -bj_0 * dx * n1_0 * n2_0 * (B * L + B + L) / (dy * (B + 1))  # (+0, +1)
-    N[0, 10] = (
-        -L
-        * (
-            bj_0 * dx * n1_0 * n2_0 * L
-            + bj_0 * dx * n1_0 * n2_0
-            + bj_0 * dy * n2_0**2
-            + bm_0 * dy
-        )
-        / (dy * (L + 1))
-    )  # (+1, +0)
-    N[0, 11] = bj_0 * dx * n1_0 * n2_0 * L / dy  # (+1, +1)
-    N[1, 6] = -bp_1 * _couple_avg(B, b)  # (+0, -1)
-    N[1, 7] = (
-        bj_1 * dx * n1_1**2 * B * L
-        + bj_1 * dx * n1_1**2 * L
-        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
-        + bj_1 * dy * n1_1 * n2_1 * B * L
-        - bj_1 * dy * n1_1 * n2_1 * B
-        + bm_1 * dx * B * L
-        + bm_1 * dx * L
-    ) / (dx * B * L)  # (+0, +0)
-    N[1, 8] = (
-        -B
-        * (
-            bj_1 * dx * n1_1**2
-            + bj_1 * dy * n1_1 * n2_1 * B
-            + bj_1 * dy * n1_1 * n2_1
-            + bm_1 * dx
-        )
-        / (dx * (B + 1))
-    )  # (+0, +1)
-    N[1, 10] = -bj_1 * dy * n1_1 * n2_1 * (B * L + B + L) / (dx * (L + 1))  # (+1, +0)
-    N[1, 11] = bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, +1)
-    N[2, 1] = -bj_2 * dy * n1_2 * n2_2 * b / dx  # (-1, -3)
-    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * b + 1) / dx  # (-1, -2)
-    N[2, 4] = (
-        b
-        * (
-            bj_2 * dx * n1_2**2
-            + bj_2 * dy * n1_2 * n2_2 * b
-            + bj_2 * dy * n1_2 * n2_2
-            + bm_2 * dx
-        )
-        / (dx * (b + 1))
-    )  # (+0, -3)
-    N[2, 5] = -(
-        bj_2 * dx * n1_2**2 * b
-        + bj_2 * dx * n1_2**2
-        + bj_2 * dy * n1_2 * n2_2 * b**2
-        + bm_2 * dx * b
-        + bm_2 * dx
-    ) / (dx * b)  # (+0, -2)
-    N[2, 6] = bp_2 * _couple_avg(B, b)  # (+0, -1)
-    N[2, 9] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, -2)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc6_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 6, eta > 0.  Row 2 is extra (L,B corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "L")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-2, +0),
-        (-1, -3),
-        (-1, -2),
-        (-1, +0),
-        (+0, -3),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+1, -2),
-        (+1, +0),
-        (+1, +1),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = bm_0 * -_phi(L) + _psi(L) * (bj_0 * n2_0**2 - bp_0)
-    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
-    M[1, 0] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
-    M[1, 1] = bm_1 * _phi_coupled(B, b) + _psi(B) * (bj_1 * n1_1**2 - bp_1)
-    M[1, 2] = bm_1 * _couple_off_fwd(B, b)
-    M[2, 2] = -bm_2 * _couple_off_rev(B, b)
-
-    d = np.zeros(3)
-    d[0] = -a_tau_0 * bm_0 * dx * n2_0 + a_0 * bm_0 * -_phi(L) + b_0 * dx * n1_0
-    d[1] = a_tau_1 * bm_1 * dy * n1_1 + a_1 * bm_1 * _couple_avg(B, b) + b_1 * dy * n2_1
-    d[2] = a_tau_2 * bm_2 * dy * n1_2 - a_2 * bm_2 * _couple_avg(B, b) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 0] = bm_0 * (L - 1) / (L - 2)  # (-2, +0)
-    N[0, 3] = -bm_0 * (L - 2) / (L - 1)  # (-1, +0)
-    N[0, 7] = (
-        bj_0 * dx * n1_0 * n2_0 * B * L**2
-        + bj_0 * dx * n1_0 * n2_0 * B * L
-        - bj_0 * dx * n1_0 * n2_0 * L
-        + bj_0 * dy * n2_0**2 * B * L
-        + bj_0 * dy * n2_0**2 * B
-        - bp_0 * dy * B * L
-        - bp_0 * dy * B
-    ) / (dy * B * L)  # (+0, +0)
-    N[0, 8] = -bj_0 * dx * n1_0 * n2_0 * (B * L + B + L) / (dy * (B + 1))  # (+0, +1)
-    N[0, 10] = (
-        -L
-        * (
-            bj_0 * dx * n1_0 * n2_0 * L
-            + bj_0 * dx * n1_0 * n2_0
-            + bj_0 * dy * n2_0**2
-            - bp_0 * dy
-        )
-        / (dy * (L + 1))
-    )  # (+1, +0)
-    N[0, 11] = bj_0 * dx * n1_0 * n2_0 * L / dy  # (+1, +1)
-    N[1, 6] = bm_1 * _couple_avg(B, b)  # (+0, -1)
-    N[1, 7] = (
-        bj_1 * dx * n1_1**2 * B * L
-        + bj_1 * dx * n1_1**2 * L
-        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
-        + bj_1 * dy * n1_1 * n2_1 * B * L
-        - bj_1 * dy * n1_1 * n2_1 * B
-        - bp_1 * dx * B * L
-        - bp_1 * dx * L
-    ) / (dx * B * L)  # (+0, +0)
-    N[1, 8] = (
-        -B
-        * (
-            bj_1 * dx * n1_1**2
-            + bj_1 * dy * n1_1 * n2_1 * B
-            + bj_1 * dy * n1_1 * n2_1
-            - bp_1 * dx
-        )
-        / (dx * (B + 1))
-    )  # (+0, +1)
-    N[1, 10] = -bj_1 * dy * n1_1 * n2_1 * (B * L + B + L) / (dx * (L + 1))  # (+1, +0)
-    N[1, 11] = bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, +1)
-    N[2, 1] = -bj_2 * dy * n1_2 * n2_2 * b / dx  # (-1, -3)
-    N[2, 2] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * b + 1) / dx  # (-1, -2)
-    N[2, 4] = (
-        b
-        * (
-            bj_2 * dx * n1_2**2
-            + bj_2 * dy * n1_2 * n2_2 * b
-            + bj_2 * dy * n1_2 * n2_2
-            - bp_2 * dx
-        )
-        / (dx * (b + 1))
-    )  # (+0, -3)
-    N[2, 5] = -(
-        bj_2 * dx * n1_2**2 * b
-        + bj_2 * dx * n1_2**2
-        + bj_2 * dy * n1_2 * n2_2 * b**2
-        - bp_2 * dx * b
-        - bp_2 * dx
-    ) / (dx * b)  # (+0, -2)
-    N[2, 6] = -bm_2 * _couple_avg(B, b)  # (+0, -1)
-    N[2, 9] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, -2)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc7_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 7, eta < 0.  Row 2 is extra (B,R corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "B")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "R")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-1, -3),
-        (-1, -2),
-        (-1, +0),
-        (-1, +1),
-        (+0, -3),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+1, -2),
-        (+1, +0),
-        (+2, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = -bp_0 * _phi_coupled(B, b) + _psi(B) * (bj_0 * n1_0**2 + bm_0)
-    M[0, 1] = bj_0 * dy * n1_0 * n2_0 / (dx * R * (R + 1))
-    M[0, 2] = -bp_0 * _couple_off_fwd(B, b)
-    M[1, 0] = -bj_1 * dx * n1_1 * n2_1 / (dy * B * (B + 1))
-    M[1, 1] = bp_1 * -_phi(R) - _psi(R) * (bj_1 * n2_1**2 + bm_1)
-    M[2, 0] = bp_2 * _couple_off_rev(B, b)
-    M[2, 2] = bp_2 * _phi_mirror(B, b) - _psi(b) * (bj_2 * n1_2**2 + bm_2)
-
-    d = np.zeros(3)
-    d[0] = a_tau_0 * bp_0 * dy * n1_0 + a_0 * bp_0 * _couple_avg(B, b) + b_0 * dy * n2_0
-    d[1] = -a_tau_1 * bp_1 * dx * n2_1 - a_1 * bp_1 * -_phi(R) + b_1 * dx * n1_1
-    d[2] = a_tau_2 * bp_2 * dy * n1_2 - a_2 * bp_2 * _couple_avg(B, b) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 2] = bj_0 * dy * n1_0 * n2_0 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
-    N[0, 3] = -bj_0 * dy * n1_0 * n2_0 * B / dx  # (-1, +1)
-    N[0, 6] = -bp_0 * _couple_avg(B, b)  # (+0, -1)
-    N[0, 7] = (
-        bj_0 * dx * n1_0**2 * B * R
-        + bj_0 * dx * n1_0**2 * R
-        - bj_0 * dy * n1_0 * n2_0 * B**2 * R
-        - bj_0 * dy * n1_0 * n2_0 * B * R
-        + bj_0 * dy * n1_0 * n2_0 * B
-        + bm_0 * dx * B * R
-        + bm_0 * dx * R
-    ) / (dx * B * R)  # (+0, +0)
-    N[0, 8] = (
-        -B
-        * (
-            bj_0 * dx * n1_0**2
-            - bj_0 * dy * n1_0 * n2_0 * B
-            - bj_0 * dy * n1_0 * n2_0
-            + bm_0 * dx
-        )
-        / (dx * (B + 1))
-    )  # (+0, +1)
-    N[1, 2] = (
-        -R
-        * (
-            bj_1 * dx * n1_1 * n2_1 * R
-            + bj_1 * dx * n1_1 * n2_1
-            - bj_1 * dy * n2_1**2
-            - bm_1 * dy
-        )
-        / (dy * (R + 1))
-    )  # (-1, +0)
-    N[1, 3] = bj_1 * dx * n1_1 * n2_1 * R / dy  # (-1, +1)
-    N[1, 7] = (
-        bj_1 * dx * n1_1 * n2_1 * B * R**2
-        + bj_1 * dx * n1_1 * n2_1 * B * R
-        - bj_1 * dx * n1_1 * n2_1 * R
-        - bj_1 * dy * n2_1**2 * B * R
-        - bj_1 * dy * n2_1**2 * B
-        - bm_1 * dy * B * R
-        - bm_1 * dy * B
-    ) / (dy * B * R)  # (+0, +0)
-    N[1, 8] = -bj_1 * dx * n1_1 * n2_1 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
-    N[1, 10] = -bp_1 * (R - 2) / (R - 1)  # (+1, +0)
-    N[1, 11] = bp_1 * (R - 1) / (R - 2)  # (+2, +0)
-    N[2, 0] = -bj_2 * dy * n1_2 * n2_2 * b / dx  # (-1, -3)
-    N[2, 1] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * b + 1) / dx  # (-1, -2)
-    N[2, 4] = (
-        b
-        * (
-            bj_2 * dx * n1_2**2
-            + bj_2 * dy * n1_2 * n2_2 * b
-            + bj_2 * dy * n1_2 * n2_2
-            + bm_2 * dx
-        )
-        / (dx * (b + 1))
-    )  # (+0, -3)
-    N[2, 5] = -(
-        bj_2 * dx * n1_2**2 * b
-        + bj_2 * dx * n1_2**2
-        + bj_2 * dy * n1_2 * n2_2 * b**2
-        + bm_2 * dx * b
-        + bm_2 * dx
-    ) / (dx * b)  # (+0, -2)
-    N[2, 6] = bp_2 * _couple_avg(B, b)  # (+0, -1)
-    N[2, 9] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, -2)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc7_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 7, eta > 0.  Row 2 is extra (B,R corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "B")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "R")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-1, -3),
-        (-1, -2),
-        (-1, +0),
-        (-1, +1),
-        (+0, -3),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+1, -2),
-        (+1, +0),
-        (+2, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = bm_0 * _phi_coupled(B, b) + _psi(B) * (bj_0 * n1_0**2 - bp_0)
-    M[0, 1] = bj_0 * dy * n1_0 * n2_0 / (dx * R * (R + 1))
-    M[0, 2] = bm_0 * _couple_off_fwd(B, b)
-    M[1, 0] = -bj_1 * dx * n1_1 * n2_1 / (dy * B * (B + 1))
-    M[1, 1] = -bm_1 * -_phi(R) - _psi(R) * (bj_1 * n2_1**2 - bp_1)
-    M[2, 0] = -bm_2 * _couple_off_rev(B, b)
-    M[2, 2] = -bm_2 * _phi_mirror(B, b) - _psi(b) * (bj_2 * n1_2**2 - bp_2)
-
-    d = np.zeros(3)
-    d[0] = a_tau_0 * bm_0 * dy * n1_0 + a_0 * bm_0 * _couple_avg(B, b) + b_0 * dy * n2_0
-    d[1] = -a_tau_1 * bm_1 * dx * n2_1 - a_1 * bm_1 * -_phi(R) + b_1 * dx * n1_1
-    d[2] = a_tau_2 * bm_2 * dy * n1_2 - a_2 * bm_2 * _couple_avg(B, b) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 2] = bj_0 * dy * n1_0 * n2_0 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
-    N[0, 3] = -bj_0 * dy * n1_0 * n2_0 * B / dx  # (-1, +1)
-    N[0, 6] = bm_0 * _couple_avg(B, b)  # (+0, -1)
-    N[0, 7] = (
-        bj_0 * dx * n1_0**2 * B * R
-        + bj_0 * dx * n1_0**2 * R
-        - bj_0 * dy * n1_0 * n2_0 * B**2 * R
-        - bj_0 * dy * n1_0 * n2_0 * B * R
-        + bj_0 * dy * n1_0 * n2_0 * B
-        - bp_0 * dx * B * R
-        - bp_0 * dx * R
-    ) / (dx * B * R)  # (+0, +0)
-    N[0, 8] = (
-        -B
-        * (
-            bj_0 * dx * n1_0**2
-            - bj_0 * dy * n1_0 * n2_0 * B
-            - bj_0 * dy * n1_0 * n2_0
-            - bp_0 * dx
-        )
-        / (dx * (B + 1))
-    )  # (+0, +1)
-    N[1, 2] = (
-        -R
-        * (
-            bj_1 * dx * n1_1 * n2_1 * R
-            + bj_1 * dx * n1_1 * n2_1
-            - bj_1 * dy * n2_1**2
-            + bp_1 * dy
-        )
-        / (dy * (R + 1))
-    )  # (-1, +0)
-    N[1, 3] = bj_1 * dx * n1_1 * n2_1 * R / dy  # (-1, +1)
-    N[1, 7] = (
-        bj_1 * dx * n1_1 * n2_1 * B * R**2
-        + bj_1 * dx * n1_1 * n2_1 * B * R
-        - bj_1 * dx * n1_1 * n2_1 * R
-        - bj_1 * dy * n2_1**2 * B * R
-        - bj_1 * dy * n2_1**2 * B
-        + bp_1 * dy * B * R
-        + bp_1 * dy * B
-    ) / (dy * B * R)  # (+0, +0)
-    N[1, 8] = -bj_1 * dx * n1_1 * n2_1 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
-    N[1, 10] = bm_1 * (R - 2) / (R - 1)  # (+1, +0)
-    N[1, 11] = -bm_1 * (R - 1) / (R - 2)  # (+2, +0)
-    N[2, 0] = -bj_2 * dy * n1_2 * n2_2 * b / dx  # (-1, -3)
-    N[2, 1] = (1 / 2) * bj_2 * dy * n1_2 * n2_2 * (2 * b + 1) / dx  # (-1, -2)
-    N[2, 4] = (
-        b
-        * (
-            bj_2 * dx * n1_2**2
-            + bj_2 * dy * n1_2 * n2_2 * b
-            + bj_2 * dy * n1_2 * n2_2
-            - bp_2 * dx
-        )
-        / (dx * (b + 1))
-    )  # (+0, -3)
-    N[2, 5] = -(
-        bj_2 * dx * n1_2**2 * b
-        + bj_2 * dx * n1_2**2
-        + bj_2 * dy * n1_2 * n2_2 * b**2
-        - bp_2 * dx * b
-        - bp_2 * dx
-    ) / (dx * b)  # (+0, -2)
-    N[2, 6] = -bm_2 * _couple_avg(B, b)  # (+0, -1)
-    N[2, 9] = -1 / 2 * bj_2 * dy * n1_2 * n2_2 / dx  # (+1, -2)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc8_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 8, eta < 0.  Row 2 is extra (B,R corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "B")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "R")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-1, +0),
-        (-1, +1),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+1, +0),
-        (+2, -1),
-        (+2, +0),
-        (+2, +1),
-        (+3, -1),
-        (+3, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = -bp_0 * -_phi(B) + _psi(B) * (bj_0 * n1_0**2 + bm_0)
-    M[0, 1] = bj_0 * dy * n1_0 * n2_0 / (dx * R * (R + 1))
-    M[1, 0] = -bj_1 * dx * n1_1 * n2_1 / (dy * B * (B + 1))
-    M[1, 1] = bp_1 * _phi_coupled(R, r) - _psi(R) * (bj_1 * n2_1**2 + bm_1)
-    M[1, 2] = bp_1 * _couple_off_fwd(R, r)
-    M[2, 2] = -bp_2 * _couple_off_rev(R, r)
-
-    d = np.zeros(3)
-    d[0] = a_tau_0 * bp_0 * dy * n1_0 + a_0 * bp_0 * -_phi(B) + b_0 * dy * n2_0
-    d[1] = (
-        -a_tau_1 * bp_1 * dx * n2_1 - a_1 * bp_1 * _couple_avg(R, r) + b_1 * dx * n1_1
-    )
-    d[2] = (
-        -a_tau_2 * bp_2 * dx * n2_2 + a_2 * bp_2 * _couple_avg(R, r) + b_2 * dx * n1_2
-    )
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 0] = bj_0 * dy * n1_0 * n2_0 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
-    N[0, 1] = -bj_0 * dy * n1_0 * n2_0 * B / dx  # (-1, +1)
-    N[0, 2] = -bp_0 * (B - 1) / (B - 2)  # (+0, -2)
-    N[0, 3] = bp_0 * (B - 2) / (B - 1)  # (+0, -1)
-    N[0, 4] = (
-        bj_0 * dx * n1_0**2 * B * R
-        + bj_0 * dx * n1_0**2 * R
-        - bj_0 * dy * n1_0 * n2_0 * B**2 * R
-        - bj_0 * dy * n1_0 * n2_0 * B * R
-        + bj_0 * dy * n1_0 * n2_0 * B
-        + bm_0 * dx * B * R
-        + bm_0 * dx * R
-    ) / (dx * B * R)  # (+0, +0)
-    N[0, 5] = (
-        -B
-        * (
-            bj_0 * dx * n1_0**2
-            - bj_0 * dy * n1_0 * n2_0 * B
-            - bj_0 * dy * n1_0 * n2_0
-            + bm_0 * dx
-        )
-        / (dx * (B + 1))
-    )  # (+0, +1)
-    N[1, 0] = (
-        -R
-        * (
-            bj_1 * dx * n1_1 * n2_1 * R
-            + bj_1 * dx * n1_1 * n2_1
-            - bj_1 * dy * n2_1**2
-            - bm_1 * dy
-        )
-        / (dy * (R + 1))
-    )  # (-1, +0)
-    N[1, 1] = bj_1 * dx * n1_1 * n2_1 * R / dy  # (-1, +1)
-    N[1, 4] = (
-        bj_1 * dx * n1_1 * n2_1 * B * R**2
-        + bj_1 * dx * n1_1 * n2_1 * B * R
-        - bj_1 * dx * n1_1 * n2_1 * R
-        - bj_1 * dy * n2_1**2 * B * R
-        - bj_1 * dy * n2_1**2 * B
-        - bm_1 * dy * B * R
-        - bm_1 * dy * B
-    ) / (dy * B * R)  # (+0, +0)
-    N[1, 5] = -bj_1 * dx * n1_1 * n2_1 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
-    N[1, 6] = bp_1 * _couple_avg(R, r)  # (+1, +0)
-    N[2, 6] = -bp_2 * _couple_avg(R, r)  # (+1, +0)
-    N[2, 7] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * r + 1) / dy  # (+2, -1)
-    N[2, 8] = -(
-        bj_2 * dx * n1_2 * n2_2 * r**2
-        - bj_2 * dy * n2_2**2 * r
-        - bj_2 * dy * n2_2**2
-        - bm_2 * dy * r
-        - bm_2 * dy
-    ) / (dy * r)  # (+2, +0)
-    N[2, 9] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (+2, +1)
-    N[2, 10] = -bj_2 * dx * n1_2 * n2_2 * r / dy  # (+3, -1)
-    N[2, 11] = (
-        r
-        * (
-            bj_2 * dx * n1_2 * n2_2 * r
-            + bj_2 * dx * n1_2 * n2_2
-            - bj_2 * dy * n2_2**2
-            - bm_2 * dy
-        )
-        / (dy * (r + 1))
-    )  # (+3, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case3_sc8_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 3 sub-case 8, eta > 0.  Row 2 is extra (B,R corner)."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "B")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "R")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "extra")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-1, +0),
-        (-1, +1),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+1, +0),
-        (+2, -1),
-        (+2, +0),
-        (+2, +1),
-        (+3, -1),
-        (+3, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = bm_0 * -_phi(B) + _psi(B) * (bj_0 * n1_0**2 - bp_0)
-    M[0, 1] = bj_0 * dy * n1_0 * n2_0 / (dx * R * (R + 1))
-    M[1, 0] = -bj_1 * dx * n1_1 * n2_1 / (dy * B * (B + 1))
-    M[1, 1] = -bm_1 * _phi_coupled(R, r) - _psi(R) * (bj_1 * n2_1**2 - bp_1)
-    M[1, 2] = -bm_1 * _couple_off_fwd(R, r)
-    M[2, 2] = bm_2 * _couple_off_rev(R, r)
-
-    d = np.zeros(3)
-    d[0] = a_tau_0 * bm_0 * dy * n1_0 + a_0 * bm_0 * -_phi(B) + b_0 * dy * n2_0
-    d[1] = (
-        -a_tau_1 * bm_1 * dx * n2_1 - a_1 * bm_1 * _couple_avg(R, r) + b_1 * dx * n1_1
-    )
-    d[2] = (
-        -a_tau_2 * bm_2 * dx * n2_2 + a_2 * bm_2 * _couple_avg(R, r) + b_2 * dx * n1_2
-    )
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 0] = bj_0 * dy * n1_0 * n2_0 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
-    N[0, 1] = -bj_0 * dy * n1_0 * n2_0 * B / dx  # (-1, +1)
-    N[0, 2] = bm_0 * (B - 1) / (B - 2)  # (+0, -2)
-    N[0, 3] = -bm_0 * (B - 2) / (B - 1)  # (+0, -1)
-    N[0, 4] = (
-        bj_0 * dx * n1_0**2 * B * R
-        + bj_0 * dx * n1_0**2 * R
-        - bj_0 * dy * n1_0 * n2_0 * B**2 * R
-        - bj_0 * dy * n1_0 * n2_0 * B * R
-        + bj_0 * dy * n1_0 * n2_0 * B
-        - bp_0 * dx * B * R
-        - bp_0 * dx * R
-    ) / (dx * B * R)  # (+0, +0)
-    N[0, 5] = (
-        -B
-        * (
-            bj_0 * dx * n1_0**2
-            - bj_0 * dy * n1_0 * n2_0 * B
-            - bj_0 * dy * n1_0 * n2_0
-            - bp_0 * dx
-        )
-        / (dx * (B + 1))
-    )  # (+0, +1)
-    N[1, 0] = (
-        -R
-        * (
-            bj_1 * dx * n1_1 * n2_1 * R
-            + bj_1 * dx * n1_1 * n2_1
-            - bj_1 * dy * n2_1**2
-            + bp_1 * dy
-        )
-        / (dy * (R + 1))
-    )  # (-1, +0)
-    N[1, 1] = bj_1 * dx * n1_1 * n2_1 * R / dy  # (-1, +1)
-    N[1, 4] = (
-        bj_1 * dx * n1_1 * n2_1 * B * R**2
-        + bj_1 * dx * n1_1 * n2_1 * B * R
-        - bj_1 * dx * n1_1 * n2_1 * R
-        - bj_1 * dy * n2_1**2 * B * R
-        - bj_1 * dy * n2_1**2 * B
-        + bp_1 * dy * B * R
-        + bp_1 * dy * B
-    ) / (dy * B * R)  # (+0, +0)
-    N[1, 5] = -bj_1 * dx * n1_1 * n2_1 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
-    N[1, 6] = -bm_1 * _couple_avg(R, r)  # (+1, +0)
-    N[2, 6] = bm_2 * _couple_avg(R, r)  # (+1, +0)
-    N[2, 7] = (1 / 2) * bj_2 * dx * n1_2 * n2_2 * (2 * r + 1) / dy  # (+2, -1)
-    N[2, 8] = -(
-        bj_2 * dx * n1_2 * n2_2 * r**2
-        - bj_2 * dy * n2_2**2 * r
-        - bj_2 * dy * n2_2**2
-        + bp_2 * dy * r
-        + bp_2 * dy
-    ) / (dy * r)  # (+2, +0)
-    N[2, 9] = -1 / 2 * bj_2 * dx * n1_2 * n2_2 / dy  # (+2, +1)
-    N[2, 10] = -bj_2 * dx * n1_2 * n2_2 * r / dy  # (+3, -1)
-    N[2, 11] = (
-        r
-        * (
-            bj_2 * dx * n1_2 * n2_2 * r
-            + bj_2 * dx * n1_2 * n2_2
-            - bj_2 * dy * n2_2**2
-            + bp_2 * dy
-        )
-        / (dy * (r + 1))
-    )  # (+3, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case4_sc1_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 4 sub-case 1, eta < 0."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-2, +0),
-        (-1, -1),
-        (-1, +0),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+1, +0),
-        (+2, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = (
-        bj_0
-        * n2_0
-        * (dx * n1_0 * L * R - dx * n1_0 * R - dy * n2_0 * L - 2 * dy * n2_0 * R)
-        / (dy * R * (L + R))
-        - bm_0 * (L + 2 * R) / (R * (L + R))
-        + bp_0 * -_phi(R)
-    )
-    M[0, 1] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
-    M[0, 2] = -bj_0 * n2_0 * R * (dx * n1_0 * R + dx * n1_0 + dy * n2_0) / (
-        dy * L * (L + R)
-    ) - bm_0 * R / (L * (L + R))
-    M[1, 0] = bj_1 * dy * n1_1 * n2_1 * (L * T + L - T) / (dx * R * (L + R))
-    M[1, 1] = bp_1 * -_phi(T) - _psi(T) * (bj_1 * n1_1**2 + bm_1)
-    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 * (R * T + R + T) / (dx * L * (L + R))
-    M[2, 0] = -bj_2 * n2_2 * L * (dx * n1_2 * L - dx * n1_2 - dy * n2_2) / (
-        dy * R * (L + R)
-    ) + bm_2 * L / (R * (L + R))
-    M[2, 1] = bj_2 * dx * n1_2 * n2_2 / (dy * T * (T + 1))
-    M[2, 2] = (
-        bj_2
-        * n2_2
-        * (dx * n1_2 * L * R + dx * n1_2 * L + 2 * dy * n2_2 * L + dy * n2_2 * R)
-        / (dy * L * (L + R))
-        + bm_2 * (2 * L + R) / (L * (L + R))
-        - bp_2 * -_phi(L)
-    )
-
-    d = np.zeros(3)
-    d[0] = -a_tau_0 * bp_0 * dx * n2_0 - a_0 * bp_0 * -_phi(R) + b_0 * dx * n1_0
-    d[1] = a_tau_1 * bp_1 * dy * n1_1 - a_1 * bp_1 * -_phi(T) + b_1 * dy * n2_1
-    d[2] = -a_tau_2 * bp_2 * dx * n2_2 + a_2 * bp_2 * -_phi(L) + b_2 * dx * n1_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 1] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
-    N[0, 3] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
-    N[0, 4] = (
-        bj_0 * dx * n1_0 * n2_0 * L * R
-        - bj_0 * dx * n1_0 * n2_0 * R**2 * T
-        - bj_0 * dx * n1_0 * n2_0 * R * T
-        - bj_0 * dy * n2_0**2 * L * T
-        - bj_0 * dy * n2_0**2 * R * T
-        - bm_0 * dy * L * T
-        - bm_0 * dy * R * T
-    ) / (dy * L * R * T)  # (+0, +0)
-    N[0, 7] = -bp_0 * (R - 2) / (R - 1)  # (+1, +0)
-    N[0, 8] = bp_0 * (R - 1) / (R - 2)  # (+2, +0)
-    N[1, 1] = -bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, -1)
-    N[1, 3] = (
-        T
-        * (
-            bj_1 * dx * n1_1**2
-            + bj_1 * dy * n1_1 * n2_1 * T
-            + bj_1 * dy * n1_1 * n2_1
-            + bm_1 * dx
-        )
-        / (dx * (T + 1))
-    )  # (+0, -1)
-    N[1, 4] = -(
-        bj_1 * dx * n1_1**2 * L * R * T
-        + bj_1 * dx * n1_1**2 * L * R
-        - bj_1 * dy * n1_1 * n2_1 * L * T**2
-        - bj_1 * dy * n1_1 * n2_1 * L * T
-        + bj_1 * dy * n1_1 * n2_1 * R * T**2
-        + bj_1 * dy * n1_1 * n2_1 * R * T
-        + bj_1 * dy * n1_1 * n2_1 * T**2
-        + bm_1 * dx * L * R * T
-        + bm_1 * dx * L * R
-    ) / (dx * L * R * T)  # (+0, +0)
-    N[1, 5] = -bp_1 * (T - 2) / (T - 1)  # (+0, +1)
-    N[1, 6] = bp_1 * (T - 1) / (T - 2)  # (+0, +2)
-    N[2, 0] = -bp_2 * (L - 1) / (L - 2)  # (-2, +0)
-    N[2, 1] = bj_2 * dx * n1_2 * n2_2 * L / dy  # (-1, -1)
-    N[2, 2] = bp_2 * (L - 2) / (L - 1)  # (-1, +0)
-    N[2, 3] = -bj_2 * dx * n1_2 * n2_2 * (L * T + L - T) / (dy * (T + 1))  # (+0, -1)
-    N[2, 4] = -(
-        bj_2 * dx * n1_2 * n2_2 * L**2 * T
-        - bj_2 * dx * n1_2 * n2_2 * L * R
-        - bj_2 * dx * n1_2 * n2_2 * L * T
-        - bj_2 * dy * n2_2**2 * L * T
-        - bj_2 * dy * n2_2**2 * R * T
-        - bm_2 * dy * L * T
-        - bm_2 * dy * R * T
-    ) / (dy * L * R * T)  # (+0, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case4_sc1_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 4 sub-case 1, eta > 0."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-2, +0),
-        (-1, -1),
-        (-1, +0),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+1, +0),
-        (+2, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = (
-        bj_0
-        * n2_0
-        * (dx * n1_0 * L * R - dx * n1_0 * R - dy * n2_0 * L - 2 * dy * n2_0 * R)
-        / (dy * R * (L + R))
-        - bm_0 * -_phi(R)
-        + bp_0 * (L + 2 * R) / (R * (L + R))
-    )
-    M[0, 1] = bj_0 * dx * n1_0 * n2_0 / (dy * T * (T + 1))
-    M[0, 2] = -bj_0 * n2_0 * R * (dx * n1_0 * R + dx * n1_0 + dy * n2_0) / (
-        dy * L * (L + R)
-    ) + bp_0 * R / (L * (L + R))
-    M[1, 0] = bj_1 * dy * n1_1 * n2_1 * (L * T + L - T) / (dx * R * (L + R))
-    M[1, 1] = -bm_1 * -_phi(T) - _psi(T) * (bj_1 * n1_1**2 - bp_1)
-    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 * (R * T + R + T) / (dx * L * (L + R))
-    M[2, 0] = -bj_2 * n2_2 * L * (dx * n1_2 * L - dx * n1_2 - dy * n2_2) / (
-        dy * R * (L + R)
-    ) - bp_2 * L / (R * (L + R))
-    M[2, 1] = bj_2 * dx * n1_2 * n2_2 / (dy * T * (T + 1))
-    M[2, 2] = (
-        bj_2
-        * n2_2
-        * (dx * n1_2 * L * R + dx * n1_2 * L + 2 * dy * n2_2 * L + dy * n2_2 * R)
-        / (dy * L * (L + R))
-        + bm_2 * -_phi(L)
-        - bp_2 * (2 * L + R) / (L * (L + R))
-    )
-
-    d = np.zeros(3)
-    d[0] = -a_tau_0 * bm_0 * dx * n2_0 - a_0 * bm_0 * -_phi(R) + b_0 * dx * n1_0
-    d[1] = a_tau_1 * bm_1 * dy * n1_1 - a_1 * bm_1 * -_phi(T) + b_1 * dy * n2_1
-    d[2] = -a_tau_2 * bm_2 * dx * n2_2 + a_2 * bm_2 * -_phi(L) + b_2 * dx * n1_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 1] = -bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, -1)
-    N[0, 3] = bj_0 * dx * n1_0 * n2_0 * (R * T + R + T) / (dy * (T + 1))  # (+0, -1)
-    N[0, 4] = (
-        bj_0 * dx * n1_0 * n2_0 * L * R
-        - bj_0 * dx * n1_0 * n2_0 * R**2 * T
-        - bj_0 * dx * n1_0 * n2_0 * R * T
-        - bj_0 * dy * n2_0**2 * L * T
-        - bj_0 * dy * n2_0**2 * R * T
-        + bp_0 * dy * L * T
-        + bp_0 * dy * R * T
-    ) / (dy * L * R * T)  # (+0, +0)
-    N[0, 7] = bm_0 * (R - 2) / (R - 1)  # (+1, +0)
-    N[0, 8] = -bm_0 * (R - 1) / (R - 2)  # (+2, +0)
-    N[1, 1] = -bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, -1)
-    N[1, 3] = (
-        T
-        * (
-            bj_1 * dx * n1_1**2
-            + bj_1 * dy * n1_1 * n2_1 * T
-            + bj_1 * dy * n1_1 * n2_1
-            - bp_1 * dx
-        )
-        / (dx * (T + 1))
-    )  # (+0, -1)
-    N[1, 4] = -(
-        bj_1 * dx * n1_1**2 * L * R * T
-        + bj_1 * dx * n1_1**2 * L * R
-        - bj_1 * dy * n1_1 * n2_1 * L * T**2
-        - bj_1 * dy * n1_1 * n2_1 * L * T
-        + bj_1 * dy * n1_1 * n2_1 * R * T**2
-        + bj_1 * dy * n1_1 * n2_1 * R * T
-        + bj_1 * dy * n1_1 * n2_1 * T**2
-        - bp_1 * dx * L * R * T
-        - bp_1 * dx * L * R
-    ) / (dx * L * R * T)  # (+0, +0)
-    N[1, 5] = bm_1 * (T - 2) / (T - 1)  # (+0, +1)
-    N[1, 6] = -bm_1 * (T - 1) / (T - 2)  # (+0, +2)
-    N[2, 0] = bm_2 * (L - 1) / (L - 2)  # (-2, +0)
-    N[2, 1] = bj_2 * dx * n1_2 * n2_2 * L / dy  # (-1, -1)
-    N[2, 2] = -bm_2 * (L - 2) / (L - 1)  # (-1, +0)
-    N[2, 3] = -bj_2 * dx * n1_2 * n2_2 * (L * T + L - T) / (dy * (T + 1))  # (+0, -1)
-    N[2, 4] = -(
-        bj_2 * dx * n1_2 * n2_2 * L**2 * T
-        - bj_2 * dx * n1_2 * n2_2 * L * R
-        - bj_2 * dx * n1_2 * n2_2 * L * T
-        - bj_2 * dy * n2_2**2 * L * T
-        - bj_2 * dy * n2_2**2 * R * T
-        + bp_2 * dy * L * T
-        + bp_2 * dy * R * T
-    ) / (dy * L * R * T)  # (+0, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case4_sc2_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 4 sub-case 2, eta < 0."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "B")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-1, +0),
-        (-1, +1),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+1, +0),
-        (+2, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = bp_0 * -_phi(R) - _psi(R) * (bj_0 * n2_0**2 + bm_0)
-    M[0, 1] = bj_0 * dx * n1_0 * n2_0 * (B * R + B + R) / (dy * T * (B + T))
-    M[0, 2] = -bj_0 * dx * n1_0 * n2_0 * (R * T - R + T) / (dy * B * (B + T))
-    M[1, 0] = bj_1 * dy * n1_1 * n2_1 / (dx * R * (R + 1))
-    M[1, 1] = (
-        -bj_1
-        * n1_1
-        * (dx * n1_1 * B + 2 * dx * n1_1 * T - dy * n2_1 * B * T - dy * n2_1 * T)
-        / (dx * T * (B + T))
-        - bm_1 * (B + 2 * T) / (T * (B + T))
-        + bp_1 * -_phi(T)
-    )
-    M[1, 2] = -bj_1 * n1_1 * T * (dx * n1_1 + dy * n2_1 * T - dy * n2_1) / (
-        dx * B * (B + T)
-    ) - bm_1 * T / (B * (B + T))
-    M[2, 0] = bj_2 * dy * n1_2 * n2_2 / (dx * R * (R + 1))
-    M[2, 1] = bj_2 * n1_2 * B * (dx * n1_2 - dy * n2_2 * B - dy * n2_2) / (
-        dx * T * (B + T)
-    ) + bm_2 * B / (T * (B + T))
-    M[2, 2] = (
-        bj_2
-        * n1_2
-        * (2 * dx * n1_2 * B + dx * n1_2 * T + dy * n2_2 * B * T - dy * n2_2 * B)
-        / (dx * B * (B + T))
-        + bm_2 * (2 * B + T) / (B * (B + T))
-        - bp_2 * -_phi(B)
-    )
-
-    d = np.zeros(3)
-    d[0] = -a_tau_0 * bp_0 * dx * n2_0 - a_0 * bp_0 * -_phi(R) + b_0 * dx * n1_0
-    d[1] = a_tau_1 * bp_1 * dy * n1_1 - a_1 * bp_1 * -_phi(T) + b_1 * dy * n2_1
-    d[2] = a_tau_2 * bp_2 * dy * n1_2 + a_2 * bp_2 * -_phi(B) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 0] = (
-        -R
-        * (
-            bj_0 * dx * n1_0 * n2_0 * R
-            + bj_0 * dx * n1_0 * n2_0
-            - bj_0 * dy * n2_0**2
-            - bm_0 * dy
-        )
-        / (dy * (R + 1))
-    )  # (-1, +0)
-    N[0, 1] = bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, +1)
-    N[0, 4] = (
-        bj_0 * dx * n1_0 * n2_0 * B * R**2
-        + bj_0 * dx * n1_0 * n2_0 * B * R
-        - bj_0 * dx * n1_0 * n2_0 * R**2 * T
-        + bj_0 * dx * n1_0 * n2_0 * R**2
-        - bj_0 * dx * n1_0 * n2_0 * R * T
-        - bj_0 * dy * n2_0**2 * B * R * T
-        - bj_0 * dy * n2_0**2 * B * T
-        - bm_0 * dy * B * R * T
-        - bm_0 * dy * B * T
-    ) / (dy * B * R * T)  # (+0, +0)
-    N[0, 7] = -bp_0 * (R - 2) / (R - 1)  # (+1, +0)
-    N[0, 8] = bp_0 * (R - 1) / (R - 2)  # (+2, +0)
-    N[1, 0] = -bj_1 * dy * n1_1 * n2_1 * (R * T - R + T) / (dx * (R + 1))  # (-1, +0)
-    N[1, 1] = bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, +1)
-    N[1, 4] = -(
-        bj_1 * dx * n1_1**2 * B * R
-        + bj_1 * dx * n1_1**2 * R * T
-        - bj_1 * dy * n1_1 * n2_1 * B * T
-        + bj_1 * dy * n1_1 * n2_1 * R * T**2
-        - bj_1 * dy * n1_1 * n2_1 * R * T
-        + bm_1 * dx * B * R
-        + bm_1 * dx * R * T
-    ) / (dx * B * R * T)  # (+0, +0)
-    N[1, 5] = -bp_1 * (T - 2) / (T - 1)  # (+0, +1)
-    N[1, 6] = bp_1 * (T - 1) / (T - 2)  # (+0, +2)
-    N[2, 0] = bj_2 * dy * n1_2 * n2_2 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
-    N[2, 1] = -bj_2 * dy * n1_2 * n2_2 * B / dx  # (-1, +1)
-    N[2, 2] = -bp_2 * (B - 1) / (B - 2)  # (+0, -2)
-    N[2, 3] = bp_2 * (B - 2) / (B - 1)  # (+0, -1)
-    N[2, 4] = (
-        bj_2 * dx * n1_2**2 * B * R
-        + bj_2 * dx * n1_2**2 * R * T
-        - bj_2 * dy * n1_2 * n2_2 * B**2 * R
-        - bj_2 * dy * n1_2 * n2_2 * B * R
-        + bj_2 * dy * n1_2 * n2_2 * B * T
-        + bm_2 * dx * B * R
-        + bm_2 * dx * R * T
-    ) / (dx * B * R * T)  # (+0, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case4_sc2_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 4 sub-case 2, eta > 0."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "T")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "B")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-1, +0),
-        (-1, +1),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+1, +0),
-        (+2, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = -bm_0 * -_phi(R) - _psi(R) * (bj_0 * n2_0**2 - bp_0)
-    M[0, 1] = bj_0 * dx * n1_0 * n2_0 * (B * R + B + R) / (dy * T * (B + T))
-    M[0, 2] = -bj_0 * dx * n1_0 * n2_0 * (R * T - R + T) / (dy * B * (B + T))
-    M[1, 0] = bj_1 * dy * n1_1 * n2_1 / (dx * R * (R + 1))
-    M[1, 1] = (
-        -bj_1
-        * n1_1
-        * (dx * n1_1 * B + 2 * dx * n1_1 * T - dy * n2_1 * B * T - dy * n2_1 * T)
-        / (dx * T * (B + T))
-        - bm_1 * -_phi(T)
-        + bp_1 * (B + 2 * T) / (T * (B + T))
-    )
-    M[1, 2] = -bj_1 * n1_1 * T * (dx * n1_1 + dy * n2_1 * T - dy * n2_1) / (
-        dx * B * (B + T)
-    ) + bp_1 * T / (B * (B + T))
-    M[2, 0] = bj_2 * dy * n1_2 * n2_2 / (dx * R * (R + 1))
-    M[2, 1] = bj_2 * n1_2 * B * (dx * n1_2 - dy * n2_2 * B - dy * n2_2) / (
-        dx * T * (B + T)
-    ) - bp_2 * B / (T * (B + T))
-    M[2, 2] = (
-        bj_2
-        * n1_2
-        * (2 * dx * n1_2 * B + dx * n1_2 * T + dy * n2_2 * B * T - dy * n2_2 * B)
-        / (dx * B * (B + T))
-        + bm_2 * -_phi(B)
-        - bp_2 * (2 * B + T) / (B * (B + T))
-    )
-
-    d = np.zeros(3)
-    d[0] = -a_tau_0 * bm_0 * dx * n2_0 - a_0 * bm_0 * -_phi(R) + b_0 * dx * n1_0
-    d[1] = a_tau_1 * bm_1 * dy * n1_1 - a_1 * bm_1 * -_phi(T) + b_1 * dy * n2_1
-    d[2] = a_tau_2 * bm_2 * dy * n1_2 + a_2 * bm_2 * -_phi(B) + b_2 * dy * n2_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 0] = (
-        -R
-        * (
-            bj_0 * dx * n1_0 * n2_0 * R
-            + bj_0 * dx * n1_0 * n2_0
-            - bj_0 * dy * n2_0**2
-            + bp_0 * dy
-        )
-        / (dy * (R + 1))
-    )  # (-1, +0)
-    N[0, 1] = bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, +1)
-    N[0, 4] = (
-        bj_0 * dx * n1_0 * n2_0 * B * R**2
-        + bj_0 * dx * n1_0 * n2_0 * B * R
-        - bj_0 * dx * n1_0 * n2_0 * R**2 * T
-        + bj_0 * dx * n1_0 * n2_0 * R**2
-        - bj_0 * dx * n1_0 * n2_0 * R * T
-        - bj_0 * dy * n2_0**2 * B * R * T
-        - bj_0 * dy * n2_0**2 * B * T
-        + bp_0 * dy * B * R * T
-        + bp_0 * dy * B * T
-    ) / (dy * B * R * T)  # (+0, +0)
-    N[0, 7] = bm_0 * (R - 2) / (R - 1)  # (+1, +0)
-    N[0, 8] = -bm_0 * (R - 1) / (R - 2)  # (+2, +0)
-    N[1, 0] = -bj_1 * dy * n1_1 * n2_1 * (R * T - R + T) / (dx * (R + 1))  # (-1, +0)
-    N[1, 1] = bj_1 * dy * n1_1 * n2_1 * T / dx  # (-1, +1)
-    N[1, 4] = -(
-        bj_1 * dx * n1_1**2 * B * R
-        + bj_1 * dx * n1_1**2 * R * T
-        - bj_1 * dy * n1_1 * n2_1 * B * T
-        + bj_1 * dy * n1_1 * n2_1 * R * T**2
-        - bj_1 * dy * n1_1 * n2_1 * R * T
-        - bp_1 * dx * B * R
-        - bp_1 * dx * R * T
-    ) / (dx * B * R * T)  # (+0, +0)
-    N[1, 5] = bm_1 * (T - 2) / (T - 1)  # (+0, +1)
-    N[1, 6] = -bm_1 * (T - 1) / (T - 2)  # (+0, +2)
-    N[2, 0] = bj_2 * dy * n1_2 * n2_2 * (B * R + B + R) / (dx * (R + 1))  # (-1, +0)
-    N[2, 1] = -bj_2 * dy * n1_2 * n2_2 * B / dx  # (-1, +1)
-    N[2, 2] = bm_2 * (B - 1) / (B - 2)  # (+0, -2)
-    N[2, 3] = -bm_2 * (B - 2) / (B - 1)  # (+0, -1)
-    N[2, 4] = (
-        bj_2 * dx * n1_2**2 * B * R
-        + bj_2 * dx * n1_2**2 * R * T
-        - bj_2 * dy * n1_2 * n2_2 * B**2 * R
-        - bj_2 * dy * n1_2 * n2_2 * B * R
-        + bj_2 * dy * n1_2 * n2_2 * B * T
-        - bp_2 * dx * B * R
-        - bp_2 * dx * R * T
-    ) / (dx * B * R * T)  # (+0, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case4_sc3_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 4 sub-case 3, eta < 0."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-2, +0),
-        (-1, +0),
-        (-1, +1),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+1, +0),
-        (+2, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = (
-        -bj_0
-        * n2_0
-        * (dx * n1_0 * L * R - dx * n1_0 * R + dy * n2_0 * L + 2 * dy * n2_0 * R)
-        / (dy * R * (L + R))
-        - bm_0 * (L + 2 * R) / (R * (L + R))
-        + bp_0 * -_phi(R)
-    )
-    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
-    M[0, 2] = bj_0 * n2_0 * R * (dx * n1_0 * R + dx * n1_0 - dy * n2_0) / (
-        dy * L * (L + R)
-    ) - bm_0 * R / (L * (L + R))
-    M[1, 0] = bj_1 * dy * n1_1 * n2_1 * (B * L - B + L) / (dx * R * (L + R))
-    M[1, 1] = -bp_1 * -_phi(B) + _psi(B) * (bj_1 * n1_1**2 + bm_1)
-    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 * (B * R + B + R) / (dx * L * (L + R))
-    M[2, 0] = bj_2 * n2_2 * L * (dx * n1_2 * L - dx * n1_2 + dy * n2_2) / (
-        dy * R * (L + R)
-    ) + bm_2 * L / (R * (L + R))
-    M[2, 1] = -bj_2 * dx * n1_2 * n2_2 / (dy * B * (B + 1))
-    M[2, 2] = (
-        -bj_2
-        * n2_2
-        * (dx * n1_2 * L * R + dx * n1_2 * L - 2 * dy * n2_2 * L - dy * n2_2 * R)
-        / (dy * L * (L + R))
-        + bm_2 * (2 * L + R) / (L * (L + R))
-        - bp_2 * -_phi(L)
-    )
-
-    d = np.zeros(3)
-    d[0] = -a_tau_0 * bp_0 * dx * n2_0 - a_0 * bp_0 * -_phi(R) + b_0 * dx * n1_0
-    d[1] = a_tau_1 * bp_1 * dy * n1_1 + a_1 * bp_1 * -_phi(B) + b_1 * dy * n2_1
-    d[2] = -a_tau_2 * bp_2 * dx * n2_2 + a_2 * bp_2 * -_phi(L) + b_2 * dx * n1_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 2] = bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, +1)
-    N[0, 5] = (
-        bj_0 * dx * n1_0 * n2_0 * B * R**2
-        + bj_0 * dx * n1_0 * n2_0 * B * R
-        - bj_0 * dx * n1_0 * n2_0 * L * R
-        - bj_0 * dy * n2_0**2 * B * L
-        - bj_0 * dy * n2_0**2 * B * R
-        - bm_0 * dy * B * L
-        - bm_0 * dy * B * R
-    ) / (dy * B * L * R)  # (+0, +0)
-    N[0, 6] = -bj_0 * dx * n1_0 * n2_0 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
-    N[0, 7] = -bp_0 * (R - 2) / (R - 1)  # (+1, +0)
-    N[0, 8] = bp_0 * (R - 1) / (R - 2)  # (+2, +0)
-    N[1, 2] = -bj_1 * dy * n1_1 * n2_1 * B / dx  # (-1, +1)
-    N[1, 3] = -bp_1 * (B - 1) / (B - 2)  # (+0, -2)
-    N[1, 4] = bp_1 * (B - 2) / (B - 1)  # (+0, -1)
-    N[1, 5] = (
-        bj_1 * dx * n1_1**2 * B * L * R
-        + bj_1 * dx * n1_1**2 * L * R
-        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
-        - bj_1 * dy * n1_1 * n2_1 * B**2 * R
-        - bj_1 * dy * n1_1 * n2_1 * B**2
-        + bj_1 * dy * n1_1 * n2_1 * B * L
-        - bj_1 * dy * n1_1 * n2_1 * B * R
-        + bm_1 * dx * B * L * R
-        + bm_1 * dx * L * R
-    ) / (dx * B * L * R)  # (+0, +0)
-    N[1, 6] = (
-        -B
-        * (
-            bj_1 * dx * n1_1**2
-            - bj_1 * dy * n1_1 * n2_1 * B
-            - bj_1 * dy * n1_1 * n2_1
-            + bm_1 * dx
-        )
-        / (dx * (B + 1))
-    )  # (+0, +1)
-    N[2, 0] = -bp_2 * (L - 1) / (L - 2)  # (-2, +0)
-    N[2, 1] = bp_2 * (L - 2) / (L - 1)  # (-1, +0)
-    N[2, 2] = -bj_2 * dx * n1_2 * n2_2 * L / dy  # (-1, +1)
-    N[2, 5] = (
-        bj_2 * dx * n1_2 * n2_2 * B * L**2
-        - bj_2 * dx * n1_2 * n2_2 * B * L
-        - bj_2 * dx * n1_2 * n2_2 * L * R
-        + bj_2 * dy * n2_2**2 * B * L
-        + bj_2 * dy * n2_2**2 * B * R
-        + bm_2 * dy * B * L
-        + bm_2 * dy * B * R
-    ) / (dy * B * L * R)  # (+0, +0)
-    N[2, 6] = bj_2 * dx * n1_2 * n2_2 * (B * L - B + L) / (dy * (B + 1))  # (+0, +1)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case4_sc3_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 4 sub-case 3, eta > 0."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "R")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-2, +0),
-        (-1, +0),
-        (-1, +1),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+1, +0),
-        (+2, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = (
-        -bj_0
-        * n2_0
-        * (dx * n1_0 * L * R - dx * n1_0 * R + dy * n2_0 * L + 2 * dy * n2_0 * R)
-        / (dy * R * (L + R))
-        - bm_0 * -_phi(R)
-        + bp_0 * (L + 2 * R) / (R * (L + R))
-    )
-    M[0, 1] = -bj_0 * dx * n1_0 * n2_0 / (dy * B * (B + 1))
-    M[0, 2] = bj_0 * n2_0 * R * (dx * n1_0 * R + dx * n1_0 - dy * n2_0) / (
-        dy * L * (L + R)
-    ) + bp_0 * R / (L * (L + R))
-    M[1, 0] = bj_1 * dy * n1_1 * n2_1 * (B * L - B + L) / (dx * R * (L + R))
-    M[1, 1] = bm_1 * -_phi(B) + _psi(B) * (bj_1 * n1_1**2 - bp_1)
-    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 * (B * R + B + R) / (dx * L * (L + R))
-    M[2, 0] = bj_2 * n2_2 * L * (dx * n1_2 * L - dx * n1_2 + dy * n2_2) / (
-        dy * R * (L + R)
-    ) - bp_2 * L / (R * (L + R))
-    M[2, 1] = -bj_2 * dx * n1_2 * n2_2 / (dy * B * (B + 1))
-    M[2, 2] = (
-        -bj_2
-        * n2_2
-        * (dx * n1_2 * L * R + dx * n1_2 * L - 2 * dy * n2_2 * L - dy * n2_2 * R)
-        / (dy * L * (L + R))
-        + bm_2 * -_phi(L)
-        - bp_2 * (2 * L + R) / (L * (L + R))
-    )
-
-    d = np.zeros(3)
-    d[0] = -a_tau_0 * bm_0 * dx * n2_0 - a_0 * bm_0 * -_phi(R) + b_0 * dx * n1_0
-    d[1] = a_tau_1 * bm_1 * dy * n1_1 + a_1 * bm_1 * -_phi(B) + b_1 * dy * n2_1
-    d[2] = -a_tau_2 * bm_2 * dx * n2_2 + a_2 * bm_2 * -_phi(L) + b_2 * dx * n1_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 2] = bj_0 * dx * n1_0 * n2_0 * R / dy  # (-1, +1)
-    N[0, 5] = (
-        bj_0 * dx * n1_0 * n2_0 * B * R**2
-        + bj_0 * dx * n1_0 * n2_0 * B * R
-        - bj_0 * dx * n1_0 * n2_0 * L * R
-        - bj_0 * dy * n2_0**2 * B * L
-        - bj_0 * dy * n2_0**2 * B * R
-        + bp_0 * dy * B * L
-        + bp_0 * dy * B * R
-    ) / (dy * B * L * R)  # (+0, +0)
-    N[0, 6] = -bj_0 * dx * n1_0 * n2_0 * (B * R + B + R) / (dy * (B + 1))  # (+0, +1)
-    N[0, 7] = bm_0 * (R - 2) / (R - 1)  # (+1, +0)
-    N[0, 8] = -bm_0 * (R - 1) / (R - 2)  # (+2, +0)
-    N[1, 2] = -bj_1 * dy * n1_1 * n2_1 * B / dx  # (-1, +1)
-    N[1, 3] = bm_1 * (B - 1) / (B - 2)  # (+0, -2)
-    N[1, 4] = -bm_1 * (B - 2) / (B - 1)  # (+0, -1)
-    N[1, 5] = (
-        bj_1 * dx * n1_1**2 * B * L * R
-        + bj_1 * dx * n1_1**2 * L * R
-        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
-        - bj_1 * dy * n1_1 * n2_1 * B**2 * R
-        - bj_1 * dy * n1_1 * n2_1 * B**2
-        + bj_1 * dy * n1_1 * n2_1 * B * L
-        - bj_1 * dy * n1_1 * n2_1 * B * R
-        - bp_1 * dx * B * L * R
-        - bp_1 * dx * L * R
-    ) / (dx * B * L * R)  # (+0, +0)
-    N[1, 6] = (
-        -B
-        * (
-            bj_1 * dx * n1_1**2
-            - bj_1 * dy * n1_1 * n2_1 * B
-            - bj_1 * dy * n1_1 * n2_1
-            - bp_1 * dx
-        )
-        / (dx * (B + 1))
-    )  # (+0, +1)
-    N[2, 0] = bm_2 * (L - 1) / (L - 2)  # (-2, +0)
-    N[2, 1] = -bm_2 * (L - 2) / (L - 1)  # (-1, +0)
-    N[2, 2] = -bj_2 * dx * n1_2 * n2_2 * L / dy  # (-1, +1)
-    N[2, 5] = (
-        bj_2 * dx * n1_2 * n2_2 * B * L**2
-        - bj_2 * dx * n1_2 * n2_2 * B * L
-        - bj_2 * dx * n1_2 * n2_2 * L * R
-        + bj_2 * dy * n2_2**2 * B * L
-        + bj_2 * dy * n2_2**2 * B * R
-        - bp_2 * dy * B * L
-        - bp_2 * dy * B * R
-    ) / (dy * B * L * R)  # (+0, +0)
-    N[2, 6] = bj_2 * dx * n1_2 * n2_2 * (B * L - B + L) / (dy * (B + 1))  # (+0, +1)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case4_sc4_eta_m1(geom, theta_inputs, betas_per_row):
-    """Case 4 sub-case 4, eta < 0."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-2, +0),
-        (-1, +0),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+1, -1),
-        (+1, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = (
-        -bj_0
-        * n1_0
-        * (dx * n1_0 * B + 2 * dx * n1_0 * T + dy * n2_0 * B * T - dy * n2_0 * T)
-        / (dx * T * (B + T))
-        - bm_0 * (B + 2 * T) / (T * (B + T))
-        + bp_0 * -_phi(T)
-    )
-    M[0, 1] = -bj_0 * n1_0 * T * (dx * n1_0 - dy * n2_0 * T - dy * n2_0) / (
-        dx * B * (B + T)
-    ) - bm_0 * T / (B * (B + T))
-    M[0, 2] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
-    M[1, 0] = bj_1 * n1_1 * B * (dx * n1_1 + dy * n2_1 * B - dy * n2_1) / (
-        dx * T * (B + T)
-    ) + bm_1 * B / (T * (B + T))
-    M[1, 1] = (
-        bj_1
-        * n1_1
-        * (2 * dx * n1_1 * B + dx * n1_1 * T - dy * n2_1 * B * T - dy * n2_1 * B)
-        / (dx * B * (B + T))
-        + bm_1 * (2 * B + T) / (B * (B + T))
-        - bp_1 * -_phi(B)
-    )
-    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
-    M[2, 0] = bj_2 * dx * n1_2 * n2_2 * (B * L + B - L) / (dy * T * (B + T))
-    M[2, 1] = -bj_2 * dx * n1_2 * n2_2 * (L * T + L + T) / (dy * B * (B + T))
-    M[2, 2] = -bp_2 * -_phi(L) + _psi(L) * (bj_2 * n2_2**2 + bm_2)
-
-    d = np.zeros(3)
-    d[0] = a_tau_0 * bp_0 * dy * n1_0 - a_0 * bp_0 * -_phi(T) + b_0 * dy * n2_0
-    d[1] = a_tau_1 * bp_1 * dy * n1_1 + a_1 * bp_1 * -_phi(B) + b_1 * dy * n2_1
-    d[2] = -a_tau_2 * bp_2 * dx * n2_2 + a_2 * bp_2 * -_phi(L) + b_2 * dx * n1_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 4] = -(
-        bj_0 * dx * n1_0**2 * B * L
-        + bj_0 * dx * n1_0**2 * L * T
-        + bj_0 * dy * n1_0 * n2_0 * B * T
-        - bj_0 * dy * n1_0 * n2_0 * L * T**2
-        - bj_0 * dy * n1_0 * n2_0 * L * T
-        + bm_0 * dx * B * L
-        + bm_0 * dx * L * T
-    ) / (dx * B * L * T)  # (+0, +0)
-    N[0, 5] = -bp_0 * (T - 2) / (T - 1)  # (+0, +1)
-    N[0, 6] = bp_0 * (T - 1) / (T - 2)  # (+0, +2)
-    N[0, 7] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
-    N[0, 8] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
-    N[1, 2] = -bp_1 * (B - 1) / (B - 2)  # (+0, -2)
-    N[1, 3] = bp_1 * (B - 2) / (B - 1)  # (+0, -1)
-    N[1, 4] = (
-        bj_1 * dx * n1_1**2 * B * L
-        + bj_1 * dx * n1_1**2 * L * T
-        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
-        - bj_1 * dy * n1_1 * n2_1 * B * L
-        - bj_1 * dy * n1_1 * n2_1 * B * T
-        + bm_1 * dx * B * L
-        + bm_1 * dx * L * T
-    ) / (dx * B * L * T)  # (+0, +0)
-    N[1, 7] = -bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, -1)
-    N[1, 8] = bj_1 * dy * n1_1 * n2_1 * (B * L + B - L) / (dx * (L + 1))  # (+1, +0)
-    N[2, 0] = -bp_2 * (L - 1) / (L - 2)  # (-2, +0)
-    N[2, 1] = bp_2 * (L - 2) / (L - 1)  # (-1, +0)
-    N[2, 4] = (
-        bj_2 * dx * n1_2 * n2_2 * B * L**2
-        + bj_2 * dx * n1_2 * n2_2 * B * L
-        - bj_2 * dx * n1_2 * n2_2 * L**2 * T
-        - bj_2 * dx * n1_2 * n2_2 * L**2
-        - bj_2 * dx * n1_2 * n2_2 * L * T
-        + bj_2 * dy * n2_2**2 * B * L * T
-        + bj_2 * dy * n2_2**2 * B * T
-        + bm_2 * dy * B * L * T
-        + bm_2 * dy * B * T
-    ) / (dy * B * L * T)  # (+0, +0)
-    N[2, 7] = -bj_2 * dx * n1_2 * n2_2 * L / dy  # (+1, -1)
-    N[2, 8] = (
-        L
-        * (
-            bj_2 * dx * n1_2 * n2_2 * L
-            + bj_2 * dx * n1_2 * n2_2
-            - bj_2 * dy * n2_2**2
-            - bm_2 * dy
-        )
-        / (dy * (L + 1))
-    )  # (+1, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-def _case4_sc4_eta_p1(geom, theta_inputs, betas_per_row):
-    """Case 4 sub-case 4, eta > 0."""
-    R, T, L, B = (
-        theta_inputs["R"],
-        theta_inputs["T"],
-        theta_inputs["L"],
-        theta_inputs["B"],
-    )
-    r, t, l, b = (
-        theta_inputs["r"],
-        theta_inputs["t"],
-        theta_inputs["l"],
-        theta_inputs["b"],
-    )
-
-    n1_0, n2_0, a_0, b_0, a_tau_0 = _row_geom_data(geom, "T")
-    n1_1, n2_1, a_1, b_1, a_tau_1 = _row_geom_data(geom, "B")
-    n1_2, n2_2, a_2, b_2, a_tau_2 = _row_geom_data(geom, "L")
-    bp_0, bm_0, bj_0 = betas_per_row[0]
-    bp_1, bm_1, bj_1 = betas_per_row[1]
-    bp_2, bm_2, bj_2 = betas_per_row[2]
-
-    offsets = [
-        (-2, +0),
-        (-1, +0),
-        (+0, -2),
-        (+0, -1),
-        (+0, +0),
-        (+0, +1),
-        (+0, +2),
-        (+1, -1),
-        (+1, +0),
-    ]
-
-    M = np.zeros((3, 3))
-    M[0, 0] = (
-        -bj_0
-        * n1_0
-        * (dx * n1_0 * B + 2 * dx * n1_0 * T + dy * n2_0 * B * T - dy * n2_0 * T)
-        / (dx * T * (B + T))
-        - bm_0 * -_phi(T)
-        + bp_0 * (B + 2 * T) / (T * (B + T))
-    )
-    M[0, 1] = -bj_0 * n1_0 * T * (dx * n1_0 - dy * n2_0 * T - dy * n2_0) / (
-        dx * B * (B + T)
-    ) + bp_0 * T / (B * (B + T))
-    M[0, 2] = -bj_0 * dy * n1_0 * n2_0 / (dx * L * (L + 1))
-    M[1, 0] = bj_1 * n1_1 * B * (dx * n1_1 + dy * n2_1 * B - dy * n2_1) / (
-        dx * T * (B + T)
-    ) - bp_1 * B / (T * (B + T))
-    M[1, 1] = (
-        bj_1
-        * n1_1
-        * (2 * dx * n1_1 * B + dx * n1_1 * T - dy * n2_1 * B * T - dy * n2_1 * B)
-        / (dx * B * (B + T))
-        + bm_1 * -_phi(B)
-        - bp_1 * (2 * B + T) / (B * (B + T))
-    )
-    M[1, 2] = -bj_1 * dy * n1_1 * n2_1 / (dx * L * (L + 1))
-    M[2, 0] = bj_2 * dx * n1_2 * n2_2 * (B * L + B - L) / (dy * T * (B + T))
-    M[2, 1] = -bj_2 * dx * n1_2 * n2_2 * (L * T + L + T) / (dy * B * (B + T))
-    M[2, 2] = bm_2 * -_phi(L) + _psi(L) * (bj_2 * n2_2**2 - bp_2)
-
-    d = np.zeros(3)
-    d[0] = a_tau_0 * bm_0 * dy * n1_0 - a_0 * bm_0 * -_phi(T) + b_0 * dy * n2_0
-    d[1] = a_tau_1 * bm_1 * dy * n1_1 + a_1 * bm_1 * -_phi(B) + b_1 * dy * n2_1
-    d[2] = -a_tau_2 * bm_2 * dx * n2_2 + a_2 * bm_2 * -_phi(L) + b_2 * dx * n1_2
-
-    N = np.zeros((3, len(offsets)))
-    N[0, 4] = -(
-        bj_0 * dx * n1_0**2 * B * L
-        + bj_0 * dx * n1_0**2 * L * T
-        + bj_0 * dy * n1_0 * n2_0 * B * T
-        - bj_0 * dy * n1_0 * n2_0 * L * T**2
-        - bj_0 * dy * n1_0 * n2_0 * L * T
-        - bp_0 * dx * B * L
-        - bp_0 * dx * L * T
-    ) / (dx * B * L * T)  # (+0, +0)
-    N[0, 5] = bm_0 * (T - 2) / (T - 1)  # (+0, +1)
-    N[0, 6] = -bm_0 * (T - 1) / (T - 2)  # (+0, +2)
-    N[0, 7] = bj_0 * dy * n1_0 * n2_0 * T / dx  # (+1, -1)
-    N[0, 8] = -bj_0 * dy * n1_0 * n2_0 * (L * T + L + T) / (dx * (L + 1))  # (+1, +0)
-    N[1, 2] = bm_1 * (B - 1) / (B - 2)  # (+0, -2)
-    N[1, 3] = -bm_1 * (B - 2) / (B - 1)  # (+0, -1)
-    N[1, 4] = (
-        bj_1 * dx * n1_1**2 * B * L
-        + bj_1 * dx * n1_1**2 * L * T
-        + bj_1 * dy * n1_1 * n2_1 * B**2 * L
-        - bj_1 * dy * n1_1 * n2_1 * B * L
-        - bj_1 * dy * n1_1 * n2_1 * B * T
-        - bp_1 * dx * B * L
-        - bp_1 * dx * L * T
-    ) / (dx * B * L * T)  # (+0, +0)
-    N[1, 7] = -bj_1 * dy * n1_1 * n2_1 * B / dx  # (+1, -1)
-    N[1, 8] = bj_1 * dy * n1_1 * n2_1 * (B * L + B - L) / (dx * (L + 1))  # (+1, +0)
-    N[2, 0] = bm_2 * (L - 1) / (L - 2)  # (-2, +0)
-    N[2, 1] = -bm_2 * (L - 2) / (L - 1)  # (-1, +0)
-    N[2, 4] = (
-        bj_2 * dx * n1_2 * n2_2 * B * L**2
-        + bj_2 * dx * n1_2 * n2_2 * B * L
-        - bj_2 * dx * n1_2 * n2_2 * L**2 * T
-        - bj_2 * dx * n1_2 * n2_2 * L**2
-        - bj_2 * dx * n1_2 * n2_2 * L * T
-        + bj_2 * dy * n2_2**2 * B * L * T
-        + bj_2 * dy * n2_2**2 * B * T
-        - bp_2 * dy * B * L * T
-        - bp_2 * dy * B * T
-    ) / (dy * B * L * T)  # (+0, +0)
-    N[2, 7] = -bj_2 * dx * n1_2 * n2_2 * L / dy  # (+1, -1)
-    N[2, 8] = (
-        L
-        * (
-            bj_2 * dx * n1_2 * n2_2 * L
-            + bj_2 * dx * n1_2 * n2_2
-            - bj_2 * dy * n2_2**2
-            + bp_2 * dy
-        )
-        / (dy * (L + 1))
-    )  # (+1, +0)
-
-    M_inv_d = np.linalg.solve(M, d)
-    M_inv_N = np.linalg.solve(M, N)
-    return M_inv_d, M_inv_N, offsets
-
-
-# Row interfaces for each sub-case (needed by _row_betas)
-CASE3_ROW_IFACES = {
-    (1, -1): ("R", "extra", "T"),
-    (1, 1): ("R", "extra", "T"),
-    (2, -1): ("R", "T", "extra"),
-    (2, 1): ("R", "T", "extra"),
-    (3, -1): ("T", "L", "extra"),
-    (3, 1): ("T", "L", "extra"),
-    (4, -1): ("T", "L", "extra"),
-    (4, 1): ("T", "L", "extra"),
-    (5, -1): ("L", "B", "extra"),
-    (5, 1): ("L", "B", "extra"),
-    (6, -1): ("L", "B", "extra"),
-    (6, 1): ("L", "B", "extra"),
-    (7, -1): ("B", "R", "extra"),
-    (7, 1): ("B", "R", "extra"),
-    (8, -1): ("B", "R", "extra"),
-    (8, 1): ("B", "R", "extra"),
-}
-CASE4_ROW_IFACES = {
-    (1, -1): ("R", "T", "L"),
-    (1, 1): ("R", "T", "L"),
-    (2, -1): ("R", "T", "B"),
-    (2, 1): ("R", "T", "B"),
-    (3, -1): ("R", "B", "L"),
-    (3, 1): ("R", "B", "L"),
-    (4, -1): ("T", "B", "L"),
-    (4, 1): ("T", "B", "L"),
-}
-
-# Dispatch dicts
-CASE3_FUNCS = {}
-CASE4_FUNCS = {}
-CASE3_FUNCS[(1, -1)] = _case3_sc1_eta_m1
-CASE3_FUNCS[(1, 1)] = _case3_sc1_eta_p1
-CASE3_FUNCS[(2, -1)] = _case3_sc2_eta_m1
-CASE3_FUNCS[(2, 1)] = _case3_sc2_eta_p1
-CASE3_FUNCS[(3, -1)] = _case3_sc3_eta_m1
-CASE3_FUNCS[(3, 1)] = _case3_sc3_eta_p1
-CASE3_FUNCS[(4, -1)] = _case3_sc4_eta_m1
-CASE3_FUNCS[(4, 1)] = _case3_sc4_eta_p1
-CASE3_FUNCS[(5, -1)] = _case3_sc5_eta_m1
-CASE3_FUNCS[(5, 1)] = _case3_sc5_eta_p1
-CASE3_FUNCS[(6, -1)] = _case3_sc6_eta_m1
-CASE3_FUNCS[(6, 1)] = _case3_sc6_eta_p1
-CASE3_FUNCS[(7, -1)] = _case3_sc7_eta_m1
-CASE3_FUNCS[(7, 1)] = _case3_sc7_eta_p1
-CASE3_FUNCS[(8, -1)] = _case3_sc8_eta_m1
-CASE3_FUNCS[(8, 1)] = _case3_sc8_eta_p1
-CASE4_FUNCS[(1, -1)] = _case4_sc1_eta_m1
-CASE4_FUNCS[(1, 1)] = _case4_sc1_eta_p1
-CASE4_FUNCS[(2, -1)] = _case4_sc2_eta_m1
-CASE4_FUNCS[(2, 1)] = _case4_sc2_eta_p1
-CASE4_FUNCS[(3, -1)] = _case4_sc3_eta_m1
-CASE4_FUNCS[(3, 1)] = _case4_sc3_eta_p1
-CASE4_FUNCS[(4, -1)] = _case4_sc4_eta_m1
-CASE4_FUNCS[(4, 1)] = _case4_sc4_eta_p1
-
-
-def _assemble_case_n(
-    i,
-    j,
-    sw_idx,
-    M_inv_d,
-    M_inv_N,
-    all_offsets,
-    eps_r,
-    eps_l,
-    eps_t,
-    eps_b,
-    theta_R,
-    theta_T,
-    theta_L,
-    theta_B,
-    bot_x,
-    bot_y,
-):
-    """Shortley-Weller assembly for a case-3 / case-4 cell.
-
-    `sw_idx` maps face label ('R'/'T'/'L'/'B') to the row index of the
-    corresponding interface ghost in M_inv_d / M_inv_N. Faces NOT in sw_idx
-    are uncut and contribute the regular grid value at the neighbour.
-    """
-    row_idx = index(i, j)
-
-    # Per-face Shortley-Weller weights: (eps, theta, bot_dim, neighbour offset).
-    face_data = {
-        "R": (eps_r, theta_R, bot_x, (1, 0)),
-        "T": (eps_t, theta_T, bot_y, (0, 1)),
-        "L": (eps_l, theta_L, bot_x, (-1, 0)),
-        "B": (eps_b, theta_B, bot_y, (0, -1)),
-    }
-
-    # f update from the d term of each cut face.
-    for face, idx_in_M in sw_idx.items():
-        eps_face, theta_face, bot_dim, _ = face_data[face]
-        f[i, j] -= M_inv_d[idx_in_M] * eps_face / theta_face / bot_dim
-
-    coefs = {}
-
-    # Contribution to each grid point from the local 3x3 ghost solve.
-    for k, off in enumerate(all_offsets):
-        v = 0.0
-        for face, idx_in_M in sw_idx.items():
-            eps_face, theta_face, bot_dim, _ = face_data[face]
-            v += M_inv_N[idx_in_M, k] * eps_face / theta_face / bot_dim
-        coefs[off] = v
-
-    # Diagonal Shortley-Weller term for u_{i,j}.
-    coefs[(0, 0)] = coefs.get((0, 0), 0.0) + (
-        -(eps_r / theta_R + eps_l / theta_L) / bot_x
-        - (eps_t / theta_T + eps_b / theta_B) / bot_y
-    )
-
-    # Uncut neighbours pick up the regular flux term directly.
-    for face, (eps_face, theta_face, bot_dim, neighbour) in face_data.items():
-        if face not in sw_idx:
-            coefs[neighbour] = (
-                coefs.get(neighbour, 0.0) + eps_face / theta_face / bot_dim
-            )
-
-    for (di, dj), val in coefs.items():
-        rows.append(row_idx)
-        cols.append(index(i + di, j + dj))
-        vals.append(val)
 
 
 def construct_matrix():
@@ -5207,7 +1386,6 @@ def interface_value_case1(
     direction: int, i: int, j: int, u: np.ndarray
 ) -> tuple[float, float, float, float, float, float, float, float]:
     """Compute the interface value of u at the cut."""
-    cd = _CD[direction]
     x, y = center(i, j)
     eta = surface(x, y)
     theta = compute_theta(direction, i, j)
@@ -5217,109 +1395,532 @@ def interface_value_case1(
     n1_I = interp(direction, theta, i, j, n1)
     n2_I = interp(direction, theta, i, j, n2)
 
-    theta_l, theta_r, theta_t, theta_b = cd.theta_assign(theta)
+    s = dirsign(direction)
+    is_x_dir = direction in (Direction.R, Direction.L)
 
-    px, py, p_axis = cd.probe_loc(x, y, theta)
-    _eps_p, _eps_m, eps_jump, eps_p, eps_m = _sample_beta_legacy(px, py, p_axis, eta)
+    theta_r = theta if direction == Direction.R else 1.0
+    theta_l = theta if direction == Direction.L else 1.0
+    theta_t = theta if direction == Direction.T else 1.0
+    theta_b = theta if direction == Direction.B else 1.0
 
-    n_t = [n1_I, n2_I][cd.n_tang]
-    n_n = [n1_I, n2_I][cd.n_norm]
-    d_self = dx if cd.is_x else dy
-    d_other = dy if cd.is_x else dx
-
-    d = (
-        (-1 if cd.is_x else 1) * a_tau_I * eps_p * n_t * d_self
-        + b_I * n_n * d_self
-        + cd.sign * a_I * eps_p * _phi(theta)
-    )
-
+    if is_x_dir:
+        eps_p = permittivity(x + s * (theta + EPS) * dx, y)
+        eps_m = permittivity(x + s * (theta - EPS) * dx, y)
+    else:
+        eps_p = permittivity(x, y + s * (theta + EPS) * dy)
+        eps_m = permittivity(x, y + s * (theta - EPS) * dy)
+    eps_jump = eps_p - eps_m
     if eta > 0:
-        eps_p, eps_m = -_eps_m, -_eps_p
+        eps_jump = -eps_jump
 
-    M = -cd.sign * (
-        eps_p * _phi(theta) + eps_m * _psi(theta) + eps_jump * n_t**2 * _psi(theta)
+    _ext = {
+        Direction.R: (x - dx, y - dy, (-1, -1)),
+        Direction.T: (x - dx, y - dy, (-1, -1)),
+        Direction.L: (x + dx, y - dy, (1, -1)),
+        Direction.B: (x - dx, y + dy, (-1, 1)),
+    }
+    x_ext, y_ext, offset_ext = _ext[direction]
+
+    x_r = x + theta_r * dx
+    x_l = x - theta_l * dx
+    y_t = y + theta_t * dy
+    y_b = y - theta_b * dy
+
+    s_eta = np.sign(eta)
+    B_val, C_arr, a_term = _per_iface_algebraic(s_eta, s, eps_p, eps_m, theta, a_I)
+
+    P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
+    x_I = x + s * theta * dx if is_x_dir else x
+    y_I = y + s * theta * dy if not is_x_dir else y
+    grad_tau = np.array(
+        [-2 * x_I * n2_I, x_I * n1_I - y_I * n2_I, 2 * y_I * n1_I, -n2_I, n1_I, 0.0]
     )
 
-    N = [
-        -cd.sign * (eps_jump * n_t**2 + eps_m) * (1 + theta) / theta
-        - eps_jump * n1_I * n2_I * theta * d_self / d_other,
-        -cd.sign * eps_p * (theta - 2) / (theta - 1),
-        cd.sign * eps_p * (theta - 1) / (theta - 2),
-        cd.sign * (eps_jump * n_t**2 + eps_m) * theta / (1 + theta)
-        + eps_jump * n1_I * n2_I * theta * d_self / d_other,
-        eps_jump * n1_I * n2_I * (2 * theta + 1) * d_self / (2 * d_other),
-        -eps_jump * n1_I * n2_I * d_self / (2 * d_other),
-        -eps_jump * n1_I * n2_I * theta * d_self / d_other,
-    ]
-    u_arr = [u[i + di, j + dj] for (di, dj) in cd.offsets]
-    u_I = (np.dot(N, u_arr) + d) / M
+    if is_x_dir:
+        grad_coeff = -dx * eps_jump * n2_I * grad_tau @ P_inv
+        a_tau_term = -dx * a_tau_I * eps_p * n2_I
+        b_term = dx * b_I * n1_I
+    else:
+        grad_coeff = dy * eps_jump * n1_I * grad_tau @ P_inv
+        a_tau_term = dy * a_tau_I * eps_p * n1_I
+        b_term = dy * b_I * n2_I
 
-    # Return (u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t)
-    # where the cut face's value is the ghost value u_I.
-    slot_names = ["l", "r", "t", "b"]
-    face_vals = {"l": u[i - 1, j], "r": u[i + 1, j], "b": u[i, j - 1], "t": u[i, j + 1]}
-    face_vals[slot_names[cd.slot]] = u_I
-    return (
-        face_vals["l"],
-        face_vals["r"],
-        face_vals["b"],
-        face_vals["t"],
-        theta_l,
-        theta_r,
-        theta_b,
-        theta_t,
+    offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
+    M, N, D = _assemble_MND(
+        1, [B_val], [C_arr], [a_term], [grad_coeff], [a_tau_term], [b_term],
+        [direction], offset, offset_ext, 25,
     )
+    M_inv_d = np.linalg.solve(M, D)[0]
+    M_inv_N = np.linalg.solve(M, N)[0]
+
+    all_offsets = [(ox, oy) for ox in range(-2, 3) for oy in range(-2, 3)]
+    u_arr = np.array([u[i + di, j + dj] for (di, dj) in all_offsets])
+    ghost = float(M_inv_N @ u_arr + M_inv_d)
+
+    sw_idx = {_FACE_NAME[direction]: 0}
+    geom = {
+        "theta_R": theta_r, "theta_T": theta_t,
+        "theta_L": theta_l, "theta_B": theta_b,
+    }
+    return _pack_iface_values(sw_idx, np.array([ghost]), geom, i, j, u)
 
 
 def interface_value_case2(
     direction: int, i: int, j: int, u: np.ndarray
 ) -> tuple[float, float, float, float, float, float, float, float]:
     """Compute the interface value of u at the cut."""
-    M_inv_d, M_inv_N, all_offsets, sw_idx, geom = _solve_case2_local(direction, i, j)
+    x, y = center(i, j)
+    eta = surface(x, y)
+
+    theta_r = compute_theta(Direction.R, i, j)
+    theta_t = compute_theta(Direction.T, i, j)
+    theta_l = compute_theta(Direction.L, i, j)
+    theta_b = compute_theta(Direction.B, i, j)
+
+    x_r = x + theta_r * dx
+    x_l = x - theta_l * dx
+    y_t = y + theta_t * dy
+    y_b = y - theta_b * dy
+
+    eps_r = permittivity(x + theta_r * dx / 2, y)
+    eps_l = permittivity(x - theta_l * dx / 2, y)
+    eps_t = permittivity(x, y + theta_t * dy / 2)
+    eps_b = permittivity(x, y - theta_b * dy / 2)
+
+    if direction == Direction.R | Direction.T:
+        dir = [Direction.R, Direction.T]
+        theta = [theta_r, theta_t]
+    elif direction == Direction.L | Direction.T:
+        dir = [Direction.L, Direction.T]
+        theta = [theta_l, theta_t]
+    elif direction == Direction.L | Direction.B:
+        dir = [Direction.L, Direction.B]
+        theta = [theta_l, theta_b]
+    elif direction == Direction.R | Direction.B:
+        dir = [Direction.R, Direction.B]
+        theta = [theta_r, theta_b]
+
+    _ext = {
+        Direction.R | Direction.T: (x - dx, y - dy, (-1, -1)),
+        Direction.T | Direction.L: (x + dx, y - dy, (1, -1)),
+        Direction.L | Direction.B: (x + dx, y + dy, (1, 1)),
+        Direction.B | Direction.R: (x - dx, y + dy, (-1, 1)),
+    }
+    x_ext, y_ext, offset_ext = _ext[direction]
+
+    s_eta = np.sign(eta)
+    s = [dirsign(dir[d]) for d in range(2)]
+
+    eps_p = [
+        permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
+        permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
+    ]
+    eps_m = [
+        permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
+        permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
+    ]
+    eps_jump = np.array([eps_p[d] - eps_m[d] for d in range(2)])
+    if eta > 0:
+        eps_jump = -eps_jump
+
+    n1_I = np.array([interp(dir[d], theta[d], i, j, n1) for d in range(2)])
+    n2_I = np.array([interp(dir[d], theta[d], i, j, n2) for d in range(2)])
+    a_tau_I = [interp(dir[d], theta[d], i, j, a_tau) for d in range(2)]
+    a_I = [interp(dir[d], theta[d], i, j, a) for d in range(2)]
+    b_I = [interp(dir[d], theta[d], i, j, b) for d in range(2)]
+
+    B, C, a_term = [], [], []
+    for d in range(2):
+        B_d, C_d, a_d = _per_iface_algebraic(
+            s_eta, s[d], eps_p[d], eps_m[d], theta[d], a_I[d]
+        )
+        B.append(B_d)
+        C.append(C_d)
+        a_term.append(a_d)
+
+    P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
+    x_I = np.array([x + s[0] * theta[0] * dx, x])
+    y_I = np.array([y, y + s[1] * theta[1] * dy])
+
+    grad_tau = [
+        np.array(
+            [-2 * x_I[d] * n2_I[d], x_I[d] * n1_I[d] - y_I[d] * n2_I[d],
+             2 * y_I[d] * n1_I[d], -n2_I[d], n1_I[d], 0.0]
+        )
+        for d in range(2)
+    ]
+    n_norm = [n1_I[0], n2_I[1]]
+    n_tang = [-n2_I[0], n1_I[1]]
+    dr = [dx, dy]
+    grad_coeff = [dr[d] * eps_jump[d] * n_tang[d] * grad_tau[d] @ P_inv for d in range(2)]
+    a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(2)]
+    b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(2)]
+
+    offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
+    M, N, D = _assemble_MND(
+        2, B, C, a_term, grad_coeff, a_tau_term, b_term, dir, offset, offset_ext, 25,
+    )
+    M_inv_d = np.linalg.solve(M, D)
+    M_inv_N = np.linalg.solve(M, N)
+
+    all_offsets = [(ox, oy) for ox in range(-2, 3) for oy in range(-2, 3)]
     u_arr = np.array([u[i + di, j + dj] for (di, dj) in all_offsets])
     ghosts = M_inv_N @ u_arr + M_inv_d
+
+    sw_idx = {_FACE_NAME[dir[0]]: 0, _FACE_NAME[dir[1]]: 1}
+    geom = {
+        "theta_R": theta_r, "theta_T": theta_t,
+        "theta_L": theta_l, "theta_B": theta_b,
+    }
     return _pack_iface_values(sw_idx, ghosts, geom, i, j, u)
 
 
 def interface_value_case3(
     direction: int, extra: int, i: int, j: int, u: np.ndarray
 ) -> tuple[float, float, float, float, float, float, float, float]:
-    """Reconstruct interface values (u_l, u_r, u_b, u_t) for a case-3 cell.
+    """Reconstruct interface values for a case-3 cell."""
+    x, y = center(i, j)
+    eta = surface(x, y)
+    s_eta = np.sign(eta)
 
-    Mirrors interface_value_case2 but for the three-interface stencil. Two of
-    the returned interface u-values come from the local 3x3 solve; the third
-    (corresponding to the side without a corner cut) is just a regular grid
-    value.
-    """
-    x_, y_ = center(i, j)
-    geom = _case3_geometry(direction, extra, i, j)
+    offset = lambda ox, oy: (ox + 3) * 7 + (oy + 3)
 
-    sub_case_table = {
-        (Direction.R | Direction.T, Direction.R): 1,
-        (Direction.R | Direction.T, Direction.T): 2,
-        (Direction.L | Direction.T, Direction.T): 3,
-        (Direction.L | Direction.T, Direction.L): 4,
-        (Direction.L | Direction.B, Direction.L): 5,
-        (Direction.L | Direction.B, Direction.B): 6,
-        (Direction.R | Direction.B, Direction.B): 7,
-        (Direction.R | Direction.B, Direction.R): 8,
-    }
-    sub_case = sub_case_table.get((int(direction), int(extra)))
-    if sub_case is None:
+    theta_r = compute_theta(Direction.R, i, j)
+    theta_t = compute_theta(Direction.T, i, j)
+    theta_l = compute_theta(Direction.L, i, j)
+    theta_b = compute_theta(Direction.B, i, j)
+
+    x_r = x + theta_r * dx
+    x_l = x - theta_l * dx
+    y_t = y + theta_t * dy
+    y_b = y - theta_b * dy
+
+    theta_rr = theta_tt = theta_ll = theta_bb = 0.0
+    if Direction.R & extra:
+        theta_rr = compute_theta(Direction.R, i + 1, j)
+    if Direction.T & extra:
+        theta_tt = compute_theta(Direction.T, i, j + 1)
+    if Direction.L & extra:
+        theta_ll = compute_theta(Direction.L, i - 1, j)
+    if Direction.B & extra:
+        theta_bb = compute_theta(Direction.B, i, j - 1)
+
+    s = [dirsign(d) for d in direction] + [dirsign(extra, is_extra=True)]
+    if (direction == Direction.T | Direction.R) and (extra == Direction.R):
+        dir = [Direction.T, Direction.R, Direction.R]
+        theta = [theta_t, theta_r]
+        theta_extra = [0, theta_rr]
+        eps_p = [
+            permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
+            permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
+            permittivity(x + 2 * dx + s[2] * (theta_extra[1] + EPS) * dx, y),
+        ]
+        eps_m = [
+            permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
+            permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
+            permittivity(x + 2 * dx + s[2] * (theta_extra[1] - EPS) * dx, y),
+        ]
+        x_ext, y_ext = x - dx, y - dy
+        offset_ext = (-1, -1)
+        x_I = [x, x + s[1] * theta[1] * dx, x + s[2] * (theta_extra[1] - 2) * dx]
+        y_I = [y + s[0] * theta[0] * dy, y, y]
+    elif (direction == Direction.T | Direction.R) and (extra == Direction.T):
+        dir = [Direction.R, Direction.T, Direction.T]
+        theta = [theta_r, theta_t]
+        theta_extra = [0, theta_tt]
+        eps_p = [
+            permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
+            permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
+            permittivity(x, y + 2 * dy + s[2] * (theta_extra[1] + EPS) * dy),
+        ]
+        eps_m = [
+            permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
+            permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
+            permittivity(x, y + 2 * dy + s[2] * (theta_extra[1] - EPS) * dy),
+        ]
+        x_ext, y_ext = x - dx, y - dy
+        offset_ext = (-1, -1)
+        x_I = [x + s[0] * theta[0] * dx, x, x]
+        y_I = [y, y + s[1] * theta[1] * dy, y + s[2] * (theta_extra[1] - 2) * dy]
+    elif (direction == Direction.T | Direction.L) and (extra == Direction.T):
+        dir = [Direction.L, Direction.T, Direction.T]
+        theta = [theta_l, theta_t]
+        theta_extra = [0, theta_tt]
+        eps_p = [
+            permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
+            permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
+            permittivity(x, y + 2 * dy + s[2] * (theta_extra[1] + EPS) * dy),
+        ]
+        eps_m = [
+            permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
+            permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
+            permittivity(x, y + 2 * dy + s[2] * (theta_extra[1] - EPS) * dy),
+        ]
+        x_ext, y_ext = x + dx, y - dy
+        offset_ext = (1, -1)
+        x_I = [x + s[0] * theta[0] * dx, x, x]
+        y_I = [y, y + s[1] * theta[1] * dy, y + s[2] * (theta_extra[1] - 2) * dy]
+    elif (direction == Direction.T | Direction.L) and (extra == Direction.L):
+        dir = [Direction.T, Direction.L, Direction.L]
+        theta = [theta_t, theta_l]
+        theta_extra = [0, theta_ll]
+        eps_p = [
+            permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
+            permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
+            permittivity(x - 2 * dx + s[2] * (theta_extra[1] + EPS) * dx, y),
+        ]
+        eps_m = [
+            permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
+            permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
+            permittivity(x - 2 * dx + s[2] * (theta_extra[1] - EPS) * dx, y),
+        ]
+        x_ext, y_ext = x + dx, y - dy
+        offset_ext = (1, -1)
+        x_I = [x, x + s[1] * theta[1] * dx, x + s[2] * (theta_extra[1] - 2) * dx]
+        y_I = [y + s[0] * theta[0] * dy, y, y]
+    elif (direction == Direction.L | Direction.B) and (extra == Direction.L):
+        dir = [Direction.B, Direction.L, Direction.L]
+        theta = [theta_b, theta_l]
+        theta_extra = [0, theta_ll]
+        eps_p = [
+            permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
+            permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
+            permittivity(x - 2 * dx + s[2] * (theta_extra[1] + EPS) * dx, y),
+        ]
+        eps_m = [
+            permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
+            permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
+            permittivity(x - 2 * dx + s[2] * (theta_extra[1] - EPS) * dx, y),
+        ]
+        x_ext, y_ext = x + dx, y + dy
+        offset_ext = (1, 1)
+        x_I = [x, x + s[1] * theta[1] * dx, x + s[2] * (theta_extra[1] - 2) * dx]
+        y_I = [y + s[0] * theta[0] * dy, y, y]
+    elif (direction == Direction.L | Direction.B) and (extra == Direction.B):
+        dir = [Direction.L, Direction.B, Direction.B]
+        theta = [theta_l, theta_b]
+        theta_extra = [0, theta_bb]
+        eps_p = [
+            permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
+            permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
+            permittivity(x, y - 2 * dy + s[2] * (theta_extra[1] + EPS) * dy),
+        ]
+        eps_m = [
+            permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
+            permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
+            permittivity(x, y - 2 * dy + s[2] * (theta_extra[1] - EPS) * dy),
+        ]
+        x_ext, y_ext = x + dx, y + dy
+        offset_ext = (1, 1)
+        x_I = [x + s[0] * theta[0] * dx, x, x]
+        y_I = [y, y + s[1] * theta[1] * dy, y + s[2] * (theta_extra[1] - 2) * dy]
+    elif (direction == Direction.R | Direction.B) and (extra == Direction.B):
+        dir = [Direction.R, Direction.B, Direction.B]
+        theta = [theta_r, theta_b]
+        theta_extra = [0, theta_bb]
+        eps_p = [
+            permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
+            permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
+            permittivity(x, y - 2 * dy + s[2] * (theta_extra[1] + EPS) * dy),
+        ]
+        eps_m = [
+            permittivity(x + s[0] * (theta[0] - EPS) * dx, y),
+            permittivity(x, y + s[1] * (theta[1] - EPS) * dy),
+            permittivity(x, y - 2 * dy + s[2] * (theta_extra[1] - EPS) * dy),
+        ]
+        x_ext, y_ext = x - dx, y + dy
+        offset_ext = (-1, 1)
+        x_I = [x + s[0] * theta[0] * dx, x, x]
+        y_I = [y, y + s[1] * theta[1] * dy, y + s[2] * (theta_extra[1] - 2) * dy]
+    elif (direction == Direction.R | Direction.B) and (extra == Direction.R):
+        dir = [Direction.B, Direction.R, Direction.R]
+        theta = [theta_b, theta_r]
+        theta_extra = [0, theta_rr]
+        eps_p = [
+            permittivity(x, y + s[0] * (theta[0] + EPS) * dy),
+            permittivity(x + s[1] * (theta[1] + EPS) * dx, y),
+            permittivity(x + 2 * dx + s[2] * (theta_extra[1] + EPS) * dx, y),
+        ]
+        eps_m = [
+            permittivity(x, y + s[0] * (theta[0] - EPS) * dy),
+            permittivity(x + s[1] * (theta[1] - EPS) * dx, y),
+            permittivity(x + 2 * dx + s[2] * (theta_extra[1] - EPS) * dx, y),
+        ]
+        x_ext, y_ext = x - dx, y + dy
+        offset_ext = (-1, 1)
+        x_I = [x, x + s[1] * theta[1] * dx, x + s[2] * (theta_extra[1] - 2) * dx]
+        y_I = [y + s[0] * theta[0] * dy, y, y]
+    else:
         raise ValueError(
-            f"Invalid (direction, extra) for case 3: ({direction!r}, {extra!r})"
+            "Invalid direction/extra combination for case 3", direction, extra
         )
 
-    eta = geom["eta"]
-    M_inv_d, M_inv_N, all_offsets = _solve_case3_local(
-        sub_case, eta, direction, extra, geom
+    dr = [dx if dir[d] in (Direction.R, Direction.L) else dy for d in range(3)]
+    eps_jump = np.array([eps_p[d] - eps_m[d] for d in range(3)])
+    if eta > 0:
+        eps_jump = -eps_jump
+    n1_I = [interp(dir[d], theta[d], i, j, n1) for d in range(2)]
+    n2_I = [interp(dir[d], theta[d], i, j, n2) for d in range(2)]
+    a_tau_I = [interp(dir[d], theta[d], i, j, a_tau) for d in range(2)]
+    a_I = [interp(dir[d], theta[d], i, j, a) for d in range(2)]
+    b_I = [interp(dir[d], theta[d], i, j, b) for d in range(2)]
+    if extra == Direction.R:
+        n1_I.append(interp(Direction.L, theta_extra[1], i + 2, j, n1))
+        n2_I.append(interp(Direction.L, theta_extra[1], i + 2, j, n2))
+        a_tau_I.append(interp(Direction.L, theta_extra[1], i + 2, j, a_tau))
+        a_I.append(interp(Direction.L, theta_extra[1], i + 2, j, a))
+        b_I.append(interp(Direction.L, theta_extra[1], i + 2, j, b))
+    elif extra == Direction.T:
+        n1_I.append(interp(Direction.B, theta_extra[1], i, j + 2, n1))
+        n2_I.append(interp(Direction.B, theta_extra[1], i, j + 2, n2))
+        a_tau_I.append(interp(Direction.B, theta_extra[1], i, j + 2, a_tau))
+        a_I.append(interp(Direction.B, theta_extra[1], i, j + 2, a))
+        b_I.append(interp(Direction.B, theta_extra[1], i, j + 2, b))
+    elif extra == Direction.L:
+        n1_I.append(interp(Direction.R, theta_extra[1], i - 2, j, n1))
+        n2_I.append(interp(Direction.R, theta_extra[1], i - 2, j, n2))
+        a_tau_I.append(interp(Direction.R, theta_extra[1], i - 2, j, a_tau))
+        a_I.append(interp(Direction.R, theta_extra[1], i - 2, j, a))
+        b_I.append(interp(Direction.R, theta_extra[1], i - 2, j, b))
+    elif extra == Direction.B:
+        n1_I.append(interp(Direction.T, theta_extra[1], i, j - 2, n1))
+        n2_I.append(interp(Direction.T, theta_extra[1], i, j - 2, n2))
+        a_tau_I.append(interp(Direction.T, theta_extra[1], i, j - 2, a_tau))
+        a_I.append(interp(Direction.T, theta_extra[1], i, j - 2, a))
+        b_I.append(interp(Direction.T, theta_extra[1], i, j - 2, b))
+    else:
+        raise ValueError("bad extra direction", extra)
+
+    B = np.zeros((3, 3))
+    B[0, 0] = (
+        s_eta * s[0] * (
+            eps_p[0] * (3 - 2 * theta[0] - theta_extra[0])
+            / ((1 - theta[0]) * (2 - theta[0] - theta_extra[0]))
+            + eps_m[0] * (2 * theta[0] + 1) / (theta[0] * (theta[0] + 1))
+        )
+    )
+    B[0, 1] = 0.0
+    B[0, 2] = 0.0
+    B[1, 0] = 0.0
+    B[1, 1] = (
+        s_eta * s[1] * (
+            eps_p[1] * (3 - 2 * theta[1] - theta_extra[1])
+            / ((1 - theta[1]) * (2 - theta[1] - theta_extra[1]))
+            + eps_m[1] * (2 * theta[1] + 1) / (theta[1] * (theta[1] + 1))
+        )
+    )
+    B[1, 2] = (
+        s_eta * s[1] * eps_p[1] * (1 - theta[1])
+        / ((2 - theta[1] - theta_extra[1]) * (1 - theta_extra[1]))
+    )
+    B[2, 0] = 0.0
+    B[2, 1] = (
+        s_eta * s[2] * (
+            eps_p[2] * (1 - theta_extra[1])
+            / ((2 - theta[1] - theta_extra[1]) * (1 - theta[1]))
+        )
+    )
+    B[2, 2] = (
+        s_eta * s[2] * (
+            eps_p[2] * (3 - 2 * theta_extra[1] - theta[1])
+            / ((1 - theta_extra[1]) * (2 - theta[1] - theta_extra[1]))
+            + eps_m[2] * (2 * theta_extra[1] + 1)
+            / (theta_extra[1] * (theta_extra[1] + 1))
+        )
     )
 
-    # Apply M_inv_N @ u_arr + M_inv_d to get the 3 interface ghost values.
+    C = np.zeros((3, 5))
+    C[0] = (
+        -s_eta * s[0] * np.array([
+            -eps_m[0] * theta[0] / (1 + theta[0]),
+            eps_m[0] * (1 + theta[0]) / theta[0],
+            eps_p[0] * (2 - theta[0]) / (1 - theta[0]),
+            -eps_p[0] * (1 - theta[0]) / (2 - theta[0]),
+            0,
+        ])
+    )
+    C[1] = (
+        -s_eta * s[1] * np.array([
+            -eps_m[1] * theta[1] / (1 + theta[1]),
+            eps_m[1] * (theta[1] + 1) / (theta[1] * (theta[0] + 1)),
+            eps_p[1] * (2 - theta[1] - theta_extra[1])
+            / ((1 - theta[1]) * (1 - theta_extra[1])),
+            0,
+            0,
+        ])
+    )
+    C[2] = (
+        s_eta * s[2] * np.array([
+            0,
+            0,
+            -eps_p[2] * (2 - theta[1] - theta_extra[1])
+            / ((2 - theta[1]) * (1 - theta_extra[1])),
+            -eps_m[2] * (theta_extra[1] + 1) / theta_extra[1],
+            eps_m[2] * theta_extra[1] / (theta_extra[1] + 1),
+        ])
+    )
+
+    a_term = np.zeros(3)
+    a_term[0] = (
+        -s[0] * a_I[0] * eps_p[0]
+        * (3 - 2 * theta[0]) / ((1 - theta[0]) * (2 - theta[0]))
+    )
+    a_term[1] = (
+        -s[1] * a_I[1] * eps_p[1]
+        * (3 - 2 * theta[1] - theta_extra[1])
+        / ((1 - theta[1]) * (2 - theta[1] - theta_extra[1]))
+    )
+    a_term[2] = (
+        -s[2] * a_I[2] * eps_p[1]
+        * (3 - 2 * theta_extra[1] - theta[1])
+        / ((1 - theta_extra[1]) * (2 - theta[1] - theta_extra[1]))
+    )
+
+    n_norm = [
+        n1_I[d] if dir[d] in (Direction.R, Direction.L) else n2_I[d] for d in range(3)
+    ]
+    n_tang = [
+        -n2_I[d] if dir[d] in (Direction.R, Direction.L) else n1_I[d] for d in range(3)
+    ]
+
+    P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
+    grad_tau = [
+        np.array([
+            -2 * x_I[d] * n2_I[d],
+            x_I[d] * n1_I[d] - y_I[d] * n2_I[d],
+            2 * y_I[d] * n1_I[d],
+            -n2_I[d],
+            n1_I[d],
+            0.0,
+        ])
+        for d in range(3)
+    ]
+    grad_coeff = [
+        dr[d] * eps_jump[d] * n_tang[d] * grad_tau[d] @ P_inv for d in range(3)
+    ]
+    a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(3)]
+    b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(3)]
+
+    M, N, D = _assemble_MND(
+        3, B, C, a_term, grad_coeff, a_tau_term, b_term, dir, offset, offset_ext, 49,
+        gate_x_dirs={dir[0]}, gate_y_dirs={dir[1]},
+    )
+    M_inv_d = np.linalg.solve(M, D)
+    M_inv_N = np.linalg.solve(M, N)
+
+    all_offsets = [(ox, oy) for ox in range(-3, 4) for oy in range(-3, 4)]
     u_arr = np.array([u[i + di, j + dj] for (di, dj) in all_offsets])
     ghosts = M_inv_N @ u_arr + M_inv_d
 
-    sw_idx = _CASE3_SW_INDEX[sub_case]
+    sw_idx = {}
+    for idx, d in enumerate(dir):
+        face = _FACE_NAME[d]
+        if face not in sw_idx:
+            sw_idx[face] = idx
+    geom = {
+        "theta_R": theta_r, "theta_T": theta_t,
+        "theta_L": theta_l, "theta_B": theta_b,
+    }
     return _pack_iface_values(sw_idx, ghosts, geom, i, j, u)
 
 
@@ -5343,28 +1944,122 @@ def _pack_iface_values(sw_idx, ghosts, geom, i, j, u):
 def interface_value_case4(
     direction: int, i: int, j: int, u: np.ndarray
 ) -> tuple[float, float, float, float, float, float, float, float]:
-    """Reconstruct interface values (u_l, u_r, u_b, u_t) for a case-4 cell.
+    """Reconstruct interface values for a case-4 cell."""
+    x, y = center(i, j)
+    eta = surface(x, y)
 
-    Mirrors interface_value_case3: three of the returned slots come from the
-    local 3x3 solve, the fourth (uncut side) is just a regular grid value.
-    """
-    geom = _case4_geometry(direction, i, j)
+    offset = lambda ox, oy: (ox + 2) * 5 + (oy + 2)
 
-    sub_case_table = {
-        int(Direction.R | Direction.T | Direction.L): 1,
-        int(Direction.R | Direction.T | Direction.B): 2,
-        int(Direction.R | Direction.B | Direction.L): 3,
-        int(Direction.T | Direction.B | Direction.L): 4,
+    theta_r = compute_theta(Direction.R, i, j)
+    theta_t = compute_theta(Direction.T, i, j)
+    theta_l = compute_theta(Direction.L, i, j)
+    theta_b = compute_theta(Direction.B, i, j)
+
+    x_r = x + theta_r * dx
+    x_l = x - theta_l * dx
+    y_t = y + theta_t * dy
+    y_b = y - theta_b * dy
+
+    if direction == Direction.R | Direction.T | Direction.L:
+        dir = [Direction.R, Direction.T, Direction.L]
+        theta = [theta_r, theta_t, theta_l]
+        x_I = [x + theta_r * dx, x, x - theta_l * dx]
+        y_I = [y, y + theta_t * dy, y]
+    elif direction == Direction.L | Direction.T | Direction.B:
+        dir = [Direction.L, Direction.T, Direction.B]
+        theta = [theta_l, theta_t, theta_b]
+        x_I = [x - theta_l * dx, x, x]
+        y_I = [y, y + theta_t * dy, y - theta_b * dy]
+    elif direction == Direction.L | Direction.B | Direction.R:
+        dir = [Direction.L, Direction.B, Direction.R]
+        theta = [theta_l, theta_b, theta_r]
+        x_I = [x - theta_l * dx, x, x + theta_r * dx]
+        y_I = [y, y - theta_b * dy, y]
+    elif direction == Direction.R | Direction.B | Direction.T:
+        dir = [Direction.R, Direction.B, Direction.T]
+        theta = [theta_r, theta_b, theta_t]
+        x_I = [x + theta_r * dx, x, x]
+        y_I = [y, y - theta_b * dy, y + theta_t * dy]
+    else:
+        raise ValueError("Invalid direction for case 4", direction)
+
+    _ext = {
+        Direction.R | Direction.T | Direction.L: (x - dx, y - dy, (-1, -1)),
+        Direction.R | Direction.T | Direction.B: (x - dx, y + dy, (-1, 1)),
+        Direction.R | Direction.B | Direction.L: (x + dx, y + dy, (1, 1)),
+        Direction.T | Direction.B | Direction.L: (x + dx, y - dy, (1, -1)),
     }
-    sub_case = sub_case_table.get(int(direction))
-    if sub_case is None:
-        raise ValueError(f"Invalid direction for case 4: {direction!r}")
+    x_ext, y_ext, offset_ext = _ext[direction]
 
-    eta = geom["eta"]
-    M_inv_d, M_inv_N, all_offsets = _solve_case4_local(sub_case, eta, direction, geom)
+    s_eta = np.sign(eta)
+    s = [dirsign(dir[d]) for d in range(3)]
+
+    is_x = [d in (Direction.R, Direction.L) for d in dir]
+    dr = [dx if is_x[d] else dy for d in range(3)]
+
+    eps_p = []
+    eps_m = []
+    for d in range(3):
+        if is_x[d]:
+            eps_p.append(permittivity(x + s[d] * (theta[d] + EPS) * dx, y))
+            eps_m.append(permittivity(x + s[d] * (theta[d] - EPS) * dx, y))
+        else:
+            eps_p.append(permittivity(x, y + s[d] * (theta[d] + EPS) * dy))
+            eps_m.append(permittivity(x, y + s[d] * (theta[d] - EPS) * dy))
+    eps_jump = np.array([eps_p[d] - eps_m[d] for d in range(3)])
+    if eta > 0:
+        eps_jump = -eps_jump
+
+    n1_I = np.array([interp(dir[d], theta[d], i, j, n1) for d in range(3)])
+    n2_I = np.array([interp(dir[d], theta[d], i, j, n2) for d in range(3)])
+    a_tau_I = [interp(dir[d], theta[d], i, j, a_tau) for d in range(3)]
+    a_I = [interp(dir[d], theta[d], i, j, a) for d in range(3)]
+    b_I = [interp(dir[d], theta[d], i, j, b) for d in range(3)]
+
+    B, C, a_term = [], [], []
+    for d in range(3):
+        B_d, C_d, a_d = _per_iface_algebraic(
+            s_eta, s[d], eps_p[d], eps_m[d], theta[d], a_I[d]
+        )
+        B.append(B_d)
+        C.append(C_d)
+        a_term.append(a_d)
+
+    P_inv = compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext)
+    grad_tau = [
+        np.array([
+            -2 * x_I[d] * n2_I[d],
+            x_I[d] * n1_I[d] - y_I[d] * n2_I[d],
+            2 * y_I[d] * n1_I[d],
+            -n2_I[d],
+            n1_I[d],
+            0.0,
+        ])
+        for d in range(3)
+    ]
+    n_norm = [n1_I[d] if is_x[d] else n2_I[d] for d in range(3)]
+    n_tang = [-n2_I[d] if is_x[d] else n1_I[d] for d in range(3)]
+    grad_coeff = [
+        dr[d] * eps_jump[d] * n_tang[d] * grad_tau[d] @ P_inv for d in range(3)
+    ]
+    a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(3)]
+    b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(3)]
+
+    M, N, D = _assemble_MND(
+        3, B, C, a_term, grad_coeff, a_tau_term, b_term, dir, offset, offset_ext, 25,
+    )
+    M_inv_d = np.linalg.solve(M, D)
+    M_inv_N = np.linalg.solve(M, N)
+
+    all_offsets = [(ox, oy) for ox in range(-2, 3) for oy in range(-2, 3)]
     u_arr = np.array([u[i + di, j + dj] for (di, dj) in all_offsets])
     ghosts = M_inv_N @ u_arr + M_inv_d
-    sw_idx = _CASE4_SW_INDEX[sub_case]
+
+    sw_idx = {_FACE_NAME[dir[0]]: 0, _FACE_NAME[dir[1]]: 1, _FACE_NAME[dir[2]]: 2}
+    geom = {
+        "theta_R": theta_r, "theta_T": theta_t,
+        "theta_L": theta_l, "theta_B": theta_b,
+    }
     return _pack_iface_values(sw_idx, ghosts, geom, i, j, u)
 
 
@@ -6091,5 +2786,5 @@ if __name__ == "__main__":
     # convergence_test1()
     # convergence_test2()
     # convergence_test3()
-    convergence_test4()
-    # convergence_test5()
+    # convergence_test4()
+    convergence_test5()

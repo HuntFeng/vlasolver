@@ -3,34 +3,12 @@ import enum
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
-
-np.set_printoptions(legacy="1.25")  # no type info when printing
-
-EPS = 0.01
-
-# Shared zero function — all constant-zero matrix entries.
-_Z = lambda *_: 0.0
-
-
-# -- Rational-theta helpers (cubic Hermite interpolation coefficients) --
-
-
-def _phi(th):
-    """_phi(theta) = (3 - 2*th) / ((1-th)*(2-th)), for th in (0,1)."""
-    return (3 - 2 * th) / ((1 - th) * (2 - th))
-
-
-def _psi(th):
-    """_psi(theta) = (2*th + 1) / (th*(th+1)), for th in (0,1)."""
-    return (2 * th + 1) / (th * (th + 1))
-
-
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import spsolve
 
 np.set_printoptions(legacy="1.25")  # no type info when printing
 
-
+EPS = 0.01
 
 class Direction(enum.IntFlag):
     R = 1 << 0  # 0001
@@ -48,116 +26,6 @@ def dirsign(direction: int, is_extra=False):
         raise ValueError("Invalid direction for dirsign", direction)
 
 
-
-# ---------------------------------------------------------------------------
-# Direction parameterization — encodes axis / sign to eliminate if/else branches.
-# ---------------------------------------------------------------------------
-
-
-class CutDir:
-    """Encodes axis and orientation for a single interface cut direction.
-
-    Each instance captures the mechanical differences between R/L (x-axis,
-    forward/backward) and T/B (y-axis, forward/backward) so that downstream
-    formulas become a single code path parameterized by these two bits.
-    """
-
-    __slots__ = ("face", "axis", "sign")
-
-    def __init__(self, face: int, axis: int, sign: int):
-        self.face = face
-        self.axis = axis  # 0 → x-axis; 1 → y-axis
-        self.sign = sign  # +1 for R/T (forward), -1 for L/B (backward)
-
-    @property
-    def is_x(self) -> bool:
-        return self.axis == 0
-
-    @property
-    def is_y(self) -> bool:
-        return self.axis == 1
-
-    @property
-    def n_tang(self) -> int:
-        """Index of the tangential normal component (0=n1, 1=n2).
-
-        x-axis interfaces (R,L) are vertical → tangent is horizontal → n2.
-        y-axis interfaces (T,B) are horizontal → tangent is vertical → n1.
-        """
-        return 1 if self.is_x else 0
-
-    @property
-    def n_norm(self) -> int:
-        """Index of the surface-normal component."""
-        return 0 if self.is_x else 1
-
-    # -- stencil offsets ------------------------------------------------------
-    # The 7 neighbour offsets for the M/d/N system, keyed by semantic role.
-
-    _STENCIL = {
-        Direction.R: [(0, 0), (1, 0), (2, 0), (-1, 0), (0, -1), (0, 1), (-1, -1)],
-        Direction.T: [(0, 0), (0, 1), (0, 2), (0, -1), (-1, 0), (1, 0), (-1, -1)],
-        Direction.L: [(0, 0), (-1, 0), (-2, 0), (1, 0), (0, -1), (0, 1), (1, -1)],
-        Direction.B: [(0, 0), (0, -1), (0, -2), (0, 1), (-1, 0), (1, 0), (-1, 1)],
-    }
-
-    @property
-    def offsets(self):
-        """The 7 (di, dj) stencil offsets for the N-vector."""
-        return self._STENCIL[self.face]
-
-    # -- theta / eps / bot slot indices (0=L, 1=R, 2=T, 3=B) -----------------
-
-    _SLOT = {Direction.R: 1, Direction.T: 2, Direction.L: 0, Direction.B: 3}
-
-    @property
-    def slot(self) -> int:
-        """Index into the (L,R,T,B) arrays for the active face."""
-        return self._SLOT[self.face]
-
-    def theta_assign(self, theta: float):
-        """Return (theta_l, theta_r, theta_t, theta_b) with `theta` in the active slot."""
-        t = [1.0, 1.0, 1.0, 1.0]
-        t[self.slot] = theta
-        return t[0], t[1], t[2], t[3]
-
-    # -- uncut-neighbour correction helpers -----------------------------------
-
-    # Map each face to the (di, dj) of its *neighbour* and which *half-eps*
-    # variable corresponds to it.  Used to add eps/theta/bot corrections
-    # for the sides that are NOT the active cut.
-
-    _NEIGHBOUR = {
-        Direction.R: (1, 0, "eps_r"),
-        Direction.L: (-1, 0, "eps_l"),
-        Direction.T: (0, 1, "eps_t"),
-        Direction.B: (0, -1, "eps_b"),
-    }
-
-    @staticmethod
-    def uncut_faces(active_face: int):
-        """Yield (di, dj, eps_name) for the three faces *other* than `active_face`."""
-        for face in (Direction.R, Direction.T, Direction.L, Direction.B):
-            if face != active_face:
-                yield CutDir._NEIGHBOUR[face]
-
-    # -- beta probe location --------------------------------------------------
-
-    def probe_loc(self, x: float, y: float, theta: float):
-        """Return (x_loc, y_loc, axis_str) for the interface point."""
-        if self.is_x:
-            return (x + self.sign * theta * dx, y, "x")
-        else:
-            return (x, y + self.sign * theta * dy, "y")
-
-
-# Lookup table Direction int → CutDir instance.
-_CD = {
-    Direction.R: CutDir(Direction.R, 0, +1),
-    Direction.T: CutDir(Direction.T, 1, +1),
-    Direction.L: CutDir(Direction.L, 0, -1),
-    Direction.B: CutDir(Direction.B, 1, -1),
-}
 
 _FACE_NAME = {Direction.R: "R", Direction.T: "T", Direction.L: "L", Direction.B: "B"}
 
@@ -204,10 +72,10 @@ def center(i: int, j: int) -> tuple[float, float]:
 
 
 def compute_theta(direction: int, i: int, j: int) -> float:
-    cd = _CD[direction]
     x, y = center(i, j)
     eta = surface(x, y)
-    if cd.is_x:
+    is_x_dir = direction in (Direction.R, Direction.L)
+    if is_x_dir:
         eta_r = surface(x + dx, y)
         eta_l = surface(x - dx, y)
         d_eta = (eta_r - eta_l) / 2
@@ -220,13 +88,12 @@ def compute_theta(direction: int, i: int, j: int) -> float:
     if np.isclose(dd_eta, 0.0):
         theta = np.abs(eta / d_eta)
     else:
+        s = dirsign(direction)
         theta = (
-            -cd.sign * d_eta - np.sign(eta) * np.sqrt(d_eta**2 - 4 * dd_eta * eta)
+            -s * d_eta - np.sign(eta) * np.sqrt(d_eta**2 - 4 * dd_eta * eta)
         ) / (2 * dd_eta)
     if theta < 1e-6 or theta > 1.0 - 1e-6:
         theta = 1.0
-        # TODO: maybe this is not a good idea
-        # breakpoint()
     return theta
 
 
@@ -241,17 +108,14 @@ def interp(direction: int, theta: float, i: int, j: int, field: np.ndarray) -> f
             [-1.0, 3.0, -3.0, 1.0],
         ]
     )
-    cd = _CD[direction]
-    if cd.is_x:
+    is_x_dir = direction in (Direction.R, Direction.L)
+    s = dirsign(direction)
+    if is_x_dir:
         k = i
-        points = (
-            field[k - 1 : k + 3, j] if cd.sign > 0 else field[k - 2 : k + 2, j][::-1]
-        )
+        points = field[k - 1 : k + 3, j] if s > 0 else field[k - 2 : k + 2, j][::-1]
     else:
         k = j
-        points = (
-            field[i, k - 1 : k + 3] if cd.sign > 0 else field[i, k - 2 : k + 2][::-1]
-        )
+        points = field[i, k - 1 : k + 3] if s > 0 else field[i, k - 2 : k + 2][::-1]
     return 0.5 * t_matrix @ c_matrix @ points
 
 
@@ -325,7 +189,9 @@ def coeff_case0(i: int, j: int) -> None:
 
 def _per_iface_algebraic(s_eta, s, eps_p, eps_m, theta, a_I):
     """Return (B, C, a_term) for a single uncoupled interface."""
-    B_val = s_eta * s * (eps_p * _phi(theta) + eps_m * _psi(theta))
+    _phi = (3 - 2 * theta) / ((1 - theta) * (2 - theta))
+    _psi = (2 * theta + 1) / (theta * (theta + 1))
+    B_val = s_eta * s * (eps_p * _phi + eps_m * _psi)
     C_arr = -s_eta * s * np.array(
         [
             -eps_m * theta / (1 + theta),
@@ -334,7 +200,7 @@ def _per_iface_algebraic(s_eta, s, eps_p, eps_m, theta, a_I):
             -eps_p * (1 - theta) / (2 - theta),
         ]
     )
-    a_val = -s * a_I * eps_p * _phi(theta)
+    a_val = -s * a_I * eps_p * _phi
     return B_val, C_arr, a_val
 
 

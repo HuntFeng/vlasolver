@@ -212,21 +212,13 @@ def _assemble_MND(
     offset,
     offset_ext,
     stencil_size,
-    gate_x_dirs=None,
-    gate_y_dirs=None,
 ):
     """Assemble M, N, D for an n_intf x n_intf local system.
 
-    gate_x_dirs / gate_y_dirs control which cut directions gate out grad_coeff
     entries in N at x-axis / y-axis neighbour positions. When None they default
     to ``dirs``, which is correct for cases 1, 2 and 4. Case 3 passes separate
     sets to match its distinct gating logic.
     """
-    if gate_x_dirs is None:
-        gate_x_dirs = dirs
-    if gate_y_dirs is None:
-        gate_y_dirs = dirs
-
     D = np.array([a_tau_term[d] + b_term[d] - a_term[d] for d in range(n_intf)])
 
     if isinstance(B, np.ndarray) and B.ndim == 2:
@@ -573,35 +565,6 @@ def case3_extra_dir(direction: int, i: int, j: int) -> int:
     ):
         extra |= Direction.B
     return extra
-    # extras = []
-    # if direction == (Direction.R | Direction.T):
-    #     if surface(x_ + dx, y_) * surface(x_ + 2 * dx, y_) < 0:
-    #         extras.append(Direction.R)
-    #     if surface(x_, y_ + dy) * surface(x_, y_ + 2 * dy) < 0:
-    #         extras.append(Direction.T)
-    # elif direction == (Direction.L | Direction.T):
-    #     if surface(x_, y_ + dy) * surface(x_, y_ + 2 * dy) < 0:
-    #         extras.append(Direction.T)
-    #     if surface(x_ - dx, y_) * surface(x_ - 2 * dx, y_) < 0:
-    #         extras.append(Direction.L)
-    # elif direction == (Direction.L | Direction.B):
-    #     if surface(x_ - dx, y_) * surface(x_ - 2 * dx, y_) < 0:
-    #         extras.append(Direction.L)
-    #     if surface(x_, y_ - dy) * surface(x_, y_ - 2 * dy) < 0:
-    #         extras.append(Direction.B)
-    # elif direction == (Direction.R | Direction.B):
-    #     if surface(x_, y_ - dy) * surface(x_, y_ - 2 * dy) < 0:
-    #         extras.append(Direction.B)
-    #     if surface(x_ + dx, y_) * surface(x_ + 2 * dx, y_) < 0:
-    #         extras.append(Direction.R)
-    # for extra in extras.copy():
-    #     if (extra == Direction.R and i + 3 >= nx) or (extra == Direction.L and i - 3 < 0) or (extra == Direction.T and j + 3 >= ny) or (extra == Direction.B and j - 3 < 0):
-    #         extras.pop()
-    # return extras
-
-
-
-
 
 def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     x, y = center(i, j)

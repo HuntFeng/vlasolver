@@ -1447,10 +1447,6 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
         for k in range(5):
             N[d, offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[d][k]
 
-    print(f"{i,j}, eta={eta}")
-    print(f"direction={[_FACE_NAME[d] for d in dir]}, extra={_FACE_NAME[extra]}")
-    print(f"D={D}")
-    print(f"M\n={M}")
     M_inv_d = np.linalg.solve(M, D)
     M_inv_N = np.linalg.solve(M, N)
 

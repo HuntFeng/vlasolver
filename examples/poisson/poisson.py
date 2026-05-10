@@ -425,6 +425,8 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
         eps_p = permittivity(x, y + s * (theta + EPS) * dy)
         eps_m = permittivity(x, y + s * (theta - EPS) * dy)
     eps_jump = eps_p - eps_m
+    if eta > 0:
+        eps_jump = -eps_jump
 
     # Geometric correction: extension point per direction
     _ext = {
@@ -511,7 +513,6 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
     dx_dir, dy_dir = _dir_step[direction]
     for k in range(4):
         N[offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[k]
-
 
     M_inv_N = N / M
     M_inv_d = D / M
@@ -1419,15 +1420,6 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     D[:] = [a_tau_term[d] + b_term[d] - a_term[d] for d in range(3)]
 
     _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
-    # M[0, 0] = B[0, 0] - grad_coeff[0][_grad_idx[dir[0]]]
-    # M[1, 1] = B[1, 1] - grad_coeff[1][_grad_idx[dir[1]]]
-    # M[2, 2] = B[2, 2] - grad_coeff[2][_grad_idx[dir[2]]]
-    # M[0, 1] = -grad_coeff[0][_grad_idx[dir[1]]]
-    # M[0, 2] = -grad_coeff[0][_grad_idx[dir[2]]]
-    # M[1, 0] = -grad_coeff[1][_grad_idx[dir[0]]]
-    # M[1, 2] = -grad_coeff[1][_grad_idx[dir[2]]]
-    # M[2, 0] = -grad_coeff[2][_grad_idx[dir[0]]]
-    # M[2, 1] = -grad_coeff[2][_grad_idx[dir[1]]]
     M = B
     M[0, 0] -= grad_coeff[0][_grad_idx[dir[0]]]
     M[0, 1] -= grad_coeff[0][_grad_idx[dir[1]]]
@@ -1455,6 +1447,10 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
         for k in range(5):
             N[d, offset((k - 1) * dx_dir, (k - 1) * dy_dir)] -= C[d][k]
 
+    print(f"{i,j}, eta={eta}")
+    print(f"direction={[_FACE_NAME[d] for d in dir]}, extra={_FACE_NAME[extra]}")
+    print(f"D={D}")
+    print(f"M\n={M}")
     M_inv_d = np.linalg.solve(M, D)
     M_inv_N = np.linalg.solve(M, N)
 

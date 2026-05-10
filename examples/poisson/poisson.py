@@ -365,13 +365,13 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
 
     # Extra stencil entries for directions orthogonal to the current one
     add_terms = {}
-    if direction != Direction.R:
+    if not (direction & Direction.R):
         add_terms[(1, 0)] = eps_r / theta_r / bot_x
-    if direction != Direction.L:
+    if not (direction & Direction.L):
         add_terms[(-1, 0)] = eps_l / theta_l / bot_x
-    if direction != Direction.T:
+    if not (direction & Direction.T):
         add_terms[(0, 1)] = eps_t / theta_t / bot_y
-    if direction != Direction.B:
+    if not (direction & Direction.B):
         add_terms[(0, -1)] = eps_b / theta_b / bot_y
 
     for offset_x in range(-2, 3):
@@ -512,13 +512,13 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
 
     # Extra stencil entries for directions orthogonal to the current one
     add_terms = {}
-    if dir[0] != Direction.R:
+    if not (direction & Direction.R):
         add_terms[(1, 0)] = eps_r / theta_r / bot_x
-    if dir[0] != Direction.L:
+    if not (direction & Direction.L):
         add_terms[(-1, 0)] = eps_l / theta_l / bot_x
-    if dir[1] != Direction.T:
+    if not (direction & Direction.T):
         add_terms[(0, 1)] = eps_t / theta_t / bot_y
-    if dir[1] != Direction.B:
+    if not (direction & Direction.B):
         add_terms[(0, -1)] = eps_b / theta_b / bot_y
 
     for offset_x in range(-2, 3):
@@ -1007,13 +1007,13 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
 
     # Extra stencil entries for directions orthogonal to the current one
     add_terms = {}
-    if dir[0] != Direction.R:
+    if not (direction & Direction.R):
         add_terms[(1, 0)] = eps_r / theta_r / bot_x
-    if dir[0] != Direction.L:
+    if not (direction & Direction.L):
         add_terms[(-1, 0)] = eps_l / theta_l / bot_x
-    if dir[1] != Direction.T:
+    if not (direction & Direction.T):
         add_terms[(0, 1)] = eps_t / theta_t / bot_y
-    if dir[1] != Direction.B:
+    if not (direction & Direction.B):
         add_terms[(0, -1)] = eps_b / theta_b / bot_y
 
     for offset_x in range(-3, 4):
@@ -1161,13 +1161,13 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
     f[i, j] -= sum(M_inv_d[d] * sub_coeff[d] for d in range(3))
 
     add_terms = {}
-    if Direction.R not in dir:
+    if not (direction & Direction.R):
         add_terms[(1, 0)] = eps_r / theta_r / bot_x
-    if Direction.L not in dir:
+    if not (direction & Direction.L):
         add_terms[(-1, 0)] = eps_l / theta_l / bot_x
-    if Direction.T not in dir:
+    if not (direction & Direction.T):
         add_terms[(0, 1)] = eps_t / theta_t / bot_y
-    if Direction.B not in dir:
+    if not (direction & Direction.B):
         add_terms[(0, -1)] = eps_b / theta_b / bot_y
 
     for offset_x in range(-2, 3):

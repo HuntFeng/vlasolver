@@ -114,6 +114,7 @@ class Direction(enum.IntFlag):
     L = 1 << 2  # 0100
     B = 1 << 3  # 1000
 
+
 def dirsign(direction: int):
     if direction == Direction.R or direction == Direction.T:
         return 1.0
@@ -331,6 +332,7 @@ def interp(direction: int, theta: float, i: int, j: int, field: np.ndarray) -> f
         )
     return 0.5 * t_matrix @ c_matrix @ points
 
+
 def compute_P_inv(
     x: float,
     y: float,
@@ -352,6 +354,7 @@ def compute_P_inv(
         ]
     )
     return np.linalg.inv(P_mat)
+
 
 def compute_a_tau_field() -> np.ndarray:
     """Compute tangential derivative of jump condition a at (i, j)"""
@@ -777,7 +780,6 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
     bot_x = (theta_r + theta_l) / 2 * dx**2
     bot_y = (theta_t + theta_b) / 2 * dy**2
 
-
     eps_p = [
         permittivity(x + s[0] * (theta[0] + EPS) * dx, y),
         permittivity(x, y + s[1] * (theta[1] + EPS) * dy),
@@ -827,7 +829,11 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
         for d in range(2)
     ]
     a_term = [
-        -s[d] * a_I[d] * eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
+        -s[d]
+        * a_I[d]
+        * eps_p[d]
+        * (3 - 2 * theta[d])
+        / ((1 - theta[d]) * (2 - theta[d]))
         for d in range(2)
     ]
 
@@ -847,11 +853,13 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
     ]
     n_norm = [n1_I[0], n2_I[1]]
     n_tang = [-n2_I[0], n1_I[1]]
-    grad_coeff = [dr[d] * eps_jump[d] * n_tang[d] * grad_tau[d] @ P_inv for d in range(2) ]
+    grad_coeff = [
+        dr[d] * eps_jump[d] * n_tang[d] * grad_tau[d] @ P_inv for d in range(2)
+    ]
     a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(2)]
     b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(2)]
 
-    D[:] = [ a_tau_term[d] + b_term[d] - a_term[d] for d in range(2) ]
+    D[:] = [a_tau_term[d] + b_term[d] - a_term[d] for d in range(2)]
 
     _grad_idx = {Direction.R: 0, Direction.L: 1, Direction.T: 2, Direction.B: 3}
     M[0, 0] = B[0] - grad_coeff[0][_grad_idx[dir[0]]]
@@ -881,7 +889,7 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
     M_inv_d = np.linalg.solve(M, D)
     M_inv_N = np.linalg.solve(M, N)
 
-    sub_coeff = [ eps[0] / theta[0] / bot_x, eps[1] / theta[1] / bot_y ]
+    sub_coeff = [eps[0] / theta[0] / bot_x, eps[1] / theta[1] / bot_y]
     f[i, j] -= M_inv_d[0] * sub_coeff[0] + M_inv_d[1] * sub_coeff[1]
 
     # Extra stencil entries for directions orthogonal to the current one
@@ -898,9 +906,9 @@ def coeff_case2(direction: int, i: int, j: int) -> None:
     for offset_x in range(-2, 3):
         for offset_y in range(-2, 3):
             value = (
-                    M_inv_N[0, offset(offset_x, offset_y)] * sub_coeff[0]
-                    + M_inv_N[1, offset(offset_x, offset_y)] * sub_coeff[1]
-                )
+                M_inv_N[0, offset(offset_x, offset_y)] * sub_coeff[0]
+                + M_inv_N[1, offset(offset_x, offset_y)] * sub_coeff[1]
+            )
             if (offset_x, offset_y) == (0, 0):
                 value += (
                     -(eps_r / theta_r + eps_l / theta_l) / bot_x
@@ -1390,7 +1398,11 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
         for d in range(3)
     ]
     a_term = [
-        -s[d] * a_I[d] * eps_p[d] * (3 - 2 * theta[d]) / ((1 - theta[d]) * (2 - theta[d]))
+        -s[d]
+        * a_I[d]
+        * eps_p[d]
+        * (3 - 2 * theta[d])
+        / ((1 - theta[d]) * (2 - theta[d]))
         for d in range(3)
     ]
 
@@ -1410,7 +1422,9 @@ def coeff_case4(direction: int, i: int, j: int) -> None:
     ]
     n_norm = [n1_I[d] if is_x[d] else n2_I[d] for d in range(3)]
     n_tang = [-n2_I[d] if is_x[d] else n1_I[d] for d in range(3)]
-    grad_coeff = [dr[d] * eps_jump[d] * n_tang[d] * grad_tau[d] @ P_inv for d in range(3)]
+    grad_coeff = [
+        dr[d] * eps_jump[d] * n_tang[d] * grad_tau[d] @ P_inv for d in range(3)
+    ]
     a_tau_term = [dr[d] * a_tau_I[d] * eps_p[d] * n_tang[d] for d in range(3)]
     b_term = [dr[d] * b_I[d] * n_norm[d] for d in range(3)]
 

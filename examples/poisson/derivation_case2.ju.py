@@ -299,6 +299,7 @@ def coeff_case2(
     print("d[1]")
     display(d[1])
 
+
 def geometric_jump(
     eta: Literal[1, -1],
     direction: int,
@@ -332,7 +333,7 @@ def geometric_jump(
             b * ny + beta_jump * nx * (-ny * dudx + nx * dudy) + beta_m * a_tau * nx
         ).subs(vars_y_p)
     beta_uy_jump_algebra = beta_p * dudy.subs(vars_y_p) - beta_m * dudy.subs(vars_y_m)
-    
+
     expanded_x = beta_ux_jump_geometry.expand()
     expanded_y = beta_uy_jump_geometry.expand()
 
@@ -351,10 +352,9 @@ def geometric_jump(
         u_pm_x = uR_m if eta < 0 else uR_p
         u_pm_y = uB_m if eta < 0 else uB_p
 
-
     for i, expanded in enumerate([expanded_x, expanded_y]):
-        print(f"{"x" if i==0 else "y"} direction")
-        u_pm = u_pm_x if i==0 else u_pm_y
+        print(f"{'x' if i == 0 else 'y'} direction")
+        u_pm = u_pm_x if i == 0 else u_pm_y
         u_pm_coeff = expanded.coeff(u_pm).factor()
         print("u_p_coeff")
         display(u_pm_coeff)
@@ -375,6 +375,7 @@ def geometric_jump(
     print("eval at y direction, order R,L,T,B,c,ext")
     for coeff in u_coeff:
         display(coeff.subs(vars_y_m).expand().factor())
+
 
 # %% [markdown]
 # ## $\eta < 0$

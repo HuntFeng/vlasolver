@@ -125,9 +125,13 @@ def algebraic_jump(eta, pt):
     dudy = grad_P.components[coord.j]
 
     if pt["axis"] == "x":
-        beta_ujump_algebra = beta_p * dudx.subs(pt["vars_p"]) - beta_m * dudx.subs(pt["vars_m"])
+        beta_ujump_algebra = beta_p * dudx.subs(pt["vars_p"]) - beta_m * dudx.subs(
+            pt["vars_m"]
+        )
     else:
-        beta_ujump_algebra = beta_p * dudy.subs(pt["vars_p"]) - beta_m * dudy.subs(pt["vars_m"])
+        beta_ujump_algebra = beta_p * dudy.subs(pt["vars_p"]) - beta_m * dudy.subs(
+            pt["vars_m"]
+        )
 
     if eta < 0:
         u_pm = pt["u_m"]
@@ -198,8 +202,11 @@ def geometric_jump(eta, pt):
     display(grad_term)
 
     grad_ops = sp.Matrix([-2 * x * ny, x * nx - y * ny, 2 * y * nx, -ny, nx, 0]).T
-    u_coeff = (-beta_jump * ny * grad_ops @ A_inv if pt["axis"] == "x"
-               else beta_jump * nx * grad_ops @ A_inv)
+    u_coeff = (
+        -beta_jump * ny * grad_ops @ A_inv
+        if pt["axis"] == "x"
+        else beta_jump * nx * grad_ops @ A_inv
+    )
     print("u_coeff factors:")
     for coeff in u_coeff:
         display(coeff.subs(pt["vars_m"] if eta < 0 else pt["vars_p"]).expand().factor())

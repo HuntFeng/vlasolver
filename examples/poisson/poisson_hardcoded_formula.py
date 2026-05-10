@@ -622,7 +622,7 @@ def _solve_case2_local(direction: int, i: int, j: int):
         1, cd_y, cd_x, theta_y, theta_x, n1_y, n2_y, eps_p_y, eps_m_y, eps_jump_y
     )
 
-    print(f"(i,j)={(i,j)}")
+    print(f"(i,j)={(i, j)}")
     print(f"eta={eta}")
     print(f"direction={_FACE_NAME[cd_x.face]}|{_FACE_NAME[cd_y.face]}")
     # print(f"theta_x={theta_x}, theta_y={theta_y}")

@@ -26,10 +26,6 @@ def dirsign(direction: int, is_extra=False):
         raise ValueError("Invalid direction for dirsign", direction)
 
 
-
-_FACE_NAME = {Direction.R: "R", Direction.T: "T", Direction.L: "L", Direction.B: "B"}
-
-
 def surface(x: float, y: float) -> float:
     pass
 
@@ -251,10 +247,10 @@ def _assemble_MND(
         Direction.B: (0, -1),
     }
     for d in range(n_intf):
-        N[d, offset(1, 0)] = grad_coeff[d][0] if Direction.R not in gate_x_dirs else 0.0
-        N[d, offset(-1, 0)] = grad_coeff[d][1] if Direction.L not in gate_x_dirs else 0.0
-        N[d, offset(0, 1)] = grad_coeff[d][2] if Direction.T not in gate_y_dirs else 0.0
-        N[d, offset(0, -1)] = grad_coeff[d][3] if Direction.B not in gate_y_dirs else 0.0
+        N[d, offset(1, 0)] = grad_coeff[d][0] if not (Direction.R in dirs) else 0.0
+        N[d, offset(-1, 0)] = grad_coeff[d][1] if not (Direction.L in dirs) else 0.0
+        N[d, offset(0, 1)] = grad_coeff[d][2] if not (Direction.T in dirs) else 0.0
+        N[d, offset(0, -1)] = grad_coeff[d][3] if not (Direction.B in dirs) else 0.0
         N[d, offset(0, 0)] = grad_coeff[d][4]
         N[d, offset(*offset_ext)] = grad_coeff[d][5]
 
@@ -1322,13 +1318,11 @@ def interface_value_case1(
     all_offsets = [(ox, oy) for ox in range(-2, 3) for oy in range(-2, 3)]
     u_arr = np.array([u[i + di, j + dj] for (di, dj) in all_offsets])
     ghost = float(M_inv_N @ u_arr + M_inv_d)
-
-    sw_idx = {_FACE_NAME[direction]: 0}
-    geom = {
-        "theta_R": theta_r, "theta_T": theta_t,
-        "theta_L": theta_l, "theta_B": theta_b,
-    }
-    return _pack_iface_values(sw_idx, np.array([ghost]), geom, i, j, u)
+    u_l = ghost if direction & Direction.L else u[i - 1, j]
+    u_r = ghost if direction & Direction.R else u[i + 1, j]
+    u_b = ghost if direction & Direction.B else u[i, j - 1]
+    u_t = ghost if direction & Direction.T else u[i, j + 1]
+    return u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t
 
 
 def interface_value_case2(
@@ -1347,11 +1341,6 @@ def interface_value_case2(
     x_l = x - theta_l * dx
     y_t = y + theta_t * dy
     y_b = y - theta_b * dy
-
-    eps_r = permittivity(x + theta_r * dx / 2, y)
-    eps_l = permittivity(x - theta_l * dx / 2, y)
-    eps_t = permittivity(x, y + theta_t * dy / 2)
-    eps_b = permittivity(x, y - theta_b * dy / 2)
 
     if direction == Direction.R | Direction.T:
         dir = [Direction.R, Direction.T]
@@ -1432,13 +1421,11 @@ def interface_value_case2(
     all_offsets = [(ox, oy) for ox in range(-2, 3) for oy in range(-2, 3)]
     u_arr = np.array([u[i + di, j + dj] for (di, dj) in all_offsets])
     ghosts = M_inv_N @ u_arr + M_inv_d
-
-    sw_idx = {_FACE_NAME[dir[0]]: 0, _FACE_NAME[dir[1]]: 1}
-    geom = {
-        "theta_R": theta_r, "theta_T": theta_t,
-        "theta_L": theta_l, "theta_B": theta_b,
-    }
-    return _pack_iface_values(sw_idx, ghosts, geom, i, j, u)
+    u_l = ghosts[0] if direction & Direction.L else u[i - 1, j]
+    u_r = ghosts[0] if direction & Direction.R else u[i + 1, j]
+    u_b = ghosts[1] if direction & Direction.B else u[i, j - 1]
+    u_t = ghosts[1] if direction & Direction.T else u[i, j + 1]
+    return u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t
 
 
 def interface_value_case3(
@@ -1777,35 +1764,11 @@ def interface_value_case3(
     all_offsets = [(ox, oy) for ox in range(-3, 4) for oy in range(-3, 4)]
     u_arr = np.array([u[i + di, j + dj] for (di, dj) in all_offsets])
     ghosts = M_inv_N @ u_arr + M_inv_d
-
-    sw_idx = {}
-    for idx, d in enumerate(dir):
-        face = _FACE_NAME[d]
-        if face not in sw_idx:
-            sw_idx[face] = idx
-    geom = {
-        "theta_R": theta_r, "theta_T": theta_t,
-        "theta_L": theta_l, "theta_B": theta_b,
-    }
-    return _pack_iface_values(sw_idx, ghosts, geom, i, j, u)
-
-
-def _pack_iface_values(sw_idx, ghosts, geom, i, j, u):
-    """Return (u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t).
-
-    Cut directions take their value from `ghosts[sw_idx[face]]`; uncut
-    directions return the regular grid neighbour and theta = 1.
-    """
-    u_l = ghosts[sw_idx["L"]] if "L" in sw_idx else u[i - 1, j]
-    u_r = ghosts[sw_idx["R"]] if "R" in sw_idx else u[i + 1, j]
-    u_b = ghosts[sw_idx["B"]] if "B" in sw_idx else u[i, j - 1]
-    u_t = ghosts[sw_idx["T"]] if "T" in sw_idx else u[i, j + 1]
-    theta_l = geom["theta_L"] if "L" in sw_idx else 1.0
-    theta_r = geom["theta_R"] if "R" in sw_idx else 1.0
-    theta_b = geom["theta_B"] if "B" in sw_idx else 1.0
-    theta_t = geom["theta_T"] if "T" in sw_idx else 1.0
+    u_l = ghosts[0] if direction & Direction.L else u[i - 1, j]
+    u_r = ghosts[0] if direction & Direction.R else u[i + 1, j]
+    u_b = ghosts[1] if direction & Direction.B else u[i, j - 1]
+    u_t = ghosts[1] if direction & Direction.T else u[i, j + 1]
     return u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t
-
 
 def interface_value_case4(
     direction: int, i: int, j: int, u: np.ndarray
@@ -1920,13 +1883,11 @@ def interface_value_case4(
     all_offsets = [(ox, oy) for ox in range(-2, 3) for oy in range(-2, 3)]
     u_arr = np.array([u[i + di, j + dj] for (di, dj) in all_offsets])
     ghosts = M_inv_N @ u_arr + M_inv_d
-
-    sw_idx = {_FACE_NAME[dir[0]]: 0, _FACE_NAME[dir[1]]: 1, _FACE_NAME[dir[2]]: 2}
-    geom = {
-        "theta_R": theta_r, "theta_T": theta_t,
-        "theta_L": theta_l, "theta_B": theta_b,
-    }
-    return _pack_iface_values(sw_idx, ghosts, geom, i, j, u)
+    u_l = ghosts[dir.index(Direction.L)] if direction & Direction.L else u[i - 1, j]
+    u_r = ghosts[dir.index(Direction.R)] if direction & Direction.R else u[i + 1, j]
+    u_b = ghosts[dir.index(Direction.B)] if direction & Direction.B else u[i, j - 1]
+    u_t = ghosts[dir.index(Direction.T)] if direction & Direction.T else u[i, j + 1]
+    return u_l, u_r, u_b, u_t, theta_l, theta_r, theta_b, theta_t
 
 
 def gradient(u: np.ndarray):
@@ -2652,5 +2613,5 @@ if __name__ == "__main__":
     # convergence_test1()
     # convergence_test2()
     # convergence_test3()
-    # convergence_test4()
-    convergence_test5()
+    convergence_test4()
+    # convergence_test5()

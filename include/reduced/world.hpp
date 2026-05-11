@@ -48,6 +48,7 @@ struct World {
     Kokkos::View<double**> phi;        // potential field (assuming Boltzmann distribution for electron)
     Kokkos::View<double***> E;         // Ex(x,y), E_y(x,y)
     Kokkos::View<PoissonBCPair**, Kokkos::HostSpace> poisson_bc_map;
+    Kokkos::View<double***> norm_vec; // normal vector
 
     // simulation time control
     double dt           = 0.0; // time step size
@@ -70,12 +71,14 @@ struct World {
         phi                     = Kokkos::View<double**>("phi", nx, ny);
         E                       = Kokkos::View<double***>("E", nx, ny, 2);
         poisson_bc_map          = Kokkos::View<PoissonBCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
+        norm_vec                  = Kokkos::View<double***>("norm_vec", nx, ny, 2);
         Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_1st, 0.0);
         Kokkos::deep_copy(ep_l, 0.0);
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::deep_copy(phi, 0.0);
         Kokkos::deep_copy(E, 0.0);
+        Kokkos::deep_copy(norm_vec, 0.0);
     }
     /**
      * Expression of the immersed boundary.

@@ -3,7 +3,6 @@ import os
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Wedge
 
 plt.rcParams.update(
     {
@@ -17,7 +16,7 @@ plt.rcParams.update(
     }
 )
 
-nx, ny = 100, 100
+nx, ny = 128, 128
 Lx, Ly = 1, 1
 G = 3
 is_include_star = True
@@ -38,15 +37,12 @@ x = np.arange(dx / 2 - G * dx, Lx + G * dx, dx)
 y = np.arange(dy / 2 - G * dy, Ly + G * dy, dy)
 X, Y = np.meshgrid(x, y, indexing="ij")
 
-# fig = plt.figure()
 def surface(x, y):
     x0 = 0.5
     y0 = 0.5
     rr = np.sqrt(np.pow(x - x0, 2) + np.pow(y - y0, 2));
     ang = np.atan2(y - y0, x - x0);
     return rr - (0.3 + 0.1 * np.sin(4 * ang));
-# s_eta = np.sign(surface(X,Y))
-# plt.pcolormesh(X,Y, s_eta)
 
 fig, ax = plt.subplots(figsize=(6, 3))
 c = ax.contourf(X, Y, ni, cmap="jet", levels=50)
@@ -55,17 +51,6 @@ plt.title("$n_i$")
 if is_include_star:
     ax.contourf(X, Y, surface(X,Y), levels=[-100, 0], colors='white')
     ax.contour(X, Y, surface(X,Y), levels=[0], colors='black', linewidths=2)
-# if is_include_circle:
-#     circle = Wedge(
-#         center=(0.375, 0),
-#         r=0.125,
-#         theta1=0,
-#         theta2=180,
-#         facecolor="white",
-#         edgecolor="k",
-#         linewidth=2,
-#     )
-#     ax.add_patch(circle)
 ax.set_xlim(0, 1)
 ax.set_ylim(0, 1)
 ax.set_xlabel("$x/L_x$")
@@ -80,17 +65,6 @@ plt.title("$e\\phi/2k_BT_i$")
 if is_include_star:
     ax.contourf(X, Y, surface(X,Y), levels=[-100, 0], colors='white')
     ax.contour(X, Y, surface(X,Y), levels=[0], colors='black', linewidths=2)
-# if is_include_circle:
-#     circle = Wedge(
-#         center=(0.375, 0),
-#         r=0.125,
-#         theta1=0,
-#         theta2=180,
-#         facecolor="white",
-#         edgecolor="k",
-#         linewidth=2,
-#     )
-#     ax.add_patch(circle)
 ax.set_xlim(0, 1)
 ax.set_ylim(0, 1)
 ax.set_xlabel("$x/L_x$")
@@ -105,17 +79,6 @@ plt.title("$eE_x/m_ev_{th,e}\\omega_{pe}$")
 if is_include_star:
     ax.contourf(X, Y, surface(X,Y), levels=[-100, 0], colors='white')
     ax.contour(X, Y, surface(X,Y), levels=[0], colors='black', linewidths=2)
-# if is_include_circle:
-#     circle = Wedge(
-#         center=(0.375, 0),
-#         r=0.125,
-#         theta1=0,
-#         theta2=180,
-#         facecolor="white",
-#         edgecolor="k",
-#         linewidth=2,
-#     )
-#     ax.add_patch(circle)
 ax.set_xlim(dx / 2, Lx - dx / 2)
 ax.set_ylim(dy / 2, Ly - dy / 2)
 ax.set_xlabel("$x/L_x$")

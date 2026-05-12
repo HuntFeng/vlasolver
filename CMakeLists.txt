@@ -39,6 +39,8 @@ add_executable(poisson_cylinder examples/poisson_cylinder/main.cpp)
 target_link_libraries(poisson_cylinder PRIVATE vlasolver)
 add_executable(cylinder_2nd_order examples/cylinder_2nd_order/main.cpp)
 target_link_libraries(cylinder_2nd_order PRIVATE vlasolver)
+add_executable(star examples/star/main.cpp)
+target_link_libraries(star PRIVATE vlasolver)
 
 # Print helpful information when configuration is done
 message(STATUS "")

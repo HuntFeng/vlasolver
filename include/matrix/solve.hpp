@@ -21,7 +21,7 @@ KOKKOS_INLINE_FUNCTION void solve_linear_system(Kokkos::Array<Kokkos::Array<doub
         }
     }
 
-    for (int i = N; i >= 0; --i) {
+    for (int i = N - 1; i >= 0; --i) {
         double sum = b[i];
         for (int j = i + 1; j < N; ++j) {
             sum -= A[i][j] * b[j];

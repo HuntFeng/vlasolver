@@ -6,6 +6,7 @@
  *
  **/
 #pragma once
+#include "matrix/solve.hpp"
 #include "reduced/poisson.hpp"
 #include "reduced/world.hpp"
 #include <KokkosKernels_Handle.hpp>
@@ -29,6 +30,20 @@ enum Direction : size_t {
 struct InterfaceValue {
     double u_l, u_r, u_b, u_t;
     double theta_l, theta_r, theta_b, theta_t;
+};
+
+struct InterCaseResult {
+    double M_inv_d[3];
+    double M_inv_N[3][49]; // [n_intf][stencil_size]; 49 = max (case3 7x7)
+    double theta_r, theta_l, theta_t, theta_b;
+    double bot_x, bot_y;
+    double eps_r, eps_l, eps_t, eps_b;
+    double eps[3];
+    double theta[3];
+    bool is_x[3];
+    size_t dir[3];
+    int n_intf;
+    int stencil_size;
 };
 
 template <typename World>
@@ -62,7 +77,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
     // use to crs format for GMRES performance
     CRS A;
-    // KokkosSparse::Experimental::LUPrec<CRS, KernelHandle> prec;
     std::unique_ptr<KokkosSparse::Experimental::LUPrec<CRS, KernelHandle>> prec;
     Kokkos::View<double*> u;
     Kokkos::View<double*> rhs;
@@ -87,11 +101,15 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
           max_restart(max_restart),
           verbose(verbose) {
 
+        Kokkos::printf("Constructing Poisson solver...\n");
+        Kokkos::printf("Constructing fields\n");
         construct_fields();
+        Kokkos::printf("Constructing matrix\n");
         construct_matrix();
+        Kokkos::printf("Constructing preconditioner\n");
         construct_preconditioner();
-        // construct_preconditioner_spiluk();
 
+        Kokkos::printf("Preapre gmres\n");
         // prepare gmres
         kh.create_gmres_handle(gmres_m, tol, max_restart);
         auto gmres_handle = kh.get_gmres_handle();
@@ -157,29 +175,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         return (dir_sign * d1 - eta_sign * sqrt(disc)) / (2.0 * d2);
     }
 
-    /**
-     * cubic interpolation
-     */
     double interp(size_t direction, double theta, int i, int j, Kokkos::View<double**, Kokkos::HostSpace>& field) {
         using Kokkos::pow;
-        // double t_matrix[4]    = {1, theta, pow(theta, 2), pow(theta, 3)};
-        // double c_matrix[4][4] = {
-        //     {0.0, 2.0, 0.0, 0.0},
-        //     {-1.0, 0.0, 1.0, 0.0},
-        //     {2.0, -5.0, 4.0, -1.0},
-        //     {-1.0, 3.0, -3.0, 1.0},
-        // };
-        // double points[4];
-        // if (direction == Direction::R)
-        //     double points[4] = {field(i - 1, j), field(i, j), field(i + 1, j), field(i + 2, j)};
-        // else if (direction == Direction::T)
-        //     double points[4] = {field(i, j - 1), field(i, j), field(i, j + 1), field(i, j + 2)};
-        // else if (direction == Direction::L)
-        //     double points[4] = {field(i + 1, j), field(i, j), field(i - 1, j), field(i - 2, j)};
-        // else if (direction == Direction::B)
-        //     double points[4] = {field(i, j + 1), field(i, j), field(i, j - 1), field(i, j - 2)};
-        // else
-        //     Kokkos::abort("Interp invalid direction for interpolation");
         Kokkos::Array<double, 4> t_matrix{1, theta, pow(theta, 2), pow(theta, 3)};
         Kokkos::Array<Kokkos::Array<double, 4>, 4> c_matrix{{
             {0.0, 2.0, 0.0, 0.0},
@@ -204,13 +201,180 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 val_I += 0.5 * t_matrix[p] * c_matrix[p][q] * points[q];
             }
         }
-
         return val_I;
     }
 
-    /**
-     * Matrix entry for cells having no cuts by interface
-     */
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    KOKKOS_INLINE_FUNCTION
+    double dirsign(size_t direction, bool is_extra = false) const {
+        if (direction == Direction::R || direction == Direction::T)
+            return is_extra ? -1.0 : 1.0;
+        return is_extra ? 1.0 : -1.0;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    void per_iface_algebraic(double s_eta,
+                             double s,
+                             double eps_p,
+                             double eps_m,
+                             double theta,
+                             double a_I,
+                             double& B_val,
+                             Kokkos::Array<double, 4>& C_arr,
+                             double& a_term) const {
+        double _phi = (3.0 - 2.0 * theta) / ((1.0 - theta) * (2.0 - theta));
+        double _psi = (2.0 * theta + 1.0) / (theta * (theta + 1.0));
+        B_val       = s_eta * s * (eps_p * _phi + eps_m * _psi);
+        C_arr[0]    = -s_eta * s * (-eps_m * theta / (1.0 + theta));
+        C_arr[1]    = -s_eta * s * (eps_m * (1.0 + theta) / theta);
+        C_arr[2]    = -s_eta * s * (eps_p * (2.0 - theta) / (1.0 - theta));
+        C_arr[3]    = -s_eta * s * (-eps_p * (1.0 - theta) / (2.0 - theta));
+        a_term      = -s * a_I * eps_p * _phi;
+    }
+
+    void compute_P_inv(double x,
+                       double y,
+                       double x_r,
+                       double x_l,
+                       double x_ext,
+                       double y_t,
+                       double y_b,
+                       double y_ext,
+                       double P_inv[6][6]) {
+        // Build P matrix (6x6) and its transpose
+        double P_T[6][6] = {
+            {x_r * x_r, x_l * x_l, x * x, x * x, x * x, x_ext * x_ext},
+            {x_r * y, x_l * y, x * y_t, x * y_b, x * y, x_ext * y_ext},
+            {y * y, y * y, y_t * y_t, y_b * y_b, y * y, y_ext * y_ext},
+            {x_r, x_l, x, x, x, x_ext},
+            {y, y, y_t, y_b, y, y_ext},
+            {1.0, 1.0, 1.0, 1.0, 1.0, 1.0},
+        };
+
+        // Solve P^T * X = I column by column using solve_linear_system<6>
+        Kokkos::Array<Kokkos::Array<double, 6>, 6> PT_k;
+        Kokkos::Array<double, 6> rhs;
+        for (int col = 0; col < 6; ++col) {
+            // Copy P^T into Kokkos::Array
+            for (int i = 0; i < 6; ++i) {
+                for (int j = 0; j < 6; ++j)
+                    PT_k[i][j] = P_T[i][j];
+                rhs[i] = (i == col) ? 1.0 : 0.0;
+            }
+            solve_linear_system<6>(PT_k, rhs);
+            for (int i = 0; i < 6; ++i)
+                P_inv[i][col] = rhs[i];
+        }
+    }
+
+    void compute_grad_coeff(
+        double x_I, double y_I, double n1_I, double n2_I, const double P_inv[6][6], double grad_coeff_out[6]) {
+        double grad_tau[6] = {
+            -2.0 * x_I * n2_I, x_I * n1_I - y_I * n2_I, 2.0 * y_I * n1_I, -n2_I, n1_I, 0.0,
+        };
+        for (int j = 0; j < 6; ++j) {
+            grad_coeff_out[j] = 0.0;
+            for (int k = 0; k < 6; ++k)
+                grad_coeff_out[j] += grad_tau[k] * P_inv[k][j];
+        }
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    void invert3x3(const double M[3][3], double invM[3][3]) const {
+        double det = M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) -
+                     M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) +
+                     M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+        invM[0][0] = (M[1][1] * M[2][2] - M[1][2] * M[2][1]) / det;
+        invM[0][1] = -(M[0][1] * M[2][2] - M[0][2] * M[2][1]) / det;
+        invM[0][2] = (M[0][1] * M[1][2] - M[0][2] * M[1][1]) / det;
+        invM[1][0] = -(M[1][0] * M[2][2] - M[1][2] * M[2][0]) / det;
+        invM[1][1] = (M[0][0] * M[2][2] - M[0][2] * M[2][0]) / det;
+        invM[1][2] = -(M[0][0] * M[1][2] - M[0][2] * M[1][0]) / det;
+        invM[2][0] = (M[1][0] * M[2][1] - M[1][1] * M[2][0]) / det;
+        invM[2][1] = -(M[0][0] * M[2][1] - M[0][1] * M[2][0]) / det;
+        invM[2][2] = (M[0][0] * M[1][1] - M[0][1] * M[1][0]) / det;
+    }
+
+    static inline int offset25(int ox, int oy) { return (ox + 2) * 5 + (oy + 2); }
+    static inline int offset49(int ox, int oy) { return (ox + 3) * 7 + (oy + 3); }
+
+    // Unified assembly of M, N, D for n_intf interfaces.
+    // When B_diag is true,  B is a scalar per interface (size n_intf).
+    // When B_diag is false, B is a full n_intf x n_intf matrix.
+    template <int stencil_size>
+    void assemble_MND(int n_intf,
+                      const double* B_diag,
+                      const double B_full[3][3],
+                      const Kokkos::Array<double, 4>* C,
+                      int c_size,
+                      const double* a_term,
+                      const double grad_coeff[3][6],
+                      const double* a_tau_term,
+                      const double* b_term,
+                      const size_t* dirs,
+                      int (*offset_fn)(int, int),
+                      const int offset_ext[2],
+                      double M[3][3],
+                      double N[3][stencil_size],
+                      double D[3]) {
+        int grad_idx[9]        = {};
+        grad_idx[Direction::R] = 0;
+        grad_idx[Direction::L] = 1;
+        grad_idx[Direction::T] = 2;
+        grad_idx[Direction::B] = 3;
+
+        for (int d = 0; d < n_intf; ++d)
+            D[d] = a_tau_term[d] + b_term[d] - a_term[d];
+
+        // M starts from algebraic B and subtracts grad_coeff coupling
+        for (int d = 0; d < n_intf; ++d) {
+            for (int e = 0; e < n_intf; ++e) {
+                double Bde = (d == e) ? (B_diag ? B_diag[d] : B_full[d][e]) : (B_diag ? 0.0 : B_full[d][e]);
+                M[d][e]    = Bde - grad_coeff[d][grad_idx[dirs[e]]];
+            }
+        }
+
+        for (int d = 0; d < n_intf; ++d)
+            for (int k = 0; k < stencil_size; ++k)
+                N[d][k] = 0.0;
+
+        int dx_dir[9] = {}, dy_dir[9] = {};
+        dx_dir[Direction::R] = 1;
+        dy_dir[Direction::R] = 0;
+        dx_dir[Direction::L] = -1;
+        dy_dir[Direction::L] = 0;
+        dx_dir[Direction::T] = 0;
+        dy_dir[Direction::T] = 1;
+        dx_dir[Direction::B] = 0;
+        dy_dir[Direction::B] = -1;
+
+        auto is_cut          = [&](size_t dflag) {
+            for (int e = 0; e < n_intf; ++e)
+                if (dirs[e] == dflag)
+                    return true;
+            return false;
+        };
+        for (int d = 0; d < n_intf; ++d) {
+            N[d][offset_fn(1, 0)]                         = is_cut(Direction::R) ? 0.0 : grad_coeff[d][0];
+            N[d][offset_fn(-1, 0)]                        = is_cut(Direction::L) ? 0.0 : grad_coeff[d][1];
+            N[d][offset_fn(0, 1)]                         = is_cut(Direction::T) ? 0.0 : grad_coeff[d][2];
+            N[d][offset_fn(0, -1)]                        = is_cut(Direction::B) ? 0.0 : grad_coeff[d][3];
+            N[d][offset_fn(0, 0)]                         = grad_coeff[d][4];
+            N[d][offset_fn(offset_ext[0], offset_ext[1])] = grad_coeff[d][5];
+
+            int dx                                        = dx_dir[dirs[d]];
+            int dy                                        = dy_dir[dirs[d]];
+            for (int k = 0; k < c_size; ++k)
+                N[d][offset_fn((k - 1) * dx, (k - 1) * dy)] -= C[d][k];
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Case 0 -- no cut
+    // -----------------------------------------------------------------------
     void coeff_case0(int i, int j) {
         auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
         double bot_x        = dx * dx;
@@ -222,13 +386,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double eps_t        = world.permittivity(x, y + dy / 2);
 
         int row_idx         = index(i, j);
-        rows_coo.insert(rows_coo.end(), {
-                                            row_idx,
-                                            row_idx,
-                                            row_idx,
-                                            row_idx,
-                                            row_idx,
-                                        });
+        rows_coo.insert(rows_coo.end(), {row_idx, row_idx, row_idx, row_idx, row_idx});
         cols_coo.insert(cols_coo.end(), {
                                             index(i - 1, j),
                                             index(i + 1, j),
@@ -236,1662 +394,1216 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                                             index(i, j + 1),
                                             index(i, j),
                                         });
-
         vals_coo.insert(vals_coo.end(), {
-                                            // u_[i - 1, j]
                                             eps_l / bot_x,
-                                            // u_[i + 1, j]
                                             eps_r / bot_x,
-                                            // u_[i, j - 1]
                                             eps_b / bot_y,
-                                            // u_[i, j + 1]
                                             eps_t / bot_y,
-                                            // u_[i, j]
                                             (-(eps_l + eps_r) / bot_x - (eps_b + eps_t) / bot_y),
                                         });
     }
 
-    /**
-     * Matrix entry for cells having 1 cut by interface
-     */
-    void coeff_case1(size_t direction, int i, int j) {
+    // -----------------------------------------------------------------------
+    // Case 1 -- one interface cut
+    // -----------------------------------------------------------------------
+    InterCaseResult case1(size_t direction, int i, int j) {
         auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
-        int row_idx         = index(i, j);         // laplacian matrix row index
-        double eta          = world.surface(x, y); // assume this is negative for now
+        double eta          = world.surface(x, y);
+        double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
         double theta        = compute_theta(direction, i, j);
         double a_tau_I      = interp(direction, theta, i, j, a_tau);
         double a_I          = interp(direction, theta, i, j, a);
         double b_I          = interp(direction, theta, i, j, b);
         double n1_I         = interp(direction, theta, i, j, n1);
         double n2_I         = interp(direction, theta, i, j, n2);
+        double s            = dirsign(direction);
+        bool is_x_dir       = (direction == Direction::R || direction == Direction::L);
 
-        if (direction == Direction::R) {
-            double theta_l = 1.0;
-            double theta_r = theta;
-            double theta_t = 1.0;
-            double theta_b = 1.0;
+        double theta_r      = (direction == Direction::R) ? theta : 1.0;
+        double theta_l      = (direction == Direction::L) ? theta : 1.0;
+        double theta_t      = (direction == Direction::T) ? theta : 1.0;
+        double theta_b      = (direction == Direction::B) ? theta : 1.0;
 
-            // common denominator in discretization
-            double bot_x = (theta_r + theta_l) / 2 * dx * dx;
-            double bot_y = (theta_t + theta_b) / 2 * dy * dy;
-
-            // world.permittivity
-            double eps_r = world.permittivity(x + theta_r * dx / 2, y);
-            double eps_l = world.permittivity(x - dx / 2, y);
-            double eps_t = world.permittivity(x, y + dy / 2);
-            double eps_b = world.permittivity(x, y - dy / 2);
-
-            double eps_p, eps_m, eps_jump, _eps_p, _eps_m;
-            if (eta > 0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x + dx, y);
-                eps_jump = _eps_p - _eps_m;
-                // swap these two variable in the d expression
-                eps_p = _eps_m;
-                eps_m = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x + dx, y);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            double d = (-a_tau_I * eps_p * n2_I * dx + b_I * n1_I * dx +
-                        a_I * eps_p * (3 - 2 * theta_r) / ((2 - theta_r) * (1 - theta_r)));
-
-            if (eta > 0) {
-                // in the following formulas, world.permittivity signs are also swapped
-                // the world.permittivity jump stays the same
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            double M    = (-eps_p * (3 - 2 * theta_r) / ((1 - theta_r) * (2 - theta_r)) -
-                        eps_m * (2 * theta_r + 1) / (theta_r * (theta_r + 1)) -
-                        eps_jump * n2_I * n2_I * (2 * theta_r + 1) / (theta_r * (theta_r + 1)));
-
-            double N[7] = {
-                // u[i,j]
-                -eps_jump * n1_I * n2_I * theta_r * dx / dy -
-                    (eps_jump * n2_I * n2_I + eps_m) * (1 + theta_r) / theta_r,
-                // u[i+1,j]
-                -eps_p * (theta_r - 2) / (theta_r - 1),
-                // u[i+2,j]
-                eps_p * (theta_r - 1) / (theta_r - 2),
-                // u[i-1,j]
-                eps_jump * n1_I * n2_I * theta_r * dx / dy + (eps_jump * n2_I * n2_I + eps_m) * theta_r / (1 + theta_r),
-                // u[i,j-1]
-                eps_jump * n1_I * n2_I * (2 * theta_r + 1) * dx / (2 * dy),
-                // u[i,j+1]
-                -eps_jump * n1_I * n2_I * dx / (2 * dy),
-                // u[i-1,j-1]
-                -eps_jump * n1_I * n2_I * theta_r * dx / dy,
-            };
-
-            rhs_h(row_idx) -= (d / M) * eps_r / theta_r / bot_x;
-
-            rows_coo.insert(rows_coo.end(), 7, row_idx);
-            cols_coo.insert(cols_coo.end(), {
-                                                index(i, j),
-                                                index(i + 1, j),
-                                                index(i + 2, j),
-                                                index(i - 1, j),
-                                                index(i, j - 1),
-                                                index(i, j + 1),
-                                                index(i - 1, j - 1),
-                                            });
-            vals_coo.insert(vals_coo.end(),
-                            {
-                                // u[i,j]
-                                (N[0] / M) * eps_r / theta_r / bot_x - (eps_r / theta_r + eps_l / theta_l) / bot_x -
-                                    (eps_t / theta_t + eps_b / theta_b) / bot_y,
-                                // u[i+1,j]
-                                (N[1] / M) * eps_r / theta_r / bot_x,
-                                // u[i+2,j]
-                                (N[2] / M) * eps_r / theta_r / bot_x,
-                                // u[i-1,j]
-                                (N[3] / M) * eps_r / theta_r / bot_x + eps_l / theta_l / bot_x,
-                                // u[i,j-1]
-                                (N[4] / M) * eps_r / theta_r / bot_x + eps_b / theta_b / bot_y,
-                                // u[i,j+1]
-                                (N[5] / M) * eps_r / theta_r / bot_x + eps_t / theta_t / bot_y,
-                                // u_ext at [i-1,j-1]
-                                (N[6] / M) * eps_r / theta_r / bot_x,
-                            });
-        } else if (direction == Direction::T) {
-            double theta_l = 1.0;
-            double theta_r = 1.0;
-            double theta_t = theta;
-            double theta_b = 1.0;
-
-            double bot_x   = (theta_r + theta_l) / 2.0 * (dx * dx);
-            double bot_y   = (theta_t + theta_b) / 2.0 * (dy * dy);
-
-            double eps_r   = world.permittivity(x + dx / 2.0, y);
-            double eps_l   = world.permittivity(x - dx / 2.0, y);
-            double eps_t   = world.permittivity(x, y + theta_t * dy / 2.0);
-            double eps_b   = world.permittivity(x, y - dy / 2.0);
-
-            double _eps_p, _eps_m;
-            double eps_jump;
-            double eps_p, eps_m;
-
-            if (eta > 0.0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x, y + dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x, y + dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            double d = a_tau_I * eps_p * n1_I * dy + b_I * n2_I * dy +
-                       a_I * eps_p * (3.0 - 2.0 * theta_t) / ((2.0 - theta_t) * (1.0 - theta_t));
-
-            if (eta > 0.0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            double M = -eps_p * (3.0 - 2.0 * theta_t) / ((1.0 - theta_t) * (2.0 - theta_t)) -
-                       eps_m * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0)) -
-                       eps_jump * (n1_I * n1_I) * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0));
-
-            double N[7] = {// u[i,j]
-                           -eps_jump * n1_I * n2_I * theta_t * dy / dx -
-                               (eps_jump * (n1_I * n1_I) + eps_m) * (1.0 + theta_t) / theta_t,
-                           // u[i,j+1]
-                           -eps_p * (theta_t - 2.0) / (theta_t - 1.0),
-                           // u[i,j+2]
-                           eps_p * (theta_t - 1.0) / (theta_t - 2.0),
-                           // u[i,j-1]
-                           eps_jump * n1_I * n2_I * theta_t * dy / dx +
-                               (eps_jump * (n1_I * n1_I) + eps_m) * theta_t / (1.0 + theta_t),
-                           // u[i-1,j]
-                           eps_jump * n1_I * n2_I * (2.0 * theta_t + 1.0) * dy / (2.0 * dx),
-                           // u[i+1,j]
-                           -eps_jump * n1_I * n2_I * dy / (2.0 * dx),
-                           // u[i-1,j-1]
-                           -eps_jump * n1_I * n2_I * theta_t * dy / dx};
-
-            rhs_h(row_idx) -= (d / M) * eps_t / theta_t / bot_y;
-
-            rows_coo.insert(rows_coo.end(), 7, row_idx);
-
-            cols_coo.insert(cols_coo.end(), {
-                                                index(i, j),
-                                                index(i, j + 1),
-                                                index(i, j + 2),
-                                                index(i, j - 1),
-                                                index(i - 1, j),
-                                                index(i + 1, j),
-                                                index(i - 1, j - 1),
-                                            });
-
-            vals_coo.insert(vals_coo.end(),
-                            {
-                                (N[0] / M) * eps_t / theta_t / bot_y - (eps_r / theta_r + eps_l / theta_l) / bot_x -
-                                    (eps_t / theta_t + eps_b / theta_b) / bot_y,
-                                (N[1] / M * eps_t / theta_t / bot_y),
-                                (N[2] / M * eps_t / theta_t / bot_y),
-                                (N[3] / M * eps_t / theta_t / bot_y + eps_b / theta_b / bot_y),
-                                (N[4] / M * eps_t / theta_t / bot_y + eps_l / theta_l / bot_x),
-                                (N[5] / M * eps_t / theta_t / bot_y + eps_r / theta_r / bot_x),
-                                (N[6] / M * eps_t / theta_t / bot_y),
-                            });
-        } else if (direction == Direction::L) {
-            double theta_l = theta;
-            double theta_r = 1.0;
-            double theta_t = 1.0;
-            double theta_b = 1.0;
-
-            double bot_x   = (theta_r + theta_l) / 2.0 * (dx * dx);
-            double bot_y   = (theta_t + theta_b) / 2.0 * (dy * dy);
-
-            double eps_r   = world.permittivity(x + dx / 2.0, y);
-            double eps_l   = world.permittivity(x - theta_l * dx / 2.0, y);
-            double eps_t   = world.permittivity(x, y + dy / 2.0);
-            double eps_b   = world.permittivity(x, y - dy / 2.0);
-
-            double _eps_p, _eps_m;
-            double eps_jump;
-            double eps_p, eps_m;
-
-            if (eta > 0.0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x - dx, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x - dx, y);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            double d = -a_tau_I * eps_p * n2_I * dx + b_I * n1_I * dx -
-                       a_I * eps_p * (3.0 - 2.0 * theta_l) / ((2.0 - theta_l) * (1.0 - theta_l));
-
-            if (eta > 0.0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            double M = eps_p * (3.0 - 2.0 * theta_l) / ((1.0 - theta_l) * (2.0 - theta_l)) +
-                       eps_m * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0)) +
-                       eps_jump * (n2_I * n2_I) * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0));
-
-            double N[7] = {// u[i,j]
-                           -eps_jump * n1_I * n2_I * theta_l * dx / dy +
-                               (eps_jump * (n2_I * n2_I) + eps_m) * (1.0 + theta_l) / theta_l,
-                           // u[i-1,j]
-                           eps_p * (theta_l - 2.0) / (theta_l - 1.0),
-                           // u[i-2,j]
-                           -eps_p * (theta_l - 1.0) / (theta_l - 2.0),
-                           // u[i+1,j]
-                           eps_jump * n1_I * n2_I * theta_l * dx / dy -
-                               (eps_jump * (n2_I * n2_I) + eps_m) * theta_l / (1.0 + theta_l),
-                           // u[i,j-1]
-                           eps_jump * n1_I * n2_I * (2.0 * theta_l + 1.0) * dx / (2.0 * dy),
-                           // u[i,j+1]
-                           -eps_jump * n1_I * n2_I * dx / (2.0 * dy),
-                           // u[i+1,j-1]
-                           -eps_jump * n1_I * n2_I * theta_l * dx / dy};
-
-            rhs_h(row_idx) -= (d / M) * eps_l / theta_l / bot_x;
-
-            rows_coo.insert(rows_coo.end(), 7, row_idx);
-
-            cols_coo.insert(cols_coo.end(), {
-                                                index(i, j),
-                                                index(i - 1, j),
-                                                index(i - 2, j),
-                                                index(i + 1, j),
-                                                index(i, j - 1),
-                                                index(i, j + 1),
-                                                index(i + 1, j - 1),
-                                            });
-
-            vals_coo.insert(vals_coo.end(),
-                            {
-                                // u[i,j]
-                                (N[0] / M) * eps_l / theta_l / bot_x - (eps_r / theta_r + eps_l / theta_l) / bot_x -
-                                    (eps_t / theta_t + eps_b / theta_b) / bot_y,
-                                // u[i-1,j]
-                                (N[1] / M) * eps_l / theta_l / bot_x,
-                                // u[i-2,j]
-                                (N[2] / M) * eps_l / theta_l / bot_x,
-                                // u[i+1,j]
-                                (N[3] / M) * eps_l / theta_l / bot_x + eps_r / theta_r / bot_x,
-                                // u[i,j+1]
-                                (N[4] / M) * eps_l / theta_l / bot_x + eps_t / theta_t / bot_y,
-                                // u[i,j-1]
-                                (N[5] / M) * eps_l / theta_l / bot_x + eps_b / theta_b / bot_y,
-                                // u_ext at [i+1,j-1]
-                                (N[6] / M) * eps_l / theta_l / bot_x,
-                            });
-        } else if (direction == Direction::B) {
-            double theta_l = 1.0;
-            double theta_r = 1.0;
-            double theta_t = 1.0;
-            double theta_b = theta;
-
-            double bot_x   = (theta_r + theta_l) / 2.0 * (dx * dx);
-            double bot_y   = (theta_t + theta_b) / 2.0 * (dy * dy);
-
-            double eps_r   = world.permittivity(x + dx / 2.0, y);
-            double eps_l   = world.permittivity(x - dx / 2.0, y);
-            double eps_t   = world.permittivity(x, y + dy / 2.0);
-            double eps_b   = world.permittivity(x, y - theta_b * dy / 2.0);
-
-            double _eps_p, _eps_m;
-            double eps_jump;
-            double eps_p, eps_m;
-
-            if (eta > 0.0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x, y - dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x, y - dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            double d = a_tau_I * eps_p * n1_I * dy + b_I * n2_I * dy -
-                       a_I * eps_p * (3.0 - 2.0 * theta_b) / ((2.0 - theta_b) * (1.0 - theta_b));
-
-            if (eta > 0.0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            double M = eps_p * (3.0 - 2.0 * theta_b) / ((1.0 - theta_b) * (2.0 - theta_b)) +
-                       eps_m * (2.0 * theta_b + 1.0) / (theta_b * (theta_b + 1.0)) +
-                       eps_jump * (n1_I * n1_I) * (2.0 * theta_b + 1.0) / (theta_b * (theta_b + 1.0));
-
-            double N[7] = {// u[i,j]
-                           -eps_jump * n1_I * n2_I * theta_b * dy / dx +
-                               (eps_jump * (n1_I * n1_I) + eps_m) * (1.0 + theta_b) / theta_b,
-                           // u[i,j-1]
-                           eps_p * (theta_b - 2.0) / (theta_b - 1.0),
-                           // u[i,j-2]
-                           -eps_p * (theta_b - 1.0) / (theta_b - 2.0),
-                           // u[i,j+1]
-                           eps_jump * n1_I * n2_I * theta_b * dy / dx -
-                               (eps_jump * (n1_I * n1_I) + eps_m) * theta_b / (1.0 + theta_b),
-                           // u[i-1,j]
-                           eps_jump * n1_I * n2_I * (2.0 * theta_b + 1.0) * dy / (2.0 * dx),
-                           // u[i+1,j]
-                           -eps_jump * n1_I * n2_I * dy / (2.0 * dx),
-                           // u[i-1,j+1]
-                           -eps_jump * n1_I * n2_I * theta_b * dy / dx};
-
-            rhs_h(row_idx) -= (d / M) * eps_b / theta_b / bot_y;
-
-            rows_coo.insert(rows_coo.end(), 7, row_idx);
-
-            cols_coo.insert(cols_coo.end(), {
-                                                index(i, j),
-                                                index(i, j - 1),
-                                                index(i, j - 2),
-                                                index(i, j + 1),
-                                                index(i - 1, j),
-                                                index(i + 1, j),
-                                                index(i - 1, j + 1),
-                                            });
-
-            vals_coo.insert(vals_coo.end(),
-                            {
-                                // u[i,j]
-                                (N[0] / M) * eps_b / theta_b / bot_y - (eps_r / theta_r + eps_l / theta_l) / bot_x -
-                                    (eps_t / theta_t + eps_b / theta_b) / bot_y,
-                                // u[i,j-1]
-                                (N[1] / M) * eps_b / theta_b / bot_y,
-                                // u[i,j-2]
-                                (N[2] / M) * eps_b / theta_b / bot_y,
-                                // u[i,j+1]
-                                (N[3] / M) * eps_b / theta_b / bot_y + eps_t / theta_t / bot_y,
-                                // u[i-1,j]
-                                (N[4] / M) * eps_b / theta_b / bot_y + eps_l / theta_l / bot_x,
-                                // u[i+1,j]
-                                (N[5] / M) * eps_b / theta_b / bot_y + eps_r / theta_r / bot_x,
-                                // u_ext at [i-1,j+1]
-                                (N[6] / M) * eps_b / theta_b / bot_y,
-                            });
+        double eps_p, eps_m;
+        if (is_x_dir) {
+            eps_p = world.permittivity(x + s * (theta + 0.01) * dx, y);
+            eps_m = world.permittivity(x + s * (theta - 0.01) * dx, y);
         } else {
-            Kokkos::printf("coeff_case1(): Invalid direction %d\n", direction);
-            Kokkos::abort("Terminated");
+            eps_p = world.permittivity(x, y + s * (theta + 0.01) * dy);
+            eps_m = world.permittivity(x, y + s * (theta - 0.01) * dy);
+        }
+        double eps_jump = (eta > 0.0) ? (eps_m - eps_p) : (eps_p - eps_m);
+
+        // extension point
+        double x_ext, y_ext;
+        int offset_ext[2];
+        if (direction == Direction::R || direction == Direction::T) {
+            x_ext         = x - dx;
+            y_ext         = y - dy;
+            offset_ext[0] = -1;
+            offset_ext[1] = -1;
+        } else if (direction == Direction::L) {
+            x_ext         = x + dx;
+            y_ext         = y - dy;
+            offset_ext[0] = 1;
+            offset_ext[1] = -1;
+        } else { // B
+            x_ext         = x - dx;
+            y_ext         = y + dy;
+            offset_ext[0] = -1;
+            offset_ext[1] = 1;
+        }
+
+        double x_r   = x + theta_r * dx;
+        double x_l   = x - theta_l * dx;
+        double y_t   = y + theta_t * dy;
+        double y_b   = y - theta_b * dy;
+        double bot_x = (theta_r + theta_l) / 2.0 * dx * dx;
+        double bot_y = (theta_t + theta_b) / 2.0 * dy * dy;
+        double eps_r = world.permittivity(x + theta_r * dx / 2.0, y);
+        double eps_l = world.permittivity(x - theta_l * dx / 2.0, y);
+        double eps_t = world.permittivity(x, y + theta_t * dy / 2.0);
+        double eps_b = world.permittivity(x, y - theta_b * dy / 2.0);
+
+        // algebraic part
+        double B_val;
+        Kokkos::Array<double, 4> C_arr;
+        double a_term;
+        per_iface_algebraic(s_eta, s, eps_p, eps_m, theta, a_I, B_val, C_arr, a_term);
+
+        // geometric part
+        double P_inv[6][6];
+        compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext, P_inv);
+
+        double x_I = is_x_dir ? (x + s * theta * dx) : x;
+        double y_I = is_x_dir ? y : (y + s * theta * dy);
+        double grad_coeff[6];
+        compute_grad_coeff(x_I, y_I, n1_I, n2_I, P_inv, grad_coeff);
+
+        double dr     = is_x_dir ? dx : dy;
+        double n_tang = is_x_dir ? -n2_I : n1_I;
+        double n_norm = is_x_dir ? n1_I : n2_I;
+        double gc[3][6];
+        for (int k = 0; k < 6; ++k)
+            gc[0][k] = dr * eps_jump * n_tang * grad_coeff[k];
+        double a_tau_term = dr * a_tau_I * eps_p * n_tang;
+        double b_term     = dr * b_I * n_norm;
+
+        InterCaseResult r;
+        r.n_intf       = 1;
+        r.stencil_size = 25;
+        double M[3][3], N[3][25], D[3];
+        Kokkos::Array<double, 4> C_1[1] = {C_arr};
+        size_t dirs[1]                  = {direction};
+        assemble_MND<25>(1, &B_val, nullptr, C_1, 4, &a_term, gc, &a_tau_term, &b_term, dirs, offset25, offset_ext, M,
+                         N, D);
+        r.M_inv_d[0] = D[0] / M[0][0];
+        for (int k = 0; k < 25; ++k)
+            r.M_inv_N[0][k] = N[0][k] / M[0][0];
+
+        r.theta_r = theta_r;
+        r.theta_l = theta_l;
+        r.theta_t = theta_t;
+        r.theta_b = theta_b;
+        r.bot_x   = bot_x;
+        r.bot_y   = bot_y;
+        r.eps_r   = eps_r;
+        r.eps_l   = eps_l;
+        r.eps_t   = eps_t;
+        r.eps_b   = eps_b;
+        return r;
+    }
+
+    void coeff_case1(size_t direction, int i, int j) {
+        auto r      = case1(direction, i, j);
+        int row_idx = index(i, j);
+
+        double eps_dir, theta_dir, bot;
+        if (direction == Direction::R) {
+            eps_dir   = r.eps_r;
+            theta_dir = r.theta_r;
+            bot       = r.bot_x;
+        } else if (direction == Direction::L) {
+            eps_dir   = r.eps_l;
+            theta_dir = r.theta_l;
+            bot       = r.bot_x;
+        } else if (direction == Direction::T) {
+            eps_dir   = r.eps_t;
+            theta_dir = r.theta_t;
+            bot       = r.bot_y;
+        } else {
+            eps_dir   = r.eps_b;
+            theta_dir = r.theta_b;
+            bot       = r.bot_y;
+        }
+        double sub_coeff = eps_dir / theta_dir / bot;
+        rhs_h(row_idx) -= r.M_inv_d[0] * sub_coeff;
+
+        for (int ox = -2; ox <= 2; ++ox) {
+            for (int oy = -2; oy <= 2; ++oy) {
+                double value = r.M_inv_N[0][offset25(ox, oy)] * sub_coeff;
+                if (ox == 0 && oy == 0) {
+                    value += -(r.eps_r / r.theta_r + r.eps_l / r.theta_l) / r.bot_x -
+                             (r.eps_t / r.theta_t + r.eps_b / r.theta_b) / r.bot_y;
+                } else if (ox == 1 && oy == 0 && !(direction & Direction::R)) {
+                    value += r.eps_r / r.theta_r / r.bot_x;
+                } else if (ox == -1 && oy == 0 && !(direction & Direction::L)) {
+                    value += r.eps_l / r.theta_l / r.bot_x;
+                } else if (ox == 0 && oy == 1 && !(direction & Direction::T)) {
+                    value += r.eps_t / r.theta_t / r.bot_y;
+                } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
+                    value += r.eps_b / r.theta_b / r.bot_y;
+                }
+                rows_coo.push_back(row_idx);
+                cols_coo.push_back(index(i + ox, j + oy));
+                vals_coo.push_back(value);
+            }
         }
     }
 
-    KOKKOS_INLINE_FUNCTION
-    int offset(int offset_x, int offset_y) { return (offset_x + 2) * 5 + (offset_y + 2); };
-
-    KOKKOS_INLINE_FUNCTION
-    void solve2x2(const double M[2][2], const double rhs[2], double sol[2]) {
-        double det = M[0][0] * M[1][1] - M[0][1] * M[1][0];
-        sol[0]     = (rhs[0] * M[1][1] - rhs[1] * M[0][1]) / det;
-        sol[1]     = (-rhs[0] * M[1][0] + rhs[1] * M[0][0]) / det;
-    }
-
-    /**
-     * Matrix entry for cells having 2 cuts by interface
-     */
-    void coeff_case2(size_t direction, int i, int j) {
+    // -----------------------------------------------------------------------
+    // Case 2 -- two interface cuts
+    // -----------------------------------------------------------------------
+    InterCaseResult case2(size_t direction, int i, int j) {
         auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
         double eta          = world.surface(x, y);
-        int row_idx         = index(i, j); // laplacian matrix row index
-        // use = {} so they're zero-initialized
-        double d[2]     = {};
-        double M[2][2]  = {};
-        double N[2][25] = {};
+        double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
+
+        double theta_r      = compute_theta(Direction::R, i, j);
+        double theta_t      = compute_theta(Direction::T, i, j);
+        double theta_l      = compute_theta(Direction::L, i, j);
+        double theta_b      = compute_theta(Direction::B, i, j);
+
+        double x_r          = x + theta_r * dx;
+        double x_l          = x - theta_l * dx;
+        double y_t          = y + theta_t * dy;
+        double y_b          = y - theta_b * dy;
+        double bot_x        = (theta_r + theta_l) / 2.0 * dx * dx;
+        double bot_y        = (theta_t + theta_b) / 2.0 * dy * dy;
+        double eps_r        = world.permittivity(x + theta_r * dx / 2.0, y);
+        double eps_l        = world.permittivity(x - theta_l * dx / 2.0, y);
+        double eps_t        = world.permittivity(x, y + theta_t * dy / 2.0);
+        double eps_b        = world.permittivity(x, y - theta_b * dy / 2.0);
+
+        size_t dir[2];
+        double theta_arr[2], eps_arr[2];
+        double x_I[2], y_I[2];
+        double x_ext, y_ext;
+        int offset_ext[2];
 
         if (direction == (Direction::R | Direction::T)) {
-            double theta_r = compute_theta(Direction::R, i, j);
-            double theta_t = compute_theta(Direction::T, i, j);
-            double theta_l = 1.0;
-            double theta_b = 1.0;
-
-            double bot_x   = (theta_r + theta_l) / 2.0 * (dx * dx);
-            double bot_y   = (theta_t + theta_b) / 2.0 * (dy * dy);
-
-            double eps_r   = world.permittivity(x + theta_r * dx / 2.0, y);
-            double eps_l   = world.permittivity(x - dx / 2.0, y);
-            double eps_t   = world.permittivity(x, y + theta_t * dy / 2.0);
-            double eps_b   = world.permittivity(x, y - dy / 2.0);
-
-            // normal evaluated at x_R and x_T
-            double n1_x = interp(Direction::R, theta_r, i, j, n1);
-            double n2_x = interp(Direction::R, theta_r, i, j, n2);
-            double n1_y = interp(Direction::T, theta_t, i, j, n1);
-            double n2_y = interp(Direction::T, theta_t, i, j, n2);
-
-            // a_tau at x_R and x_T
-            double a_tau_x = interp(Direction::R, theta_r, i, j, a_tau);
-            double a_tau_y = interp(Direction::T, theta_t, i, j, a_tau);
-
-            // jump conditions at x_R and x_T
-            double a_x = interp(Direction::R, theta_r, i, j, a);
-            double a_y = interp(Direction::T, theta_t, i, j, a);
-            double b_x = interp(Direction::R, theta_r, i, j, b);
-            double b_y = interp(Direction::T, theta_t, i, j, b);
-
-            double _eps_p, _eps_m;
-            double eps_jump;
-            double eps_p, eps_m;
-
-            if (eta > 0.0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x + dx, y + dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x + dx, y + dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            d[0] = -a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx +
-                   a_x * eps_p * (3.0 - 2.0 * theta_r) / ((2.0 - theta_r) * (1.0 - theta_r));
-            d[1] = a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy +
-                   a_y * eps_p * (3.0 - 2.0 * theta_t) / ((2.0 - theta_t) * (1.0 - theta_t));
-
-            if (eta > 0.0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            M[0][0] = -eps_p * (3.0 - 2.0 * theta_r) / ((1.0 - theta_r) * (2.0 - theta_r)) -
-                      eps_m * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0)) -
-                      eps_jump * (n2_x * n2_x) * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0));
-            M[0][1] = eps_jump * n1_x * n2_x * dx / (dy * theta_t * (theta_t + 1.0));
-            M[1][0] = eps_jump * n1_y * n2_y * dy / (dx * theta_r * (theta_r + 1.0));
-            M[1][1] = -eps_p * (3.0 - 2.0 * theta_t) / ((1.0 - theta_t) * (2.0 - theta_t)) -
-                      eps_m * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0)) -
-                      eps_jump * (n1_y * n1_y) * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0));
-
-            // u[i,j]
-            N[0][offset(0, 0)] = -(eps_m + eps_jump * (n2_x * n2_x)) * (theta_r + 1.0) / theta_r -
-                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_t * theta_r + theta_t - 1.0) / theta_t);
-            // u[i+1,j]
-            N[0][offset(1, 0)] = -eps_p * (theta_r - 2.0) / (theta_r - 1.0);
-            // u[i+2,j]
-            N[0][offset(2, 0)] = eps_p * (theta_r - 1.0) / (theta_r - 2.0);
-            // u[i-1,j]
-            N[0][offset(-1, 0)] = (eps_m + eps_jump * (n2_x * n2_x)) * theta_r / (theta_r + 1.0) +
-                                  eps_jump * n1_x * n2_x * theta_r * (dx / dy);
-            // u[i,j-1]
-            N[0][offset(0, -1)] = eps_jump * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1.0) + theta_r);
-            // u[i-1,j-1]
-            N[0][offset(-1, -1)] = -eps_jump * n1_x * n2_x * theta_r * (dx / dy);
-
-            // u[i,j]
-            N[1][offset(0, 0)] = -(eps_m + eps_jump * (n1_y * n1_y)) * (theta_t + 1.0) / theta_t -
-                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_t + theta_r - 1.0) / theta_r);
-            // u[i,j+1]
-            N[1][offset(0, 1)] = -eps_p * (theta_t - 2.0) / (theta_t - 1.0);
-            // u[i,j+2]
-            N[1][offset(0, 2)] = eps_p * (theta_t - 1.0) / (theta_t - 2.0);
-            // u[i,j-1]
-            N[1][offset(0, -1)] = (eps_m + eps_jump * (n1_y * n1_y)) * theta_t / (theta_t + 1.0) +
-                                  eps_jump * n1_y * n2_y * theta_t * (dy / dx);
-            // u[i-1,j]
-            N[1][offset(-1, 0)] = eps_jump * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1.0) + theta_t);
-            // u[i-1,j-1]
-            N[1][offset(-1, -1)] = -eps_jump * n1_y * n2_y * theta_t * (dy / dx);
-
-            // Solve M * x = d and M * X = N via explicit 2x2 inverse
-            double det        = M[0][0] * M[1][1] - M[0][1] * M[1][0];
-            double invM[2][2] = {{M[1][1] / det, -M[0][1] / det}, {-M[1][0] / det, M[0][0] / det}};
-
-            double M_inv_d[2] = {invM[0][0] * d[0] + invM[0][1] * d[1], invM[1][0] * d[0] + invM[1][1] * d[1]};
-
-            double M_inv_N[2][25];
-            for (int k = 0; k < 25; ++k) {
-                M_inv_N[0][k] = invM[0][0] * N[0][k] + invM[0][1] * N[1][k];
-                M_inv_N[1][k] = invM[1][0] * N[0][k] + invM[1][1] * N[1][k];
-            }
-
-            rhs_h(row_idx) -= M_inv_d[0] * eps_r / theta_r / bot_x + M_inv_d[1] * eps_t / theta_t / bot_y;
-
-            for (int offset_x = -2; offset_x <= 2; ++offset_x) {
-                for (int offset_y = -2; offset_y <= 2; ++offset_y) {
-                    double value = M_inv_N[0][offset(offset_x, offset_y)] * eps_r / theta_r / bot_x +
-                                   M_inv_N[1][offset(offset_x, offset_y)] * eps_t / theta_t / bot_y;
-
-                    if (offset_x == 0 && offset_y == 0) {
-                        value +=
-                            -(eps_r / theta_r + eps_l / theta_l) / bot_x - (eps_t / theta_t + eps_b / theta_b) / bot_y;
-                    } else if (offset_x == -1 && offset_y == 0) {
-                        value += eps_l / theta_l / bot_x;
-                    } else if (offset_x == 0 && offset_y == -1) {
-                        value += eps_b / theta_b / bot_y;
-                    }
-
-                    rows_coo.push_back(row_idx);
-                    cols_coo.push_back(index(i + offset_x, j + offset_y));
-                    vals_coo.push_back(value);
-                }
-            }
+            dir[0]        = Direction::R;
+            dir[1]        = Direction::T;
+            theta_arr[0]  = theta_r;
+            theta_arr[1]  = theta_t;
+            eps_arr[0]    = eps_r;
+            eps_arr[1]    = eps_t;
+            x_I[0]        = x + theta_r * dx;
+            y_I[0]        = y;
+            x_I[1]        = x;
+            y_I[1]        = y + theta_t * dy;
+            x_ext         = x - dx;
+            y_ext         = y - dy;
+            offset_ext[0] = -1;
+            offset_ext[1] = -1;
         } else if (direction == (Direction::L | Direction::T)) {
-            double theta_l = compute_theta(Direction::L, i, j);
-            double theta_t = compute_theta(Direction::T, i, j);
-            double theta_r = 1.0;
-            double theta_b = 1.0;
-
-            double bot_x   = (theta_r + theta_l) / 2.0 * (dx * dx);
-            double bot_y   = (theta_t + theta_b) / 2.0 * (dy * dy);
-
-            double eps_r   = world.permittivity(x + dx / 2.0, y);
-            double eps_l   = world.permittivity(x - theta_l * dx / 2.0, y);
-            double eps_t   = world.permittivity(x, y + theta_t * dy / 2.0);
-            double eps_b   = world.permittivity(x, y - dy / 2.0);
-
-            // normal evaluated at x_L and x_T
-            double n1_x = interp(Direction::L, theta_l, i, j, n1);
-            double n2_x = interp(Direction::L, theta_l, i, j, n2);
-            double n1_y = interp(Direction::T, theta_t, i, j, n1);
-            double n2_y = interp(Direction::T, theta_t, i, j, n2);
-
-            // jump conditions at x_L and x_T
-            double a_x = interp(Direction::L, theta_l, i, j, a);
-            double a_y = interp(Direction::T, theta_t, i, j, a);
-            double b_x = interp(Direction::L, theta_l, i, j, b);
-            double b_y = interp(Direction::T, theta_t, i, j, b);
-
-            // a_tau at x_L and x_T
-            double a_tau_x = interp(Direction::L, theta_l, i, j, a_tau);
-            double a_tau_y = interp(Direction::T, theta_t, i, j, a_tau);
-
-            double _eps_p, _eps_m;
-            double eps_jump;
-            double eps_p, eps_m;
-
-            if (eta > 0.0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x - dx, y + dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x - dx, y + dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            d[0] = -a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx -
-                   a_x * eps_p * (3.0 - 2.0 * theta_l) / ((2.0 - theta_l) * (1.0 - theta_l));
-            d[1] = a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy +
-                   a_y * eps_p * (3.0 - 2.0 * theta_t) / ((2.0 - theta_t) * (1.0 - theta_t));
-
-            if (eta > 0.0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            M[0][0] = eps_p * (3.0 - 2.0 * theta_l) / ((1.0 - theta_l) * (2.0 - theta_l)) +
-                      eps_m * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0)) +
-                      eps_jump * (n2_x * n2_x) * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0));
-            M[0][1] = eps_jump * n1_x * n2_x * dx / (dy * theta_t * (theta_t + 1.0));
-            M[1][0] = -eps_jump * n1_y * n2_y * dy / (dx * theta_l * (theta_l + 1.0));
-            M[1][1] = -eps_p * (3.0 - 2.0 * theta_t) / ((1.0 - theta_t) * (2.0 - theta_t)) -
-                      eps_m * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0)) -
-                      eps_jump * (n1_y * n1_y) * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0));
-
-            N[0][offset(0, 0)] = (eps_m + eps_jump * (n2_x * n2_x)) * (theta_l + 1.0) / theta_l -
-                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_t * theta_l + theta_t - 1.0) / theta_t);
-            N[0][offset(-1, 0)] = eps_p * (theta_l - 2.0) / (theta_l - 1.0);
-            N[0][offset(-2, 0)] = -eps_p * (theta_l - 1.0) / (theta_l - 2.0);
-            N[0][offset(1, 0)]  = -(eps_m + eps_jump * (n2_x * n2_x)) * theta_l / (theta_l + 1.0) +
-                                 eps_jump * n1_x * n2_x * theta_l * (dx / dy);
-            N[0][offset(0, -1)] = eps_jump * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1.0) + theta_l);
-            N[0][offset(1, -1)] = -eps_jump * n1_x * n2_x * theta_l * (dx / dy);
-
-            N[1][offset(0, 0)]  = -(eps_m + eps_jump * (n1_y * n1_y)) * (theta_t + 1.0) / theta_t +
-                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_t + theta_l - 1.0) / theta_l);
-            N[1][offset(0, 1)]  = -eps_p * (theta_t - 2.0) / (theta_t - 1.0);
-            N[1][offset(0, 2)]  = eps_p * (theta_t - 1.0) / (theta_t - 2.0);
-            N[1][offset(0, -1)] = (eps_m + eps_jump * (n1_y * n1_y)) * theta_t / (theta_t + 1.0) -
-                                  eps_jump * n1_y * n2_y * theta_t * (dy / dx);
-            N[1][offset(1, 0)]  = -eps_jump * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1.0) + theta_t);
-            N[1][offset(1, -1)] = eps_jump * n1_y * n2_y * theta_t * (dy / dx);
-
-            // Solve M * x = d and M * X = N via explicit 2x2 inverse
-            double det        = M[0][0] * M[1][1] - M[0][1] * M[1][0];
-            double invM[2][2] = {{M[1][1] / det, -M[0][1] / det}, {-M[1][0] / det, M[0][0] / det}};
-
-            double M_inv_d[2] = {invM[0][0] * d[0] + invM[0][1] * d[1], invM[1][0] * d[0] + invM[1][1] * d[1]};
-
-            double M_inv_N[2][25];
-            for (int k = 0; k < 25; ++k) {
-                M_inv_N[0][k] = invM[0][0] * N[0][k] + invM[0][1] * N[1][k];
-                M_inv_N[1][k] = invM[1][0] * N[0][k] + invM[1][1] * N[1][k];
-            }
-
-            rhs_h(row_idx) -= M_inv_d[0] * eps_l / theta_l / bot_x + M_inv_d[1] * eps_t / theta_t / bot_y;
-
-            for (int offset_x = -2; offset_x <= 2; ++offset_x) {
-                for (int offset_y = -2; offset_y <= 2; ++offset_y) {
-                    double value = M_inv_N[0][offset(offset_x, offset_y)] * eps_l / theta_l / bot_x +
-                                   M_inv_N[1][offset(offset_x, offset_y)] * eps_t / theta_t / bot_y;
-
-                    if (offset_x == 0 && offset_y == 0) {
-                        value +=
-                            -(eps_r / theta_r + eps_l / theta_l) / bot_x - (eps_t / theta_t + eps_b / theta_b) / bot_y;
-                    } else if (offset_x == 1 && offset_y == 0) {
-                        value += eps_r / theta_r / bot_x;
-                    } else if (offset_x == 0 && offset_y == -1) {
-                        value += eps_b / theta_b / bot_y;
-                    }
-
-                    rows_coo.push_back(row_idx);
-                    cols_coo.push_back(index(i + offset_x, j + offset_y));
-                    vals_coo.push_back(value);
-                }
-            }
-        } else if (direction == (Direction::R | Direction::B)) {
-            double theta_r = compute_theta(Direction::R, i, j);
-            double theta_b = compute_theta(Direction::B, i, j);
-            double theta_l = 1.0;
-            double theta_t = 1.0;
-
-            double bot_x   = (theta_r + theta_l) / 2.0 * (dx * dx);
-            double bot_y   = (theta_t + theta_b) / 2.0 * (dy * dy);
-
-            double eps_r   = world.permittivity(x + theta_r * dx / 2.0, y);
-            double eps_l   = world.permittivity(x - dx / 2.0, y);
-            double eps_t   = world.permittivity(x, y + dy / 2.0);
-            double eps_b   = world.permittivity(x, y - theta_b * dy / 2.0);
-
-            // normal evaluated at x_R and x_B
-            double n1_x = interp(Direction::R, theta_r, i, j, n1);
-            double n2_x = interp(Direction::R, theta_r, i, j, n2);
-            double n1_y = interp(Direction::B, theta_b, i, j, n1);
-            double n2_y = interp(Direction::B, theta_b, i, j, n2);
-
-            // jump conditions at x_R and x_B
-            double a_x = interp(Direction::R, theta_r, i, j, a);
-            double a_y = interp(Direction::B, theta_b, i, j, a);
-            double b_x = interp(Direction::R, theta_r, i, j, b);
-            double b_y = interp(Direction::B, theta_b, i, j, b);
-
-            // a_tau at x_R and x_B
-            double a_tau_x = interp(Direction::R, theta_r, i, j, a_tau);
-            double a_tau_y = interp(Direction::B, theta_b, i, j, a_tau);
-
-            double _eps_p, _eps_m;
-            double eps_jump;
-            double eps_p, eps_m;
-
-            if (eta > 0.0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x + dx, y - dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x + dx, y - dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            d[0] = -a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx +
-                   a_x * eps_p * (3.0 - 2.0 * theta_r) / ((2.0 - theta_r) * (1.0 - theta_r));
-            d[1] = a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy -
-                   a_y * eps_p * (3.0 - 2.0 * theta_b) / ((2.0 - theta_b) * (1.0 - theta_b));
-
-            if (eta > 0.0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            M[0][0] = -eps_p * (3.0 - 2.0 * theta_r) / ((1.0 - theta_r) * (2.0 - theta_r)) -
-                      eps_m * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0)) -
-                      eps_jump * (n2_x * n2_x) * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0));
-            M[0][1] = -eps_jump * n1_x * n2_x * dx / (dy * theta_b * (theta_b + 1.0));
-            M[1][0] = eps_jump * n1_y * n2_y * dy / (dx * theta_r * (theta_r + 1.0));
-            M[1][1] = eps_p * (3.0 - 2.0 * theta_b) / ((1.0 - theta_b) * (2.0 - theta_b)) +
-                      eps_m * (2.0 * theta_b + 1.0) / (theta_b * (theta_b + 1.0)) +
-                      eps_jump * (n1_y * n1_y) * (2.0 * theta_b + 1.0) / (theta_b * (theta_b + 1.0));
-
-            N[0][offset(0, 0)] = -(eps_m + eps_jump * (n2_x * n2_x)) * (theta_r + 1.0) / theta_r +
-                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_r + theta_b - 1.0) / theta_b);
-            N[0][offset(1, 0)]  = -eps_p * (theta_r - 2.0) / (theta_r - 1.0);
-            N[0][offset(2, 0)]  = eps_p * (theta_r - 1.0) / (theta_r - 2.0);
-            N[0][offset(-1, 0)] = (eps_m + eps_jump * (n2_x * n2_x)) * theta_r / (theta_r + 1.0) -
-                                  eps_jump * n1_x * n2_x * theta_r * (dx / dy);
-            N[0][offset(0, 1)]  = -eps_jump * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1.0) + theta_r);
-            N[0][offset(-1, 1)] = eps_jump * n1_x * n2_x * theta_r * (dx / dy);
-
-            N[1][offset(0, 0)]  = (eps_m + eps_jump * (n1_y * n1_y)) * (theta_b + 1.0) / theta_b -
-                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_b + theta_r - 1.0) / theta_r);
-            N[1][offset(0, -1)] = eps_p * (theta_b - 2.0) / (theta_b - 1.0);
-            N[1][offset(0, -2)] = -eps_p * (theta_b - 1.0) / (theta_b - 2.0);
-            N[1][offset(0, 1)]  = -(eps_m + eps_jump * (n1_y * n1_y)) * theta_b / (theta_b + 1.0) +
-                                 eps_jump * n1_y * n2_y * theta_b * (dy / dx);
-            N[1][offset(-1, 0)] = eps_jump * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1.0) + theta_b);
-            N[1][offset(-1, 1)] = -eps_jump * n1_y * n2_y * theta_b * (dy / dx);
-
-            // Solve M * x = d and M * X = N via explicit 2x2 inverse
-            double det        = M[0][0] * M[1][1] - M[0][1] * M[1][0];
-            double invM[2][2] = {{M[1][1] / det, -M[0][1] / det}, {-M[1][0] / det, M[0][0] / det}};
-
-            double M_inv_d[2] = {invM[0][0] * d[0] + invM[0][1] * d[1], invM[1][0] * d[0] + invM[1][1] * d[1]};
-
-            double M_inv_N[2][25];
-            for (int k = 0; k < 25; ++k) {
-                M_inv_N[0][k] = invM[0][0] * N[0][k] + invM[0][1] * N[1][k];
-                M_inv_N[1][k] = invM[1][0] * N[0][k] + invM[1][1] * N[1][k];
-            }
-
-            rhs_h(row_idx) -= M_inv_d[0] * eps_r / theta_r / bot_x + M_inv_d[1] * eps_b / theta_b / bot_y;
-
-            for (int offset_x = -2; offset_x <= 2; ++offset_x) {
-                for (int offset_y = -2; offset_y <= 2; ++offset_y) {
-                    double value = M_inv_N[0][offset(offset_x, offset_y)] * eps_r / theta_r / bot_x +
-                                   M_inv_N[1][offset(offset_x, offset_y)] * eps_b / theta_b / bot_y;
-
-                    if (offset_x == 0 && offset_y == 0) {
-                        value +=
-                            -(eps_r / theta_r + eps_l / theta_l) / bot_x - (eps_t / theta_t + eps_b / theta_b) / bot_y;
-                    } else if (offset_x == -1 && offset_y == 0) {
-                        value += eps_l / theta_l / bot_x;
-                    } else if (offset_x == 0 && offset_y == 1) {
-                        value += eps_t / theta_t / bot_y;
-                    }
-
-                    rows_coo.push_back(row_idx);
-                    cols_coo.push_back(index(i + offset_x, j + offset_y));
-                    vals_coo.push_back(value);
-                }
-            }
+            dir[0]        = Direction::L;
+            dir[1]        = Direction::T;
+            theta_arr[0]  = theta_l;
+            theta_arr[1]  = theta_t;
+            eps_arr[0]    = eps_l;
+            eps_arr[1]    = eps_t;
+            x_I[0]        = x - theta_l * dx;
+            y_I[0]        = y;
+            x_I[1]        = x;
+            y_I[1]        = y + theta_t * dy;
+            x_ext         = x + dx;
+            y_ext         = y - dy;
+            offset_ext[0] = 1;
+            offset_ext[1] = -1;
         } else if (direction == (Direction::L | Direction::B)) {
-            double theta_l = compute_theta(Direction::L, i, j);
-            double theta_b = compute_theta(Direction::B, i, j);
-            double theta_r = 1.0;
-            double theta_t = 1.0;
+            dir[0]        = Direction::L;
+            dir[1]        = Direction::B;
+            theta_arr[0]  = theta_l;
+            theta_arr[1]  = theta_b;
+            eps_arr[0]    = eps_l;
+            eps_arr[1]    = eps_b;
+            x_I[0]        = x - theta_l * dx;
+            y_I[0]        = y;
+            x_I[1]        = x;
+            y_I[1]        = y - theta_b * dy;
+            x_ext         = x + dx;
+            y_ext         = y + dy;
+            offset_ext[0] = 1;
+            offset_ext[1] = 1;
+        } else { // R|B
+            dir[0]        = Direction::R;
+            dir[1]        = Direction::B;
+            theta_arr[0]  = theta_r;
+            theta_arr[1]  = theta_b;
+            eps_arr[0]    = eps_r;
+            eps_arr[1]    = eps_b;
+            x_I[0]        = x + theta_r * dx;
+            y_I[0]        = y;
+            x_I[1]        = x;
+            y_I[1]        = y - theta_b * dy;
+            x_ext         = x - dx;
+            y_ext         = y + dy;
+            offset_ext[0] = -1;
+            offset_ext[1] = 1;
+        }
 
-            double bot_x   = (theta_r + theta_l) / 2.0 * (dx * dx);
-            double bot_y   = (theta_t + theta_b) / 2.0 * (dy * dy);
+        double s[2]  = {dirsign(dir[0]), dirsign(dir[1])};
+        bool is_x[2] = {dir[0] == Direction::R || dir[0] == Direction::L,
+                        dir[1] == Direction::R || dir[1] == Direction::L};
+        double dr[2] = {is_x[0] ? dx : dy, is_x[1] ? dx : dy};
 
-            double eps_r   = world.permittivity(x + dx / 2.0, y);
-            double eps_l   = world.permittivity(x - theta_l * dx / 2.0, y);
-            double eps_t   = world.permittivity(x, y + dy / 2.0);
-            double eps_b   = world.permittivity(x, y - theta_b * dy / 2.0);
-
-            // normal evaluated at x_L and x_B
-            double n1_x = interp(Direction::L, theta_l, i, j, n1);
-            double n2_x = interp(Direction::L, theta_l, i, j, n2);
-            double n1_y = interp(Direction::B, theta_b, i, j, n1);
-            double n2_y = interp(Direction::B, theta_b, i, j, n2);
-
-            // jump conditions at x_L and x_B
-            double a_x = interp(Direction::L, theta_l, i, j, a);
-            double a_y = interp(Direction::B, theta_b, i, j, a);
-            double b_x = interp(Direction::L, theta_l, i, j, b);
-            double b_y = interp(Direction::B, theta_b, i, j, b);
-
-            // a_tau at x_L and x_B
-            double a_tau_x = interp(Direction::L, theta_l, i, j, a_tau);
-            double a_tau_y = interp(Direction::B, theta_b, i, j, a_tau);
-
-            double _eps_p, _eps_m;
-            double eps_jump;
-            double eps_p, eps_m;
-
-            if (eta > 0.0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x - dx, y - dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
+        double eps_p[2], eps_m[2];
+        for (int d = 0; d < 2; ++d) {
+            if (is_x[d]) {
+                eps_p[d] = world.permittivity(x + s[d] * (theta_arr[d] + 0.01) * dx, y);
+                eps_m[d] = world.permittivity(x + s[d] * (theta_arr[d] - 0.01) * dx, y);
             } else {
-                _eps_p   = world.permittivity(x - dx, y - dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
+                eps_p[d] = world.permittivity(x, y + s[d] * (theta_arr[d] + 0.01) * dy);
+                eps_m[d] = world.permittivity(x, y + s[d] * (theta_arr[d] - 0.01) * dy);
             }
+        }
+        double eps_jump[2];
+        for (int d = 0; d < 2; ++d)
+            eps_jump[d] = (eta > 0.0) ? (eps_m[d] - eps_p[d]) : (eps_p[d] - eps_m[d]);
 
-            d[0] = -a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx -
-                   a_x * eps_p * (3.0 - 2.0 * theta_l) / ((2.0 - theta_l) * (1.0 - theta_l));
-            d[1] = a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy -
-                   a_y * eps_p * (3.0 - 2.0 * theta_b) / ((2.0 - theta_b) * (1.0 - theta_b));
+        double n1_I[2], n2_I[2], a_tau_I[2], a_I[2], b_I[2];
+        for (int d = 0; d < 2; ++d) {
+            n1_I[d]    = interp(dir[d], theta_arr[d], i, j, n1);
+            n2_I[d]    = interp(dir[d], theta_arr[d], i, j, n2);
+            a_tau_I[d] = interp(dir[d], theta_arr[d], i, j, a_tau);
+            a_I[d]     = interp(dir[d], theta_arr[d], i, j, a);
+            b_I[d]     = interp(dir[d], theta_arr[d], i, j, b);
+        }
 
-            if (eta > 0.0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
+        // algebraic
+        double B[2];
+        Kokkos::Array<double, 4> C[2];
+        double a_term[2];
+        for (int d = 0; d < 2; ++d)
+            per_iface_algebraic(s_eta, s[d], eps_p[d], eps_m[d], theta_arr[d], a_I[d], B[d], C[d], a_term[d]);
 
-            M[0][0] = eps_p * (3.0 - 2.0 * theta_l) / ((1.0 - theta_l) * (2.0 - theta_l)) +
-                      eps_m * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0)) +
-                      eps_jump * (n2_x * n2_x) * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0));
-            M[0][1] = -eps_jump * n1_x * n2_x * dx / (dy * theta_b * (theta_b + 1.0));
-            M[1][0] = -eps_jump * n1_y * n2_y * dy / (dx * theta_l * (theta_l + 1.0));
-            M[1][1] = eps_p * (3.0 - 2.0 * theta_b) / ((1.0 - theta_b) * (2.0 - theta_b)) +
-                      eps_m * (2.0 * theta_b + 1.0) / (theta_b * (theta_b + 1.0)) +
-                      eps_jump * (n1_y * n1_y) * (2.0 * theta_b + 1.0) / (theta_b * (theta_b + 1.0));
+        // geometric
+        double P_inv[6][6];
+        compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext, P_inv);
+        double grad_coeff[3][6];
+        for (int d = 0; d < 2; ++d) {
+            double gc6[6];
+            compute_grad_coeff(x_I[d], y_I[d], n1_I[d], n2_I[d], P_inv, gc6);
+            double n_tang = is_x[d] ? -n2_I[d] : n1_I[d];
+            for (int k = 0; k < 6; ++k)
+                grad_coeff[d][k] = dr[d] * eps_jump[d] * n_tang * gc6[k];
+        }
 
-            N[0][offset(0, 0)] = (eps_m + eps_jump * (n2_x * n2_x)) * (theta_l + 1.0) / theta_l +
-                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_l + theta_b - 1.0) / theta_b);
-            N[0][offset(-1, 0)] = eps_p * (theta_l - 2.0) / (theta_l - 1.0);
-            N[0][offset(-2, 0)] = -eps_p * (theta_l - 1.0) / (theta_l - 2.0);
-            N[0][offset(1, 0)]  = -(eps_m + eps_jump * (n2_x * n2_x)) * theta_l / (theta_l + 1.0) -
-                                 eps_jump * n1_x * n2_x * theta_l * (dx / dy);
-            N[0][offset(0, 1)] = -eps_jump * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1.0) + theta_l);
-            N[0][offset(1, 1)] = eps_jump * n1_x * n2_x * theta_l * (dx / dy);
+        double a_tau_term[2], b_term[2];
+        for (int d = 0; d < 2; ++d) {
+            double n_tang = is_x[d] ? -n2_I[d] : n1_I[d];
+            double n_norm = is_x[d] ? n1_I[d] : n2_I[d];
+            a_tau_term[d] = dr[d] * a_tau_I[d] * eps_p[d] * n_tang;
+            b_term[d]     = dr[d] * b_I[d] * n_norm;
+        }
 
-            N[1][offset(0, 0)] = (eps_m + eps_jump * (n1_y * n1_y)) * (theta_b + 1.0) / theta_b +
-                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_b + theta_l - 1.0) / theta_l);
-            N[1][offset(0, -1)] = eps_p * (theta_b - 2.0) / (theta_b - 1.0);
-            N[1][offset(0, -2)] = -eps_p * (theta_b - 1.0) / (theta_b - 2.0);
-            N[1][offset(0, 1)]  = -(eps_m + eps_jump * (n1_y * n1_y)) * theta_b / (theta_b + 1.0) -
-                                 eps_jump * n1_y * n2_y * theta_b * (dy / dx);
-            N[1][offset(1, 0)] = -eps_jump * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1.0) + theta_b);
-            N[1][offset(1, 1)] = eps_jump * n1_y * n2_y * theta_b * (dy / dx);
+        InterCaseResult r;
+        r.n_intf       = 2;
+        r.stencil_size = 25;
+        double M[3][3], N[3][25], D[3];
+        assemble_MND<25>(2, B, nullptr, C, 4, a_term, grad_coeff, a_tau_term, b_term, dir, offset25, offset_ext, M, N,
+                         D);
 
-            // Solve M * x = d and M * X = N via explicit 2x2 inverse
-            double det        = M[0][0] * M[1][1] - M[0][1] * M[1][0];
-            double invM[2][2] = {{M[1][1] / det, -M[0][1] / det}, {-M[1][0] / det, M[0][0] / det}};
+        double det    = M[0][0] * M[1][1] - M[0][1] * M[1][0];
+        double invM00 = M[1][1] / det, invM01 = -M[0][1] / det;
+        double invM10 = -M[1][0] / det, invM11 = M[0][0] / det;
+        r.M_inv_d[0] = invM00 * D[0] + invM01 * D[1];
+        r.M_inv_d[1] = invM10 * D[0] + invM11 * D[1];
+        for (int k = 0; k < 25; ++k) {
+            r.M_inv_N[0][k] = invM00 * N[0][k] + invM01 * N[1][k];
+            r.M_inv_N[1][k] = invM10 * N[0][k] + invM11 * N[1][k];
+        }
 
-            double M_inv_d[2] = {invM[0][0] * d[0] + invM[0][1] * d[1], invM[1][0] * d[0] + invM[1][1] * d[1]};
+        r.theta_r  = theta_r;
+        r.theta_l  = theta_l;
+        r.theta_t  = theta_t;
+        r.theta_b  = theta_b;
+        r.bot_x    = bot_x;
+        r.bot_y    = bot_y;
+        r.eps_r    = eps_r;
+        r.eps_l    = eps_l;
+        r.eps_t    = eps_t;
+        r.eps_b    = eps_b;
+        r.eps[0]   = eps_arr[0];
+        r.eps[1]   = eps_arr[1];
+        r.theta[0] = theta_arr[0];
+        r.theta[1] = theta_arr[1];
+        return r;
+    }
 
-            double M_inv_N[2][25];
-            for (int k = 0; k < 25; ++k) {
-                M_inv_N[0][k] = invM[0][0] * N[0][k] + invM[0][1] * N[1][k];
-                M_inv_N[1][k] = invM[1][0] * N[0][k] + invM[1][1] * N[1][k];
-            }
+    void coeff_case2(size_t direction, int i, int j) {
+        auto r              = case2(direction, i, j);
+        int row_idx         = index(i, j);
 
-            rhs_h(row_idx) -= M_inv_d[0] * eps_l / theta_l / bot_x + M_inv_d[1] * eps_b / theta_b / bot_y;
+        double sub_coeff[2] = {
+            r.eps[0] / r.theta[0] / r.bot_x,
+            r.eps[1] / r.theta[1] / r.bot_y,
+        };
+        rhs_h(row_idx) -= r.M_inv_d[0] * sub_coeff[0] + r.M_inv_d[1] * sub_coeff[1];
 
-            for (int offset_x = -2; offset_x <= 2; ++offset_x) {
-                for (int offset_y = -2; offset_y <= 2; ++offset_y) {
-                    double value = M_inv_N[0][offset(offset_x, offset_y)] * eps_l / theta_l / bot_x +
-                                   M_inv_N[1][offset(offset_x, offset_y)] * eps_b / theta_b / bot_y;
-
-                    if (offset_x == 0 && offset_y == 0) {
-                        value +=
-                            -(eps_r / theta_r + eps_l / theta_l) / bot_x - (eps_t / theta_t + eps_b / theta_b) / bot_y;
-                    } else if (offset_x == 1 && offset_y == 0) {
-                        value += eps_r / theta_r / bot_x;
-                    } else if (offset_x == 0 && offset_y == 1) {
-                        value += eps_t / theta_t / bot_y;
-                    }
-
-                    rows_coo.push_back(row_idx);
-                    cols_coo.push_back(index(i + offset_x, j + offset_y));
-                    vals_coo.push_back(value);
+        for (int ox = -2; ox <= 2; ++ox) {
+            for (int oy = -2; oy <= 2; ++oy) {
+                double value =
+                    r.M_inv_N[0][offset25(ox, oy)] * sub_coeff[0] + r.M_inv_N[1][offset25(ox, oy)] * sub_coeff[1];
+                if (ox == 0 && oy == 0) {
+                    value += -(r.eps_r / r.theta_r + r.eps_l / r.theta_l) / r.bot_x -
+                             (r.eps_t / r.theta_t + r.eps_b / r.theta_b) / r.bot_y;
+                } else if (ox == 1 && oy == 0 && !(direction & Direction::R)) {
+                    value += r.eps_r / r.theta_r / r.bot_x;
+                } else if (ox == -1 && oy == 0 && !(direction & Direction::L)) {
+                    value += r.eps_l / r.theta_l / r.bot_x;
+                } else if (ox == 0 && oy == 1 && !(direction & Direction::T)) {
+                    value += r.eps_t / r.theta_t / r.bot_y;
+                } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
+                    value += r.eps_b / r.theta_b / r.bot_y;
                 }
+                rows_coo.push_back(row_idx);
+                cols_coo.push_back(index(i + ox, j + oy));
+                vals_coo.push_back(value);
             }
         }
     }
 
-    InterfaceValue interface_value_case0(int i, int j, const auto& u) {
-        return {
-            u(i - 1, j), u(i + 1, j), u(i, j - 1), u(i, j + 1), 1.0, 1.0, 1.0, 1.0,
+    // -----------------------------------------------------------------------
+    // Case 3 -- two cuts + one extra on outer ray
+    // -----------------------------------------------------------------------
+    size_t case3_extra_dir(size_t direction, int i, int j) {
+        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        size_t extra        = 0;
+        if ((direction & Direction::R) && (world.surface(x + dx, y) * world.surface(x + 2 * dx, y) < 0))
+            extra |= Direction::R;
+        if ((direction & Direction::T) && (world.surface(x, y + dy) * world.surface(x, y + 2 * dy) < 0))
+            extra |= Direction::T;
+        if ((direction & Direction::L) && (world.surface(x - dx, y) * world.surface(x - 2 * dx, y) < 0))
+            extra |= Direction::L;
+        if ((direction & Direction::B) && (world.surface(x, y - dy) * world.surface(x, y - 2 * dy) < 0))
+            extra |= Direction::B;
+        return extra;
+    }
+
+    InterCaseResult case3(size_t direction, size_t extra, int i, int j) {
+        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        double eta          = world.surface(x, y);
+        double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
+
+        double theta_r      = compute_theta(Direction::R, i, j);
+        double theta_t      = compute_theta(Direction::T, i, j);
+        double theta_l      = compute_theta(Direction::L, i, j);
+        double theta_b      = compute_theta(Direction::B, i, j);
+        double bot_x        = (theta_r + theta_l) / 2.0 * dx * dx;
+        double bot_y        = (theta_t + theta_b) / 2.0 * dy * dy;
+
+        double theta_rr = 0, theta_tt = 0, theta_ll = 0, theta_bb = 0;
+        if (extra & Direction::R)
+            theta_rr = compute_theta(Direction::R, i + 1, j);
+        if (extra & Direction::T)
+            theta_tt = compute_theta(Direction::T, i, j + 1);
+        if (extra & Direction::L)
+            theta_ll = compute_theta(Direction::L, i - 1, j);
+        if (extra & Direction::B)
+            theta_bb = compute_theta(Direction::B, i, j - 1);
+
+        double x_r   = x + theta_r * dx;
+        double x_l   = x - theta_l * dx;
+        double y_t   = y + theta_t * dy;
+        double y_b   = y - theta_b * dy;
+        double eps_r = world.permittivity(x + theta_r * dx / 2.0, y);
+        double eps_l = world.permittivity(x - theta_l * dx / 2.0, y);
+        double eps_t = world.permittivity(x, y + theta_t * dy / 2.0);
+        double eps_b = world.permittivity(x, y - theta_b * dy / 2.0);
+
+        size_t dir[3];
+        double theta_arr[2], theta_extra[2];
+        double x_I[3], y_I[3];
+        double x_ext, y_ext;
+        int offset_ext[2];
+
+        // Dispatch the 8 sub-cases. dir[0] = non-extra, dir[1] = base with extra, dir[2] = extra
+        // s[0]=dirsign(non-extra), s[1]=dirsign(base), s[2]=dirsign(extra, is_extra=true)
+        if (direction == (Direction::T | Direction::R) && extra == Direction::R) {
+            dir[0]         = Direction::T;
+            dir[1]         = Direction::R;
+            dir[2]         = Direction::R;
+            theta_arr[0]   = theta_t;
+            theta_arr[1]   = theta_r;
+            theta_extra[0] = 0;
+            theta_extra[1] = theta_rr;
+            x_I[0]         = x;
+            y_I[0]         = y + dirsign(Direction::T) * theta_t * dy;
+            x_I[1]         = x + dirsign(Direction::R) * theta_r * dx;
+            y_I[1]         = y;
+            x_I[2]         = x + dirsign(Direction::R, true) * (theta_rr - 2) * dx;
+            y_I[2]         = y;
+            x_ext          = x - dx;
+            y_ext          = y - dy;
+            offset_ext[0]  = -1;
+            offset_ext[1]  = -1;
+        } else if (direction == (Direction::T | Direction::R) && extra == Direction::T) {
+            dir[0]         = Direction::R;
+            dir[1]         = Direction::T;
+            dir[2]         = Direction::T;
+            theta_arr[0]   = theta_r;
+            theta_arr[1]   = theta_t;
+            theta_extra[0] = 0;
+            theta_extra[1] = theta_tt;
+            x_I[0]         = x + dirsign(Direction::R) * theta_r * dx;
+            y_I[0]         = y;
+            x_I[1]         = x;
+            y_I[1]         = y + dirsign(Direction::T) * theta_t * dy;
+            x_I[2]         = x;
+            y_I[2]         = y + dirsign(Direction::T, true) * (theta_tt - 2) * dy;
+            x_ext          = x - dx;
+            y_ext          = y - dy;
+            offset_ext[0]  = -1;
+            offset_ext[1]  = -1;
+        } else if (direction == (Direction::T | Direction::L) && extra == Direction::T) {
+            dir[0]         = Direction::L;
+            dir[1]         = Direction::T;
+            dir[2]         = Direction::T;
+            theta_arr[0]   = theta_l;
+            theta_arr[1]   = theta_t;
+            theta_extra[0] = 0;
+            theta_extra[1] = theta_tt;
+            x_I[0]         = x + dirsign(Direction::L) * theta_l * dx;
+            y_I[0]         = y;
+            x_I[1]         = x;
+            y_I[1]         = y + dirsign(Direction::T) * theta_t * dy;
+            x_I[2]         = x;
+            y_I[2]         = y + dirsign(Direction::T, true) * (theta_tt - 2) * dy;
+            x_ext          = x + dx;
+            y_ext          = y - dy;
+            offset_ext[0]  = 1;
+            offset_ext[1]  = -1;
+        } else if (direction == (Direction::T | Direction::L) && extra == Direction::L) {
+            dir[0]         = Direction::T;
+            dir[1]         = Direction::L;
+            dir[2]         = Direction::L;
+            theta_arr[0]   = theta_t;
+            theta_arr[1]   = theta_l;
+            theta_extra[0] = 0;
+            theta_extra[1] = theta_ll;
+            x_I[0]         = x;
+            y_I[0]         = y + dirsign(Direction::T) * theta_t * dy;
+            x_I[1]         = x + dirsign(Direction::L) * theta_l * dx;
+            y_I[1]         = y;
+            x_I[2]         = x + dirsign(Direction::L, true) * (theta_ll - 2) * dx;
+            y_I[2]         = y;
+            x_ext          = x + dx;
+            y_ext          = y - dy;
+            offset_ext[0]  = 1;
+            offset_ext[1]  = -1;
+        } else if (direction == (Direction::L | Direction::B) && extra == Direction::L) {
+            dir[0]         = Direction::B;
+            dir[1]         = Direction::L;
+            dir[2]         = Direction::L;
+            theta_arr[0]   = theta_b;
+            theta_arr[1]   = theta_l;
+            theta_extra[0] = 0;
+            theta_extra[1] = theta_ll;
+            x_I[0]         = x;
+            y_I[0]         = y + dirsign(Direction::B) * theta_b * dy;
+            x_I[1]         = x + dirsign(Direction::L) * theta_l * dx;
+            y_I[1]         = y;
+            x_I[2]         = x + dirsign(Direction::L, true) * (theta_ll - 2) * dx;
+            y_I[2]         = y;
+            x_ext          = x + dx;
+            y_ext          = y + dy;
+            offset_ext[0]  = 1;
+            offset_ext[1]  = 1;
+        } else if (direction == (Direction::L | Direction::B) && extra == Direction::B) {
+            dir[0]         = Direction::L;
+            dir[1]         = Direction::B;
+            dir[2]         = Direction::B;
+            theta_arr[0]   = theta_l;
+            theta_arr[1]   = theta_b;
+            theta_extra[0] = 0;
+            theta_extra[1] = theta_bb;
+            x_I[0]         = x + dirsign(Direction::L) * theta_l * dx;
+            y_I[0]         = y;
+            x_I[1]         = x;
+            y_I[1]         = y + dirsign(Direction::B) * theta_b * dy;
+            x_I[2]         = x;
+            y_I[2]         = y + dirsign(Direction::B, true) * (theta_bb - 2) * dy;
+            x_ext          = x + dx;
+            y_ext          = y + dy;
+            offset_ext[0]  = 1;
+            offset_ext[1]  = 1;
+        } else if (direction == (Direction::R | Direction::B) && extra == Direction::B) {
+            dir[0]         = Direction::R;
+            dir[1]         = Direction::B;
+            dir[2]         = Direction::B;
+            theta_arr[0]   = theta_r;
+            theta_arr[1]   = theta_b;
+            theta_extra[0] = 0;
+            theta_extra[1] = theta_bb;
+            x_I[0]         = x + dirsign(Direction::R) * theta_r * dx;
+            y_I[0]         = y;
+            x_I[1]         = x;
+            y_I[1]         = y + dirsign(Direction::B) * theta_b * dy;
+            x_I[2]         = x;
+            y_I[2]         = y + dirsign(Direction::B, true) * (theta_bb - 2) * dy;
+            x_ext          = x - dx;
+            y_ext          = y + dy;
+            offset_ext[0]  = -1;
+            offset_ext[1]  = 1;
+        } else if (direction == (Direction::R | Direction::B) && extra == Direction::R) {
+            dir[0]         = Direction::B;
+            dir[1]         = Direction::R;
+            dir[2]         = Direction::R;
+            theta_arr[0]   = theta_b;
+            theta_arr[1]   = theta_r;
+            theta_extra[0] = 0;
+            theta_extra[1] = theta_rr;
+            x_I[0]         = x;
+            y_I[0]         = y + dirsign(Direction::B) * theta_b * dy;
+            x_I[1]         = x + dirsign(Direction::R) * theta_r * dx;
+            y_I[1]         = y;
+            x_I[2]         = x + dirsign(Direction::R, true) * (theta_rr - 2) * dx;
+            y_I[2]         = y;
+            x_ext          = x - dx;
+            y_ext          = y + dy;
+            offset_ext[0]  = -1;
+            offset_ext[1]  = 1;
+        } else {
+            Kokkos::printf("case3: invalid direction/extra %d/%d\n", (int)direction, (int)extra);
+            Kokkos::abort("case3: invalid sub-case");
+        }
+
+        double s[3] = {dirsign(dir[0]), dirsign(dir[1]), dirsign(dir[2], true)};
+
+        bool is_x[3];
+        double dr[3];
+        for (int d = 0; d < 3; ++d) {
+            is_x[d] = (dir[d] == Direction::R || dir[d] == Direction::L);
+            dr[d]   = is_x[d] ? dx : dy;
+        }
+
+        // eps_p/m for 3 interfaces
+        double eps_p[3], eps_m[3];
+        for (int d = 0; d < 2; ++d) {
+            if (is_x[d]) {
+                eps_p[d] = world.permittivity(x + s[d] * (theta_arr[d] + 0.01) * dx, y);
+                eps_m[d] = world.permittivity(x + s[d] * (theta_arr[d] - 0.01) * dx, y);
+            } else {
+                eps_p[d] = world.permittivity(x, y + s[d] * (theta_arr[d] + 0.01) * dy);
+                eps_m[d] = world.permittivity(x, y + s[d] * (theta_arr[d] - 0.01) * dy);
+            }
+        }
+        // Extra interface: at the shifted cell center
+        if (extra == Direction::R) {
+            eps_p[2] = world.permittivity(x + 2 * dx + s[2] * (theta_extra[1] + 0.01) * dx, y);
+            eps_m[2] = world.permittivity(x + 2 * dx + s[2] * (theta_extra[1] - 0.01) * dx, y);
+        } else if (extra == Direction::T) {
+            eps_p[2] = world.permittivity(x, y + 2 * dy + s[2] * (theta_extra[1] + 0.01) * dy);
+            eps_m[2] = world.permittivity(x, y + 2 * dy + s[2] * (theta_extra[1] - 0.01) * dy);
+        } else if (extra == Direction::L) {
+            eps_p[2] = world.permittivity(x - 2 * dx + s[2] * (theta_extra[1] + 0.01) * dx, y);
+            eps_m[2] = world.permittivity(x - 2 * dx + s[2] * (theta_extra[1] - 0.01) * dx, y);
+        } else { // B
+            eps_p[2] = world.permittivity(x, y - 2 * dy + s[2] * (theta_extra[1] + 0.01) * dy);
+            eps_m[2] = world.permittivity(x, y - 2 * dy + s[2] * (theta_extra[1] - 0.01) * dy);
+        }
+        double eps_jump[3];
+        for (int d = 0; d < 3; ++d)
+            eps_jump[d] = (eta > 0.0) ? (eps_m[d] - eps_p[d]) : (eps_p[d] - eps_m[d]);
+
+        // Interpolate: first two at (i,j), extra at shifted cell
+        double n1_I[3], n2_I[3], a_tau_I[3], a_I[3], b_I[3];
+        for (int d = 0; d < 2; ++d) {
+            n1_I[d]    = interp(dir[d], theta_arr[d], i, j, n1);
+            n2_I[d]    = interp(dir[d], theta_arr[d], i, j, n2);
+            a_tau_I[d] = interp(dir[d], theta_arr[d], i, j, a_tau);
+            a_I[d]     = interp(dir[d], theta_arr[d], i, j, a);
+            b_I[d]     = interp(dir[d], theta_arr[d], i, j, b);
+        }
+        if (extra == Direction::R) {
+            n1_I[2]    = interp(Direction::L, theta_extra[1], i + 2, j, n1);
+            n2_I[2]    = interp(Direction::L, theta_extra[1], i + 2, j, n2);
+            a_tau_I[2] = interp(Direction::L, theta_extra[1], i + 2, j, a_tau);
+            a_I[2]     = interp(Direction::L, theta_extra[1], i + 2, j, a);
+            b_I[2]     = interp(Direction::L, theta_extra[1], i + 2, j, b);
+        } else if (extra == Direction::T) {
+            n1_I[2]    = interp(Direction::B, theta_extra[1], i, j + 2, n1);
+            n2_I[2]    = interp(Direction::B, theta_extra[1], i, j + 2, n2);
+            a_tau_I[2] = interp(Direction::B, theta_extra[1], i, j + 2, a_tau);
+            a_I[2]     = interp(Direction::B, theta_extra[1], i, j + 2, a);
+            b_I[2]     = interp(Direction::B, theta_extra[1], i, j + 2, b);
+        } else if (extra == Direction::L) {
+            n1_I[2]    = interp(Direction::R, theta_extra[1], i - 2, j, n1);
+            n2_I[2]    = interp(Direction::R, theta_extra[1], i - 2, j, n2);
+            a_tau_I[2] = interp(Direction::R, theta_extra[1], i - 2, j, a_tau);
+            a_I[2]     = interp(Direction::R, theta_extra[1], i - 2, j, a);
+            b_I[2]     = interp(Direction::R, theta_extra[1], i - 2, j, b);
+        } else { // B
+            n1_I[2]    = interp(Direction::T, theta_extra[1], i, j - 2, n1);
+            n2_I[2]    = interp(Direction::T, theta_extra[1], i, j - 2, n2);
+            a_tau_I[2] = interp(Direction::T, theta_extra[1], i, j - 2, a_tau);
+            a_I[2]     = interp(Direction::T, theta_extra[1], i, j - 2, a);
+            b_I[2]     = interp(Direction::T, theta_extra[1], i, j - 2, b);
+        }
+
+        // B matrix (3x3) -- explicit algebraic coupling
+        double B3[3][3] = {};
+        double t0 = theta_arr[0], te0 = theta_extra[0];
+        double t1 = theta_arr[1], te1 = theta_extra[1];
+        B3[0][0] =
+            s_eta * s[0] *
+            (eps_p[0] * (3 - 2 * t0 - te0) / ((1 - t0) * (2 - t0 - te0)) + eps_m[0] * (2 * t0 + 1) / (t0 * (t0 + 1)));
+        B3[1][1] =
+            s_eta * s[1] *
+            (eps_p[1] * (3 - 2 * t1 - te1) / ((1 - t1) * (2 - t1 - te1)) + eps_m[1] * (2 * t1 + 1) / (t1 * (t1 + 1)));
+        B3[2][2] = s_eta * s[2] *
+                   (eps_p[2] * (3 - 2 * te1 - t1) / ((1 - te1) * (2 - t1 - te1)) +
+                    eps_m[2] * (2 * te1 + 1) / (te1 * (te1 + 1)));
+        B3[1][2] = s_eta * s[1] * eps_p[1] * (1 - t1) / ((2 - t1 - te1) * (1 - te1));
+        B3[2][1] = s_eta * s[2] * eps_p[2] * (1 - te1) / ((2 - t1 - te1) * (1 - t1));
+
+        // C matrix (3x5) -- built directly from Python lines 910-954
+        // Row 0: -s_eta * s[0] * [...]
+        double C5[3][5] = {};
+        C5[0][0]        = -s_eta * s[0] * (-eps_m[0] * t0 / (1 + t0));
+        C5[0][1]        = -s_eta * s[0] * (eps_m[0] * (1 + t0) / t0);
+        C5[0][2]        = -s_eta * s[0] * (eps_p[0] * (2 - t0) / (1 - t0));
+        C5[0][3]        = -s_eta * s[0] * (-eps_p[0] * (1 - t0) / (2 - t0));
+        C5[0][4]        = 0.0;
+
+        // Row 1: -s_eta * s[1] * [...], with t0 in denominator for entry [1]
+        C5[1][0] = -s_eta * s[1] * (-eps_m[1] * t1 / (1 + t1));
+        C5[1][1] = -s_eta * s[1] * (eps_m[1] * (t1 + 1) / (t1 * (t0 + 1)));
+        C5[1][2] = -s_eta * s[1] * (eps_p[1] * (2 - t1 - te1) / ((1 - t1) * (1 - te1)));
+        C5[1][3] = 0.0;
+        C5[1][4] = 0.0;
+
+        // Row 2: +s_eta * s[2] * [...] (positive sign, NOT negative!)
+        C5[2][0] = 0.0;
+        C5[2][1] = 0.0;
+        C5[2][2] = s_eta * s[2] * (-eps_p[2] * (2 - t1 - te1) / ((2 - t1) * (1 - te1)));
+        C5[2][3] = s_eta * s[2] * (-eps_m[2] * (te1 + 1) / te1);
+        C5[2][4] = s_eta * s[2] * (eps_m[2] * te1 / (te1 + 1));
+
+        // a_term (3)
+        double a_term3[3];
+        a_term3[0] = -s[0] * a_I[0] * eps_p[0] * (3 - 2 * t0) / ((1 - t0) * (2 - t0));
+        a_term3[1] = -s[1] * a_I[1] * eps_p[1] * (3 - 2 * t1 - te1) / ((1 - t1) * (2 - t1 - te1));
+        a_term3[2] = -s[2] * a_I[2] * eps_p[1] * (3 - 2 * te1 - t1) / ((1 - te1) * (2 - t1 - te1));
+
+        // geometric
+        double P_inv[6][6];
+        compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext, P_inv);
+        double grad_coeff[3][6];
+        for (int d = 0; d < 3; ++d) {
+            double gc6[6];
+            compute_grad_coeff(x_I[d], y_I[d], n1_I[d], n2_I[d], P_inv, gc6);
+            double n_tang = is_x[d] ? -n2_I[d] : n1_I[d];
+            for (int k = 0; k < 6; ++k)
+                grad_coeff[d][k] = dr[d] * eps_jump[d] * n_tang * gc6[k];
+        }
+
+        double a_tau_term3[3], b_term3[3];
+        for (int d = 0; d < 3; ++d) {
+            double n_tang  = is_x[d] ? -n2_I[d] : n1_I[d];
+            double n_norm  = is_x[d] ? n1_I[d] : n2_I[d];
+            a_tau_term3[d] = dr[d] * a_tau_I[d] * eps_p[d] * n_tang;
+            b_term3[d]     = dr[d] * b_I[d] * n_norm;
+        }
+
+        InterCaseResult r;
+        r.n_intf       = 3;
+        r.stencil_size = 49;
+        // Use a custom assembly for case3 (full B, c_size=5)
+        int grad_idx[9]        = {};
+        grad_idx[Direction::R] = 0;
+        grad_idx[Direction::L] = 1;
+        grad_idx[Direction::T] = 2;
+        grad_idx[Direction::B] = 3;
+        int dx_dir[9] = {}, dy_dir[9] = {};
+        dx_dir[Direction::R] = 1;
+        dy_dir[Direction::R] = 0;
+        dx_dir[Direction::L] = -1;
+        dy_dir[Direction::L] = 0;
+        dx_dir[Direction::T] = 0;
+        dy_dir[Direction::T] = 1;
+        dx_dir[Direction::B] = 0;
+        dy_dir[Direction::B] = -1;
+
+        double M3[3][3], N3[3][49], D3[3];
+        for (int d = 0; d < 3; ++d)
+            D3[d] = a_tau_term3[d] + b_term3[d] - a_term3[d];
+        for (int d = 0; d < 3; ++d)
+            for (int e = 0; e < 3; ++e)
+                M3[d][e] = B3[d][e] - grad_coeff[d][grad_idx[dir[e]]];
+        for (int d = 0; d < 3; ++d)
+            for (int k = 0; k < 49; ++k)
+                N3[d][k] = 0.0;
+
+        for (int d = 0; d < 3; ++d) {
+            N3[d][offset49(1, 0)] =
+                (dir[0] == Direction::R || dir[1] == Direction::R || dir[2] == Direction::R) ? 0.0 : grad_coeff[d][0];
+            N3[d][offset49(-1, 0)] =
+                (dir[0] == Direction::L || dir[1] == Direction::L || dir[2] == Direction::L) ? 0.0 : grad_coeff[d][1];
+            N3[d][offset49(0, 1)] =
+                (dir[0] == Direction::T || dir[1] == Direction::T || dir[2] == Direction::T) ? 0.0 : grad_coeff[d][2];
+            N3[d][offset49(0, -1)] =
+                (dir[0] == Direction::B || dir[1] == Direction::B || dir[2] == Direction::B) ? 0.0 : grad_coeff[d][3];
+            N3[d][offset49(0, 0)]                         = grad_coeff[d][4];
+            N3[d][offset49(offset_ext[0], offset_ext[1])] = grad_coeff[d][5];
+            int dx = dx_dir[dir[d]], dy = dy_dir[dir[d]];
+            for (int k = 0; k < 5; ++k)
+                N3[d][offset49((k - 1) * dx, (k - 1) * dy)] -= C5[d][k];
+        }
+
+        double invM3[3][3];
+        invert3x3(M3, invM3);
+        for (int d = 0; d < 3; ++d) {
+            r.M_inv_d[d] = invM3[d][0] * D3[0] + invM3[d][1] * D3[1] + invM3[d][2] * D3[2];
+            for (int k = 0; k < 49; ++k)
+                r.M_inv_N[d][k] = invM3[d][0] * N3[0][k] + invM3[d][1] * N3[1][k] + invM3[d][2] * N3[2][k];
+        }
+
+        r.theta_r  = theta_r;
+        r.theta_l  = theta_l;
+        r.theta_t  = theta_t;
+        r.theta_b  = theta_b;
+        r.bot_x    = bot_x;
+        r.bot_y    = bot_y;
+        r.eps_r    = eps_r;
+        r.eps_l    = eps_l;
+        r.eps_t    = eps_t;
+        r.eps_b    = eps_b;
+        r.eps[0]   = (dir[0] == Direction::R)   ? eps_r
+                     : (dir[0] == Direction::L) ? eps_l
+                     : (dir[0] == Direction::T) ? eps_t
+                                                : eps_b;
+        r.eps[1]   = (dir[1] == Direction::R)   ? eps_r
+                     : (dir[1] == Direction::L) ? eps_l
+                     : (dir[1] == Direction::T) ? eps_t
+                                                : eps_b;
+        r.theta[0] = theta_arr[0];
+        r.theta[1] = theta_arr[1];
+        return r;
+    }
+
+    void coeff_case3(size_t direction, size_t extra, int i, int j) {
+        auto r              = case3(direction, extra, i, j);
+        int row_idx         = index(i, j);
+
+        double sub_coeff[2] = {
+            r.eps[0] / r.theta[0] / r.bot_x,
+            r.eps[1] / r.theta[1] / r.bot_y,
         };
+        rhs_h(row_idx) -= r.M_inv_d[0] * sub_coeff[0] + r.M_inv_d[1] * sub_coeff[1];
+
+        for (int ox = -3; ox <= 3; ++ox) {
+            for (int oy = -3; oy <= 3; ++oy) {
+                double value =
+                    r.M_inv_N[0][offset49(ox, oy)] * sub_coeff[0] + r.M_inv_N[1][offset49(ox, oy)] * sub_coeff[1];
+                if (ox == 0 && oy == 0) {
+                    value += -(r.eps_r / r.theta_r + r.eps_l / r.theta_l) / r.bot_x -
+                             (r.eps_t / r.theta_t + r.eps_b / r.theta_b) / r.bot_y;
+                } else if (ox == 1 && oy == 0 && !(direction & Direction::R)) {
+                    value += r.eps_r / r.theta_r / r.bot_x;
+                } else if (ox == -1 && oy == 0 && !(direction & Direction::L)) {
+                    value += r.eps_l / r.theta_l / r.bot_x;
+                } else if (ox == 0 && oy == 1 && !(direction & Direction::T)) {
+                    value += r.eps_t / r.theta_t / r.bot_y;
+                } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
+                    value += r.eps_b / r.theta_b / r.bot_y;
+                }
+                rows_coo.push_back(row_idx);
+                cols_coo.push_back(index(i + ox, j + oy));
+                vals_coo.push_back(value);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Case 4 -- three interface cuts
+    // -----------------------------------------------------------------------
+    InterCaseResult case4(size_t direction, int i, int j) {
+        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        double eta          = world.surface(x, y);
+        double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
+
+        double theta_r      = compute_theta(Direction::R, i, j);
+        double theta_t      = compute_theta(Direction::T, i, j);
+        double theta_l      = compute_theta(Direction::L, i, j);
+        double theta_b      = compute_theta(Direction::B, i, j);
+
+        double x_r          = x + theta_r * dx;
+        double x_l          = x - theta_l * dx;
+        double y_t          = y + theta_t * dy;
+        double y_b          = y - theta_b * dy;
+        double bot_x        = (theta_r + theta_l) / 2.0 * dx * dx;
+        double bot_y        = (theta_t + theta_b) / 2.0 * dy * dy;
+        double eps_r        = world.permittivity(x + theta_r * dx / 2.0, y);
+        double eps_l        = world.permittivity(x - theta_l * dx / 2.0, y);
+        double eps_t        = world.permittivity(x, y + theta_t * dy / 2.0);
+        double eps_b        = world.permittivity(x, y - theta_b * dy / 2.0);
+
+        size_t dir[3];
+        double theta_arr[3], eps_arr[3];
+        double x_I[3], y_I[3];
+        bool is_x[3];
+        double x_ext, y_ext;
+        int offset_ext[2];
+
+        if (direction == (Direction::R | Direction::T | Direction::L)) {
+            dir[0]        = Direction::R;
+            dir[1]        = Direction::T;
+            dir[2]        = Direction::L;
+            theta_arr[0]  = theta_r;
+            theta_arr[1]  = theta_t;
+            theta_arr[2]  = theta_l;
+            eps_arr[0]    = eps_r;
+            eps_arr[1]    = eps_t;
+            eps_arr[2]    = eps_l;
+            x_I[0]        = x + theta_r * dx;
+            y_I[0]        = y;
+            x_I[1]        = x;
+            y_I[1]        = y + theta_t * dy;
+            x_I[2]        = x - theta_l * dx;
+            y_I[2]        = y;
+            x_ext         = x - dx;
+            y_ext         = y - dy;
+            offset_ext[0] = -1;
+            offset_ext[1] = -1;
+        } else if (direction == (Direction::L | Direction::T | Direction::B)) {
+            dir[0]        = Direction::L;
+            dir[1]        = Direction::T;
+            dir[2]        = Direction::B;
+            theta_arr[0]  = theta_l;
+            theta_arr[1]  = theta_t;
+            theta_arr[2]  = theta_b;
+            eps_arr[0]    = eps_l;
+            eps_arr[1]    = eps_t;
+            eps_arr[2]    = eps_b;
+            x_I[0]        = x - theta_l * dx;
+            y_I[0]        = y;
+            x_I[1]        = x;
+            y_I[1]        = y + theta_t * dy;
+            x_I[2]        = x;
+            y_I[2]        = y - theta_b * dy;
+            x_ext         = x + dx;
+            y_ext         = y - dy;
+            offset_ext[0] = 1;
+            offset_ext[1] = -1;
+        } else if (direction == (Direction::L | Direction::B | Direction::R)) {
+            dir[0]        = Direction::L;
+            dir[1]        = Direction::B;
+            dir[2]        = Direction::R;
+            theta_arr[0]  = theta_l;
+            theta_arr[1]  = theta_b;
+            theta_arr[2]  = theta_r;
+            eps_arr[0]    = eps_l;
+            eps_arr[1]    = eps_b;
+            eps_arr[2]    = eps_r;
+            x_I[0]        = x - theta_l * dx;
+            y_I[0]        = y;
+            x_I[1]        = x;
+            y_I[1]        = y - theta_b * dy;
+            x_I[2]        = x + theta_r * dx;
+            y_I[2]        = y;
+            x_ext         = x + dx;
+            y_ext         = y + dy;
+            offset_ext[0] = 1;
+            offset_ext[1] = 1;
+        } else { // R|B|T
+            dir[0]        = Direction::R;
+            dir[1]        = Direction::B;
+            dir[2]        = Direction::T;
+            theta_arr[0]  = theta_r;
+            theta_arr[1]  = theta_b;
+            theta_arr[2]  = theta_t;
+            eps_arr[0]    = eps_r;
+            eps_arr[1]    = eps_b;
+            eps_arr[2]    = eps_t;
+            x_I[0]        = x + theta_r * dx;
+            y_I[0]        = y;
+            x_I[1]        = x;
+            y_I[1]        = y - theta_b * dy;
+            x_I[2]        = x;
+            y_I[2]        = y + theta_t * dy;
+            x_ext         = x - dx;
+            y_ext         = y + dy;
+            offset_ext[0] = -1;
+            offset_ext[1] = 1;
+        }
+        for (int d = 0; d < 3; ++d)
+            is_x[d] = (dir[d] == Direction::R || dir[d] == Direction::L);
+
+        double s[3];
+        for (int d = 0; d < 3; ++d)
+            s[d] = dirsign(dir[d]);
+        double dr[3];
+        for (int d = 0; d < 3; ++d)
+            dr[d] = is_x[d] ? dx : dy;
+
+        double eps_p[3], eps_m[3];
+        for (int d = 0; d < 3; ++d) {
+            if (is_x[d]) {
+                eps_p[d] = world.permittivity(x + s[d] * (theta_arr[d] + 0.01) * dx, y);
+                eps_m[d] = world.permittivity(x + s[d] * (theta_arr[d] - 0.01) * dx, y);
+            } else {
+                eps_p[d] = world.permittivity(x, y + s[d] * (theta_arr[d] + 0.01) * dy);
+                eps_m[d] = world.permittivity(x, y + s[d] * (theta_arr[d] - 0.01) * dy);
+            }
+        }
+        double eps_jump[3];
+        for (int d = 0; d < 3; ++d)
+            eps_jump[d] = (eta > 0.0) ? (eps_m[d] - eps_p[d]) : (eps_p[d] - eps_m[d]);
+
+        double n1_I[3], n2_I[3], a_tau_I[3], a_I[3], b_I[3];
+        for (int d = 0; d < 3; ++d) {
+            n1_I[d]    = interp(dir[d], theta_arr[d], i, j, n1);
+            n2_I[d]    = interp(dir[d], theta_arr[d], i, j, n2);
+            a_tau_I[d] = interp(dir[d], theta_arr[d], i, j, a_tau);
+            a_I[d]     = interp(dir[d], theta_arr[d], i, j, a);
+            b_I[d]     = interp(dir[d], theta_arr[d], i, j, b);
+        }
+
+        // algebraic: diagonal B (no collinear interfaces in case4)
+        double B[3];
+        Kokkos::Array<double, 4> C[3];
+        double a_term[3];
+        for (int d = 0; d < 3; ++d)
+            per_iface_algebraic(s_eta, s[d], eps_p[d], eps_m[d], theta_arr[d], a_I[d], B[d], C[d], a_term[d]);
+
+        // geometric
+        double P_inv[6][6];
+        compute_P_inv(x, y, x_r, x_l, x_ext, y_t, y_b, y_ext, P_inv);
+        double grad_coeff[3][6];
+        for (int d = 0; d < 3; ++d) {
+            double gc6[6];
+            compute_grad_coeff(x_I[d], y_I[d], n1_I[d], n2_I[d], P_inv, gc6);
+            double n_tang = is_x[d] ? -n2_I[d] : n1_I[d];
+            for (int k = 0; k < 6; ++k)
+                grad_coeff[d][k] = dr[d] * eps_jump[d] * n_tang * gc6[k];
+        }
+
+        double a_tau_term[3], b_term[3];
+        for (int d = 0; d < 3; ++d) {
+            double n_tang = is_x[d] ? -n2_I[d] : n1_I[d];
+            double n_norm = is_x[d] ? n1_I[d] : n2_I[d];
+            a_tau_term[d] = dr[d] * a_tau_I[d] * eps_p[d] * n_tang;
+            b_term[d]     = dr[d] * b_I[d] * n_norm;
+        }
+
+        InterCaseResult r;
+        r.n_intf       = 3;
+        r.stencil_size = 25;
+        double M[3][3], N[3][25], D[3];
+        assemble_MND<25>(3, B, nullptr, C, 4, a_term, grad_coeff, a_tau_term, b_term, dir, offset25, offset_ext, M, N,
+                         D);
+
+        double invM[3][3];
+        invert3x3(M, invM);
+        for (int d = 0; d < 3; ++d) {
+            r.M_inv_d[d] = invM[d][0] * D[0] + invM[d][1] * D[1] + invM[d][2] * D[2];
+            for (int k = 0; k < 25; ++k)
+                r.M_inv_N[d][k] = invM[d][0] * N[0][k] + invM[d][1] * N[1][k] + invM[d][2] * N[2][k];
+        }
+
+        r.theta_r = theta_r;
+        r.theta_l = theta_l;
+        r.theta_t = theta_t;
+        r.theta_b = theta_b;
+        r.bot_x   = bot_x;
+        r.bot_y   = bot_y;
+        r.eps_r   = eps_r;
+        r.eps_l   = eps_l;
+        r.eps_t   = eps_t;
+        r.eps_b   = eps_b;
+        for (int d = 0; d < 3; ++d) {
+            r.eps[d]   = eps_arr[d];
+            r.theta[d] = theta_arr[d];
+            r.is_x[d]  = is_x[d];
+            r.dir[d]   = dir[d];
+        }
+        return r;
+    }
+
+    void coeff_case4(size_t direction, int i, int j) {
+        auto r      = case4(direction, i, j);
+        int row_idx = index(i, j);
+
+        double sub_coeff[3];
+        for (int d = 0; d < 3; ++d)
+            sub_coeff[d] = r.eps[d] / r.theta[d] / (r.is_x[d] ? r.bot_x : r.bot_y);
+        rhs_h(row_idx) -= r.M_inv_d[0] * sub_coeff[0] + r.M_inv_d[1] * sub_coeff[1] + r.M_inv_d[2] * sub_coeff[2];
+
+        for (int ox = -2; ox <= 2; ++ox) {
+            for (int oy = -2; oy <= 2; ++oy) {
+                double value = r.M_inv_N[0][offset25(ox, oy)] * sub_coeff[0] +
+                               r.M_inv_N[1][offset25(ox, oy)] * sub_coeff[1] +
+                               r.M_inv_N[2][offset25(ox, oy)] * sub_coeff[2];
+                if (ox == 0 && oy == 0) {
+                    value += -(r.eps_r / r.theta_r + r.eps_l / r.theta_l) / r.bot_x -
+                             (r.eps_t / r.theta_t + r.eps_b / r.theta_b) / r.bot_y;
+                } else if (ox == 1 && oy == 0 && !(direction & Direction::R)) {
+                    value += r.eps_r / r.theta_r / r.bot_x;
+                } else if (ox == -1 && oy == 0 && !(direction & Direction::L)) {
+                    value += r.eps_l / r.theta_l / r.bot_x;
+                } else if (ox == 0 && oy == 1 && !(direction & Direction::T)) {
+                    value += r.eps_t / r.theta_t / r.bot_y;
+                } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
+                    value += r.eps_b / r.theta_b / r.bot_y;
+                }
+                rows_coo.push_back(row_idx);
+                cols_coo.push_back(index(i + ox, j + oy));
+                vals_coo.push_back(value);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Interface value functions (for electric field computation)
+    // -----------------------------------------------------------------------
+    InterfaceValue interface_value_case0(int i, int j, const auto& u) {
+        return {u(i - 1, j), u(i + 1, j), u(i, j - 1), u(i, j + 1), 1.0, 1.0, 1.0, 1.0};
     }
 
     InterfaceValue interface_value_case1(size_t direction, int i, int j, const auto& u) {
-        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
-        double eta          = world.surface(x, y);
-
-        double theta        = compute_theta(direction, i, j);
-
-        double a_tau_I      = interp(direction, theta, i, j, a_tau);
-        double a_I          = interp(direction, theta, i, j, a);
-        double b_I          = interp(direction, theta, i, j, b);
-        double n1_I         = interp(direction, theta, i, j, n1);
-        double n2_I         = interp(direction, theta, i, j, n2);
-
-        double theta_l, theta_r, theta_b, theta_t;
-
-        if (direction == Direction::R) {
-
-            theta_l = 1.0;
-            theta_r = theta;
-            theta_b = 1.0;
-            theta_t = 1.0;
-
-            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
-
-            if (eta > 0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x + dx, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x + dx, y);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            double d = -a_tau_I * eps_p * n2_I * dx + b_I * n1_I * dx +
-                       a_I * eps_p * (3.0 - 2.0 * theta_r) / ((2.0 - theta_r) * (1.0 - theta_r));
-
-            if (eta > 0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            double M = -eps_p * (3.0 - 2.0 * theta_r) / ((1.0 - theta_r) * (2.0 - theta_r)) -
-                       eps_m * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0)) -
-                       eps_jump * n2_I * n2_I * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0));
-
-            double N[7]     = {-eps_jump * n1_I * n2_I * theta_r * dx / dy -
-                                   (eps_jump * n2_I * n2_I + eps_m) * (1.0 + theta_r) / theta_r,
-
-                               -eps_p * (theta_r - 2.0) / (theta_r - 1.0),
-
-                               eps_p * (theta_r - 1.0) / (theta_r - 2.0),
-
-                               eps_jump * n1_I * n2_I * theta_r * dx / dy +
-                                   (eps_jump * n2_I * n2_I + eps_m) * theta_r / (1.0 + theta_r),
-
-                               eps_jump * n1_I * n2_I * (2.0 * theta_r + 1.0) * dx / (2.0 * dy),
-
-                               -eps_jump * n1_I * n2_I * dx / (2.0 * dy),
-
-                               -eps_jump * n1_I * n2_I * theta_r * dx / dy};
-
-            double u_arr[7] = {u(i, j),     u(i + 1, j), u(i + 2, j),    u(i - 1, j),
-                               u(i, j - 1), u(i, j + 1), u(i - 1, j - 1)};
-
-            double dot      = 0.0;
-            for (int k = 0; k < 7; k++) {
-                dot += N[k] * u_arr[k];
-            }
-
-            double u_I = (dot + d) / M;
-
-            return {u(i - 1, j), u_I, u(i, j - 1), u(i, j + 1), theta_l, theta_r, theta_b, theta_t};
-        } else if (direction == Direction::T) {
-
-            theta_l = 1.0;
-            theta_r = 1.0;
-            theta_b = 1.0;
-            theta_t = theta;
-
-            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
-
-            if (eta > 0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x, y + dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x, y + dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            double d = a_tau_I * eps_p * n1_I * dy + b_I * n2_I * dy +
-                       a_I * eps_p * (3.0 - 2.0 * theta_t) / ((2.0 - theta_t) * (1.0 - theta_t));
-
-            if (eta > 0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            double M = -eps_p * (3.0 - 2.0 * theta_t) / ((1.0 - theta_t) * (2.0 - theta_t)) -
-                       eps_m * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0)) -
-                       eps_jump * n1_I * n1_I * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0));
-
-            double N[7]     = {-eps_jump * n1_I * n2_I * theta_t * dy / dx -
-                                   (eps_jump * n1_I * n1_I + eps_m) * (1.0 + theta_t) / theta_t,
-
-                               -eps_p * (theta_t - 2.0) / (theta_t - 1.0),
-
-                               eps_p * (theta_t - 1.0) / (theta_t - 2.0),
-
-                               eps_jump * n1_I * n2_I * theta_t * dy / dx +
-                                   (eps_jump * n1_I * n1_I + eps_m) * theta_t / (1.0 + theta_t),
-
-                               eps_jump * n1_I * n2_I * (2.0 * theta_t + 1.0) * dy / (2.0 * dx),
-
-                               -eps_jump * n1_I * n2_I * dy / (2.0 * dx),
-
-                               -eps_jump * n1_I * n2_I * theta_t * dy / dx};
-
-            double u_arr[7] = {u(i, j),     u(i, j + 1), u(i, j + 2),    u(i, j - 1),
-                               u(i - 1, j), u(i + 1, j), u(i - 1, j - 1)};
-
-            double dot      = 0.0;
-            for (int k = 0; k < 7; k++) {
-                dot += N[k] * u_arr[k];
-            }
-
-            double u_I = (dot + d) / M;
-
-            return {u(i - 1, j), u(i + 1, j), u(i, j - 1), u_I, theta_l, theta_r, theta_b, theta_t};
-        } else if (direction == Direction::L) {
-
-            theta_l = theta;
-            theta_r = 1.0;
-            theta_b = 1.0;
-            theta_t = 1.0;
-
-            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
-
-            if (eta > 0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x - dx, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x - dx, y);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            double d = -a_tau_I * eps_p * n2_I * dx + b_I * n1_I * dx -
-                       a_I * eps_p * (3.0 - 2.0 * theta_l) / ((2.0 - theta_l) * (1.0 - theta_l));
-
-            if (eta > 0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            double M = eps_p * (3.0 - 2.0 * theta_l) / ((1.0 - theta_l) * (2.0 - theta_l)) +
-                       eps_m * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0)) +
-                       eps_jump * n2_I * n2_I * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0));
-
-            double N[7]     = {-eps_jump * n1_I * n2_I * theta_l * dx / dy +
-                                   (eps_jump * n2_I * n2_I + eps_m) * (1.0 + theta_l) / theta_l,
-
-                               eps_p * (theta_l - 2.0) / (theta_l - 1.0),
-
-                               -eps_p * (theta_l - 1.0) / (theta_l - 2.0),
-
-                               eps_jump * n1_I * n2_I * theta_l * dx / dy -
-                                   (eps_jump * n2_I * n2_I + eps_m) * theta_l / (1.0 + theta_l),
-
-                               eps_jump * n1_I * n2_I * (2.0 * theta_l + 1.0) * dx / (2.0 * dy),
-
-                               -eps_jump * n1_I * n2_I * dx / (2.0 * dy),
-
-                               -eps_jump * n1_I * n2_I * theta_l * dx / dy};
-
-            double u_arr[7] = {u(i, j),     u(i - 1, j), u(i - 2, j),    u(i + 1, j),
-                               u(i, j - 1), u(i, j + 1), u(i + 1, j - 1)};
-
-            double dot      = 0.0;
-            for (int k = 0; k < 7; k++) {
-                dot += N[k] * u_arr[k];
-            }
-
-            double u_I = (dot + d) / M;
-
-            return {u_I, u(i + 1, j), u(i, j - 1), u(i, j + 1), theta_l, theta_r, theta_b, theta_t};
-        } else if (direction == Direction::B) {
-
-            theta_l = 1.0;
-            theta_r = 1.0;
-            theta_b = theta;
-            theta_t = 1.0;
-
-            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
-
-            if (eta > 0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x, y - dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x, y - dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            double d = a_tau_I * eps_p * n1_I * dy + b_I * n2_I * dy -
-                       a_I * eps_p * (3.0 - 2.0 * theta_b) / ((2.0 - theta_b) * (1.0 - theta_b));
-
-            if (eta > 0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            double M = eps_p * (3.0 - 2.0 * theta_b) / ((1.0 - theta_b) * (2.0 - theta_b)) +
-                       eps_m * (2.0 * theta_b + 1.0) / (theta_b * (theta_b + 1.0)) +
-                       eps_jump * n1_I * n1_I * (2.0 * theta_b + 1.0) / (theta_b * (theta_b + 1.0));
-
-            double N[7]     = {-eps_jump * n1_I * n2_I * theta_b * dy / dx +
-                                   (eps_jump * n1_I * n1_I + eps_m) * (1.0 + theta_b) / theta_b,
-
-                               eps_p * (theta_b - 2.0) / (theta_b - 1.0),
-
-                               -eps_p * (theta_b - 1.0) / (theta_b - 2.0),
-
-                               eps_jump * n1_I * n2_I * theta_b * dy / dx -
-                                   (eps_jump * n1_I * n1_I + eps_m) * theta_b / (1.0 + theta_b),
-
-                               eps_jump * n1_I * n2_I * (2.0 * theta_b + 1.0) * dy / (2.0 * dx),
-
-                               -eps_jump * n1_I * n2_I * dy / (2.0 * dx),
-
-                               -eps_jump * n1_I * n2_I * theta_b * dy / dx};
-
-            double u_arr[7] = {u(i, j),     u(i, j - 1), u(i, j - 2),    u(i, j + 1),
-                               u(i - 1, j), u(i + 1, j), u(i - 1, j + 1)};
-
-            double dot      = 0.0;
-            for (int k = 0; k < 7; k++) {
-                dot += N[k] * u_arr[k];
-            }
-
-            double u_I = (dot + d) / M;
-
-            return {u(i - 1, j), u(i + 1, j), u_I, u(i, j + 1), theta_l, theta_r, theta_b, theta_t};
-        }
-
-        else {
-            Kokkos::printf("interface_value_case1():Invalid direction %d", direction);
-            Kokkos::abort("Exit");
-        }
+        auto r = case1(direction, i, j);
+        double u_arr[25];
+        for (int ox = -2; ox <= 2; ++ox)
+            for (int oy = -2; oy <= 2; ++oy)
+                u_arr[offset25(ox, oy)] = u(i + ox, j + oy);
+        double ghost = r.M_inv_d[0];
+        for (int k = 0; k < 25; ++k)
+            ghost += r.M_inv_N[0][k] * u_arr[k];
+        return {
+            (direction & Direction::L) ? ghost : u(i - 1, j),
+            (direction & Direction::R) ? ghost : u(i + 1, j),
+            (direction & Direction::B) ? ghost : u(i, j - 1),
+            (direction & Direction::T) ? ghost : u(i, j + 1),
+            r.theta_l,
+            r.theta_r,
+            r.theta_b,
+            r.theta_t,
+        };
     }
 
     InterfaceValue interface_value_case2(size_t direction, int i, int j, const auto& u) {
-        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
-        double eta          = world.surface(x, y);
-
-        // use = {} so they're zero-initialized
-        double d[2]      = {};
-        double M[2][2]   = {};
-        double N[2][25]  = {};
-        double u_arr[25] = {};
-        for (int ox = -2; ox <= 2; ++ox) {
-            for (int oy = -2; oy <= 2; ++oy) {
-                u_arr[offset(ox, oy)] = u(i + ox, j + oy);
-            }
+        auto r = case2(direction, i, j);
+        double u_arr[25];
+        for (int ox = -2; ox <= 2; ++ox)
+            for (int oy = -2; oy <= 2; ++oy)
+                u_arr[offset25(ox, oy)] = u(i + ox, j + oy);
+        double ghosts[2] = {r.M_inv_d[0], r.M_inv_d[1]};
+        for (int k = 0; k < 25; ++k) {
+            ghosts[0] += r.M_inv_N[0][k] * u_arr[k];
+            ghosts[1] += r.M_inv_N[1][k] * u_arr[k];
         }
-
-        if (direction == (Direction::R | Direction::T)) {
-
-            double theta_r = compute_theta(Direction::R, i, j);
-            double theta_t = compute_theta(Direction::T, i, j);
-            double theta_l = 1.0;
-            double theta_b = 1.0;
-
-            // normal evaluated at x_R and x_T
-            double n1_x = interp(Direction::R, theta_r, i, j, n1);
-            double n2_x = interp(Direction::R, theta_r, i, j, n2);
-            double n1_y = interp(Direction::T, theta_t, i, j, n1);
-            double n2_y = interp(Direction::T, theta_t, i, j, n2);
-
-            // a_tau at x_R and x_T
-            double a_tau_x = interp(Direction::R, theta_r, i, j, a_tau);
-            double a_tau_y = interp(Direction::T, theta_t, i, j, a_tau);
-
-            // jump conditions at x_R and x_T
-            double a_x = interp(Direction::R, theta_r, i, j, a);
-            double a_y = interp(Direction::T, theta_t, i, j, a);
-            double b_x = interp(Direction::R, theta_r, i, j, b);
-            double b_y = interp(Direction::T, theta_t, i, j, b);
-
-            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
-
-            if (eta > 0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x + dx, y + dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x + dx, y + dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            d[0] = -a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx +
-                   a_x * eps_p * (3.0 - 2.0 * theta_r) / ((2.0 - theta_r) * (1.0 - theta_r));
-
-            d[1] = a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy +
-                   a_y * eps_p * (3.0 - 2.0 * theta_t) / ((2.0 - theta_t) * (1.0 - theta_t));
-
-            if (eta > 0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            M[0][0] = -eps_p * (3.0 - 2.0 * theta_r) / ((1.0 - theta_r) * (2.0 - theta_r)) -
-                      eps_m * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0)) -
-                      eps_jump * n2_x * n2_x * (2.0 * theta_r + 1.0) / (theta_r * (theta_r + 1.0));
-
-            M[0][1] = eps_jump * n1_x * n2_x * dx / (dy * theta_t * (theta_t + 1.0));
-
-            M[1][0] = eps_jump * n1_y * n2_y * dy / (dx * theta_r * (theta_r + 1.0));
-
-            M[1][1] = -eps_p * (3.0 - 2.0 * theta_t) / ((1.0 - theta_t) * (2.0 - theta_t)) -
-                      eps_m * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0)) -
-                      eps_jump * n1_y * n1_y * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0));
-
-            // Row 0
-            N[0][offset(0, 0)] = -(eps_m + eps_jump * n2_x * n2_x) * (theta_r + 1.0) / theta_r -
-                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_t * theta_r + theta_t - 1.0) / theta_t);
-
-            N[0][offset(1, 0)]  = -eps_p * (theta_r - 2.0) / (theta_r - 1.0);
-
-            N[0][offset(2, 0)]  = eps_p * (theta_r - 1.0) / (theta_r - 2.0);
-
-            N[0][offset(-1, 0)] = (eps_m + eps_jump * n2_x * n2_x) * theta_r / (theta_r + 1.0) +
-                                  eps_jump * n1_x * n2_x * theta_r * (dx / dy);
-
-            N[0][offset(0, -1)]  = eps_jump * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1.0) + theta_r);
-
-            N[0][offset(-1, -1)] = -eps_jump * n1_x * n2_x * theta_r * (dx / dy);
-
-            // Row 1
-            N[1][offset(0, 0)] = -(eps_m + eps_jump * n1_y * n1_y) * (theta_t + 1.0) / theta_t -
-                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_t + theta_r - 1.0) / theta_r);
-
-            N[1][offset(0, 1)]  = -eps_p * (theta_t - 2.0) / (theta_t - 1.0);
-
-            N[1][offset(0, 2)]  = eps_p * (theta_t - 1.0) / (theta_t - 2.0);
-
-            N[1][offset(0, -1)] = (eps_m + eps_jump * n1_y * n1_y) * theta_t / (theta_t + 1.0) +
-                                  eps_jump * n1_y * n2_y * theta_t * (dy / dx);
-
-            N[1][offset(-1, 0)]  = eps_jump * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1.0) + theta_t);
-
-            N[1][offset(-1, -1)] = -eps_jump * n1_y * n2_y * theta_t * (dy / dx);
-
-            // --- Compute rhs = N*u_arr + d ---
-            double _rhs[2] = {d[0], d[1]};
-            for (int r = 0; r < 2; ++r) {
-                for (int c = 0; c < 25; ++c) {
-                    _rhs[r] += N[r][c] * u_arr[c];
-                }
-            }
-
-            double det  = M[0][0] * M[1][1] - M[0][1] * M[1][0];
-
-            double u_I0 = (_rhs[0] * M[1][1] - _rhs[1] * M[0][1]) / det;
-
-            double u_I1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
-            return {
-                u(i - 1, j), u_I0, u(i, j - 1), u_I1, theta_l, theta_r, theta_b, theta_t,
-            };
-        } else if (direction == (Direction::L | Direction::T)) {
-            double theta_l = compute_theta(Direction::L, i, j);
-            double theta_t = compute_theta(Direction::T, i, j);
-            double theta_r = 1.0;
-            double theta_b = 1.0;
-
-            // normal evaluated at x_L and x_T
-            double n1_x = interp(Direction::L, theta_l, i, j, n1);
-            double n2_x = interp(Direction::L, theta_l, i, j, n2);
-            double n1_y = interp(Direction::T, theta_t, i, j, n1);
-            double n2_y = interp(Direction::T, theta_t, i, j, n2);
-
-            // jump conditions at x_L and x_T
-            double a_x = interp(Direction::L, theta_l, i, j, a);
-            double a_y = interp(Direction::T, theta_t, i, j, a);
-            double b_x = interp(Direction::L, theta_l, i, j, b);
-            double b_y = interp(Direction::T, theta_t, i, j, b);
-
-            // a_tau at x_L and x_T
-            double a_tau_x = interp(Direction::L, theta_l, i, j, a_tau);
-            double a_tau_y = interp(Direction::T, theta_t, i, j, a_tau);
-
-            double _eps_p, _eps_m, eps_jump, eps_p, eps_m;
-
-            if (eta > 0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x - dx, y + dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x - dx, y + dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            d[0] = -a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx -
-                   a_x * eps_p * (3.0 - 2.0 * theta_l) / ((2.0 - theta_l) * (1.0 - theta_l));
-
-            d[1] = a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy +
-                   a_y * eps_p * (3.0 - 2.0 * theta_t) / ((2.0 - theta_t) * (1.0 - theta_t));
-
-            if (eta > 0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            M[0][0] = eps_p * (3.0 - 2.0 * theta_l) / ((1.0 - theta_l) * (2.0 - theta_l)) +
-                      eps_m * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0)) +
-                      eps_jump * n2_x * n2_x * (2.0 * theta_l + 1.0) / (theta_l * (theta_l + 1.0));
-
-            M[0][1] = eps_jump * n1_x * n2_x * dx / (dy * theta_t * (theta_t + 1.0));
-
-            M[1][0] = -eps_jump * n1_y * n2_y * dy / (dx * theta_l * (theta_l + 1.0));
-
-            M[1][1] = -eps_p * (3.0 - 2.0 * theta_t) / ((1.0 - theta_t) * (2.0 - theta_t)) -
-                      eps_m * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0)) -
-                      eps_jump * n1_y * n1_y * (2.0 * theta_t + 1.0) / (theta_t * (theta_t + 1.0));
-
-            // ---------- Row 0 ----------
-            N[0][offset(0, 0)] = (eps_m + eps_jump * n2_x * n2_x) * (theta_l + 1.0) / theta_l -
-                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_t * theta_l + theta_t - 1.0) / theta_t);
-
-            N[0][offset(-1, 0)] = eps_p * (theta_l - 2.0) / (theta_l - 1.0);
-
-            N[0][offset(-2, 0)] = -eps_p * (theta_l - 1.0) / (theta_l - 2.0);
-
-            N[0][offset(1, 0)]  = -(eps_m + eps_jump * n2_x * n2_x) * theta_l / (theta_l + 1.0) +
-                                 eps_jump * n1_x * n2_x * theta_l * (dx / dy);
-
-            N[0][offset(0, -1)] = eps_jump * n1_x * n2_x * (dx / dy) * (theta_t / (theta_t + 1.0) + theta_l);
-
-            N[0][offset(1, -1)] = -eps_jump * n1_x * n2_x * theta_l * (dx / dy);
-
-            // ---------- Row 1 ----------
-            N[1][offset(0, 0)] = -(eps_m + eps_jump * n1_y * n1_y) * (theta_t + 1.0) / theta_t +
-                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_t + theta_l - 1.0) / theta_l);
-
-            N[1][offset(0, 1)]  = -eps_p * (theta_t - 2.0) / (theta_t - 1.0);
-
-            N[1][offset(0, 2)]  = eps_p * (theta_t - 1.0) / (theta_t - 2.0);
-
-            N[1][offset(0, -1)] = (eps_m + eps_jump * n1_y * n1_y) * theta_t / (theta_t + 1.0) -
-                                  eps_jump * n1_y * n2_y * theta_t * (dy / dx);
-
-            N[1][offset(1, 0)]  = -eps_jump * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1.0) + theta_t);
-
-            N[1][offset(1, -1)] = eps_jump * n1_y * n2_y * theta_t * (dy / dx);
-
-            // rhs = N*u_arr + d
-            double _rhs[2] = {d[0], d[1]};
-            for (int r = 0; r < 2; ++r) {
-                for (int c = 0; c < 25; ++c) {
-                    _rhs[r] += N[r][c] * u_arr[c];
-                }
-            }
-
-            // solve 2x2 system
-            double det  = M[0][0] * M[1][1] - M[0][1] * M[1][0];
-
-            double u_I0 = (_rhs[0] * M[1][1] - _rhs[1] * M[0][1]) / det;
-
-            double u_I1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
-
-            return {
-                u_I0, u(i + 1, j), u(i, j - 1), u_I1, theta_l, theta_r, theta_b, theta_t,
-            };
-        } else if (direction == (Direction::R | Direction::B)) {
-            double theta_r = compute_theta(Direction::R, i, j);
-            double theta_b = compute_theta(Direction::B, i, j);
-            double theta_l = 1.0;
-            double theta_t = 1.0;
-
-            // normal evaluated at x_R and x_B
-            double n1_x = interp(Direction::R, theta_r, i, j, n1);
-            double n2_x = interp(Direction::R, theta_r, i, j, n2);
-            double n1_y = interp(Direction::B, theta_b, i, j, n1);
-            double n2_y = interp(Direction::B, theta_b, i, j, n2);
-
-            // jump conditions at x_R and x_B
-            double a_x = interp(Direction::R, theta_r, i, j, a);
-            double a_y = interp(Direction::B, theta_b, i, j, a);
-            double b_x = interp(Direction::R, theta_r, i, j, b);
-            double b_y = interp(Direction::B, theta_b, i, j, b);
-
-            // a_tau at x_R and x_B
-            double a_tau_x = interp(Direction::R, theta_r, i, j, a_tau);
-            double a_tau_y = interp(Direction::B, theta_b, i, j, a_tau);
-
-            double _eps_p, _eps_m, eps_p, eps_m, eps_jump;
-
-            if (eta > 0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x + dx, y - dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x + dx, y - dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            d[0] = (-a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx +
-                    a_x * eps_p * (3 - 2 * theta_r) / ((2 - theta_r) * (1 - theta_r)));
-
-            d[1] = (a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy -
-                    a_y * eps_p * (3 - 2 * theta_b) / ((2 - theta_b) * (1 - theta_b)));
-
-            if (eta > 0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            M[0][0] = -eps_p * (3 - 2 * theta_r) / ((1 - theta_r) * (2 - theta_r)) -
-                      eps_m * (2 * theta_r + 1) / (theta_r * (theta_r + 1)) -
-                      eps_jump * n2_x * n2_x * (2 * theta_r + 1) / (theta_r * (theta_r + 1));
-
-            M[0][1] = -eps_jump * n1_x * n2_x * dx / (dy * theta_b * (theta_b + 1));
-
-            M[1][0] = eps_jump * n1_y * n2_y * dy / (dx * theta_r * (theta_r + 1));
-
-            M[1][1] = eps_p * (3 - 2 * theta_b) / ((1 - theta_b) * (2 - theta_b)) +
-                      eps_m * (2 * theta_b + 1) / (theta_b * (theta_b + 1)) +
-                      eps_jump * n1_y * n1_y * (2 * theta_b + 1) / (theta_b * (theta_b + 1));
-
-            // ---- Fill N matrix ----
-            N[0][offset(0, 0)] = -(eps_m + eps_jump * n2_x * n2_x) * (theta_r + 1) / theta_r +
-                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_r + theta_b - 1) / theta_b);
-
-            N[0][offset(1, 0)]  = -eps_p * (theta_r - 2) / (theta_r - 1);
-
-            N[0][offset(2, 0)]  = eps_p * (theta_r - 1) / (theta_r - 2);
-
-            N[0][offset(-1, 0)] = (eps_m + eps_jump * n2_x * n2_x) * theta_r / (theta_r + 1) -
-                                  eps_jump * n1_x * n2_x * theta_r * (dx / dy);
-
-            N[0][offset(0, 1)]  = -eps_jump * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1) + theta_r);
-
-            N[0][offset(-1, 1)] = eps_jump * n1_x * n2_x * theta_r * (dx / dy);
-
-            N[1][offset(0, 0)]  = (eps_m + eps_jump * n1_y * n1_y) * (theta_b + 1) / theta_b -
-                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_r * theta_b + theta_r - 1) / theta_r);
-
-            N[1][offset(0, -1)] = eps_p * (theta_b - 2) / (theta_b - 1);
-
-            N[1][offset(0, -2)] = -eps_p * (theta_b - 1) / (theta_b - 2);
-
-            N[1][offset(0, 1)]  = -(eps_m + eps_jump * n1_y * n1_y) * theta_b / (theta_b + 1) +
-                                 eps_jump * n1_y * n2_y * theta_b * (dy / dx);
-
-            N[1][offset(-1, 0)] = eps_jump * n1_y * n2_y * (dy / dx) * (theta_r / (theta_r + 1) + theta_b);
-
-            N[1][offset(-1, 1)] = -eps_jump * n1_y * n2_y * theta_b * (dy / dx);
-
-            // ---- Form RHS:  _rhs = N * u_arr + d ----
-            double _rhs[2] = {d[0], d[1]};
-
-            for (int k = 0; k < 25; ++k) {
-                _rhs[0] += N[0][k] * u_arr[k];
-                _rhs[1] += N[1][k] * u_arr[k];
-            }
-
-            // ---- Solve 2x2 system M * u_I = _rhs ----
-            double det = M[0][0] * M[1][1] - M[0][1] * M[1][0];
-
-            double uI0 = (_rhs[0] * M[1][1] - _rhs[1] * M[0][1]) / det;
-
-            double uI1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
-
-            return {u(i - 1, j), uI0, uI1, u(i, j + 1), theta_l, theta_r, theta_b, theta_t};
-        } else if (direction == (Direction::L | Direction::B)) {
-
-            double theta_l = compute_theta(Direction::L, i, j);
-            double theta_b = compute_theta(Direction::B, i, j);
-            double theta_r = 1.0;
-            double theta_t = 1.0;
-
-            // normal evaluated at x_L and x_B
-            double n1_x = interp(Direction::L, theta_l, i, j, n1);
-            double n2_x = interp(Direction::L, theta_l, i, j, n2);
-            double n1_y = interp(Direction::B, theta_b, i, j, n1);
-            double n2_y = interp(Direction::B, theta_b, i, j, n2);
-
-            // jump conditions at x_L and x_B
-            double a_x = interp(Direction::L, theta_l, i, j, a);
-            double a_y = interp(Direction::B, theta_b, i, j, a);
-            double b_x = interp(Direction::L, theta_l, i, j, b);
-            double b_y = interp(Direction::B, theta_b, i, j, b);
-
-            // a_tau at x_L and x_B
-            double a_tau_x = interp(Direction::L, theta_l, i, j, a_tau);
-            double a_tau_y = interp(Direction::B, theta_b, i, j, a_tau);
-
-            double _eps_p, _eps_m, eps_p, eps_m, eps_jump;
-
-            if (eta > 0) {
-                _eps_p   = world.permittivity(x, y);
-                _eps_m   = world.permittivity(x - dx, y - dy);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_m;
-                eps_m    = _eps_p;
-            } else {
-                _eps_p   = world.permittivity(x - dx, y - dy);
-                _eps_m   = world.permittivity(x, y);
-                eps_jump = _eps_p - _eps_m;
-                eps_p    = _eps_p;
-                eps_m    = _eps_m;
-            }
-
-            d[0] = (-a_tau_x * eps_p * n2_x * dx + b_x * n1_x * dx -
-                    a_x * eps_p * (3 - 2 * theta_l) / ((2 - theta_l) * (1 - theta_l)));
-
-            d[1] = (a_tau_y * eps_p * n1_y * dy + b_y * n2_y * dy -
-                    a_y * eps_p * (3 - 2 * theta_b) / ((2 - theta_b) * (1 - theta_b)));
-
-            if (eta > 0) {
-                eps_p = -_eps_m;
-                eps_m = -_eps_p;
-            }
-
-            M[0][0] = eps_p * (3 - 2 * theta_l) / ((1 - theta_l) * (2 - theta_l)) +
-                      eps_m * (2 * theta_l + 1) / (theta_l * (theta_l + 1)) +
-                      eps_jump * n2_x * n2_x * (2 * theta_l + 1) / (theta_l * (theta_l + 1));
-
-            M[0][1] = -eps_jump * n1_x * n2_x * dx / (dy * theta_b * (theta_b + 1));
-
-            M[1][0] = -eps_jump * n1_y * n2_y * dy / (dx * theta_l * (theta_l + 1));
-
-            M[1][1] = eps_p * (3 - 2 * theta_b) / ((1 - theta_b) * (2 - theta_b)) +
-                      eps_m * (2 * theta_b + 1) / (theta_b * (theta_b + 1)) +
-                      eps_jump * n1_y * n1_y * (2 * theta_b + 1) / (theta_b * (theta_b + 1));
-
-            // ---- N matrix entries ----
-            N[0][offset(0, 0)] = (eps_m + eps_jump * n2_x * n2_x) * (theta_l + 1) / theta_l +
-                                 (eps_jump * n1_x * n2_x) * (dx / dy) * ((theta_b * theta_l + theta_b - 1) / theta_b);
-
-            N[0][offset(-1, 0)] = eps_p * (theta_l - 2) / (theta_l - 1);
-
-            N[0][offset(-2, 0)] = -eps_p * (theta_l - 1) / (theta_l - 2);
-
-            N[0][offset(1, 0)]  = -(eps_m + eps_jump * n2_x * n2_x) * theta_l / (theta_l + 1) -
-                                 eps_jump * n1_x * n2_x * theta_l * (dx / dy);
-
-            N[0][offset(0, 1)] = -eps_jump * n1_x * n2_x * (dx / dy) * (theta_b / (theta_b + 1) + theta_l);
-
-            N[0][offset(1, 1)] = eps_jump * n1_x * n2_x * theta_l * (dx / dy);
-
-            N[1][offset(0, 0)] = (eps_m + eps_jump * n1_y * n1_y) * (theta_b + 1) / theta_b +
-                                 (eps_jump * n1_y * n2_y) * (dy / dx) * ((theta_l * theta_b + theta_l - 1) / theta_l);
-
-            N[1][offset(0, -1)] = eps_p * (theta_b - 2) / (theta_b - 1);
-
-            N[1][offset(0, -2)] = -eps_p * (theta_b - 1) / (theta_b - 2);
-
-            N[1][offset(0, 1)]  = -(eps_m + eps_jump * n1_y * n1_y) * theta_b / (theta_b + 1) -
-                                 eps_jump * n1_y * n2_y * theta_b * (dy / dx);
-
-            N[1][offset(1, 0)] = -eps_jump * n1_y * n2_y * (dy / dx) * (theta_l / (theta_l + 1) + theta_b);
-
-            N[1][offset(1, 1)] = eps_jump * n1_y * n2_y * theta_b * (dy / dx);
-
-            // ---- Build RHS:  _rhs = N*u_arr + d ----
-            double _rhs[2] = {d[0], d[1]};
-
-            for (int k = 0; k < 25; ++k) {
-                _rhs[0] += N[0][k] * u_arr[k];
-                _rhs[1] += N[1][k] * u_arr[k];
-            }
-
-            // ---- Solve 2x2 system M * u_I = _rhs ----
-            double det = M[0][0] * M[1][1] - M[0][1] * M[1][0];
-
-            double uI0 = (_rhs[0] * M[1][1] - _rhs[1] * M[0][1]) / det;
-
-            double uI1 = (M[0][0] * _rhs[1] - M[1][0] * _rhs[0]) / det;
-
-            return {uI0, u(i + 1, j), uI1, u(i, j + 1), theta_l, theta_r, theta_b, theta_t};
-        } else {
-            Kokkos::printf("interface_value_case2(): Invalid direction", direction);
-            Kokkos::abort("Exit");
-        }
+        return {
+            (direction & Direction::L) ? ghosts[0] : u(i - 1, j),
+            (direction & Direction::R) ? ghosts[0] : u(i + 1, j),
+            (direction & Direction::B) ? ghosts[1] : u(i, j - 1),
+            (direction & Direction::T) ? ghosts[1] : u(i, j + 1),
+            r.theta_l,
+            r.theta_r,
+            r.theta_b,
+            r.theta_t,
+        };
     }
 
-    /**
-     * Convert sparse matrix coo format to crs format
-     */
+    InterfaceValue interface_value_case3(size_t direction, size_t extra, int i, int j, const auto& u) {
+        auto r = case3(direction, extra, i, j);
+        double u_arr[49];
+        for (int ox = -3; ox <= 3; ++ox)
+            for (int oy = -3; oy <= 3; ++oy)
+                u_arr[offset49(ox, oy)] = u(i + ox, j + oy);
+        double ghosts[2] = {r.M_inv_d[0], r.M_inv_d[1]};
+        for (int k = 0; k < 49; ++k) {
+            ghosts[0] += r.M_inv_N[0][k] * u_arr[k];
+            ghosts[1] += r.M_inv_N[1][k] * u_arr[k];
+        }
+        return {
+            (direction & Direction::L) ? ghosts[0] : u(i - 1, j),
+            (direction & Direction::R) ? ghosts[0] : u(i + 1, j),
+            (direction & Direction::B) ? ghosts[1] : u(i, j - 1),
+            (direction & Direction::T) ? ghosts[1] : u(i, j + 1),
+            r.theta_l,
+            r.theta_r,
+            r.theta_b,
+            r.theta_t,
+        };
+    }
+
+    InterfaceValue interface_value_case4(size_t direction, int i, int j, const auto& u) {
+        auto r = case4(direction, i, j);
+        double u_arr[25];
+        for (int ox = -2; ox <= 2; ++ox)
+            for (int oy = -2; oy <= 2; ++oy)
+                u_arr[offset25(ox, oy)] = u(i + ox, j + oy);
+        double ghosts[3] = {r.M_inv_d[0], r.M_inv_d[1], r.M_inv_d[2]};
+        for (int k = 0; k < 25; ++k) {
+            ghosts[0] += r.M_inv_N[0][k] * u_arr[k];
+            ghosts[1] += r.M_inv_N[1][k] * u_arr[k];
+            ghosts[2] += r.M_inv_N[2][k] * u_arr[k];
+        }
+        // Map ghosts to u_l/r/b/t using dir index
+        int idx_l = [&]() {
+            for (int d = 0; d < 3; ++d)
+                if (r.dir[d] == Direction::L)
+                    return d;
+            return -1;
+        }();
+        int idx_r = [&]() {
+            for (int d = 0; d < 3; ++d)
+                if (r.dir[d] == Direction::R)
+                    return d;
+            return -1;
+        }();
+        int idx_b = [&]() {
+            for (int d = 0; d < 3; ++d)
+                if (r.dir[d] == Direction::B)
+                    return d;
+            return -1;
+        }();
+        int idx_t = [&]() {
+            for (int d = 0; d < 3; ++d)
+                if (r.dir[d] == Direction::T)
+                    return d;
+            return -1;
+        }();
+        return {
+            (direction & Direction::L) ? ghosts[idx_l] : u(i - 1, j),
+            (direction & Direction::R) ? ghosts[idx_r] : u(i + 1, j),
+            (direction & Direction::B) ? ghosts[idx_b] : u(i, j - 1),
+            (direction & Direction::T) ? ghosts[idx_t] : u(i, j + 1),
+            r.theta_l,
+            r.theta_r,
+            r.theta_b,
+            r.theta_t,
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // COO to CRS conversion
+    // -----------------------------------------------------------------------
     void coo2crs() {
         int nrows = nx * ny;
         int ncols = nx * ny;
         int nnz   = vals_coo.size();
 
-        // make rowmap (counts -> prefix-sum)
         std::vector<int> rowmap(nrows + 1, 0);
-        for (int k = 0; k < rows_coo.size(); ++k) {
-            rowmap[rows_coo[k] + 1] += 1; // increment bucket for row
-        }
-        for (int i = 0; i < nrows; ++i) {
-            rowmap[i + 1] += rowmap[i]; // prefix sum
-        }
+        for (size_t k = 0; k < rows_coo.size(); ++k)
+            rowmap[rows_coo[k] + 1] += 1;
+        for (int i = 0; i < nrows; ++i)
+            rowmap[i + 1] += rowmap[i];
 
-        // scatter coo into crs arrays (stable within row)
-        std::vector<int> cur = rowmap; // current write pointer per row
+        std::vector<int> cur = rowmap;
         std::vector<int> cols_crs(nnz);
         std::vector<double> vals_crs(nnz);
         for (size_t k = 0; k < rows_coo.size(); ++k) {
@@ -1901,27 +1613,22 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             vals_crs[dest] = vals_coo[k];
         }
 
-        // constructor will deep-copy to device
         A = CRS("A", nrows, ncols, nnz, vals_crs.data(), rowmap.data(), cols_crs.data());
-        // make sure A's rows are sorted, so we can build preconditioner later
         KokkosSparse::sort_crs_matrix(A);
     }
 
-    /**
-     * Construct all necessary fiels
-     * normal field, jump condition fields
-     */
     void construct_fields() {
         u     = Kokkos::View<double*>("u", nx * ny);
         rhs   = Kokkos::View<double*>("rhs", nx * ny);
         rhs_h = Kokkos::View<double*, Kokkos::HostSpace>("rhs_h", nx * ny);
+        Kokkos::deep_copy(rhs_h, 0.0);
 
         n1    = Kokkos::View<double**, Kokkos::HostSpace>("n1", nx, ny);
         n2    = Kokkos::View<double**, Kokkos::HostSpace>("n2", nx, ny);
         a     = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
         b     = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
         a_tau = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
-        // pre-compute fields
+
         using Kokkos::pow;
         using Kokkos::sqrt;
         int ngc = world.grid.ngc;
@@ -1929,7 +1636,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         for (int i = ngc; i < nx - ngc; ++i) {
             for (int j = ngc; j < ny - ngc; ++j) {
                 auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
-
                 double dx_eta       = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
                                  8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
                                 (12 * dx);
@@ -1937,8 +1643,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                                  8 * world.surface(x, y - dy) + world.surface(x, y - 2 * dy)) /
                                 (12 * dy);
                 double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
-
-                // normal field
                 if (isclose(norm, 0.0)) {
                     n1(i, j) = 0.0;
                     n2(i, j) = 0.0;
@@ -1946,14 +1650,10 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                     n1(i, j) = dx_eta / norm;
                     n2(i, j) = dy_eta / norm;
                 }
-
-                // jump conditions
                 a(i, j) = world.poisson_jump_condition_a(x, y);
                 b(i, j) = world.poisson_jump_condition_b(x, y);
             }
         }
-
-        // tangentual derivative of a
         for (int i = ngc; i < nx - ngc; ++i) {
             for (int j = ngc; j < ny - ngc; ++j) {
                 double dx_a = (-a(i + 2, j) + 8 * a(i + 1, j) - 8 * a(i - 1, j) + a(i - 2, j)) / (12 * dx);
@@ -1963,13 +1663,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         }
     }
 
-    /**
-     * Construct the Laplacian matrix nabla^2
-     */
     void construct_matrix() {
-        int ngc    = world.grid.ngc;
-        double dx2 = dx * dx;
-        double dy2 = dy * dy;
+        int ngc = world.grid.ngc;
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 int row_idx          = index(i, j);
@@ -2031,7 +1726,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                         Kokkos::abort("Terminated");
                     }
                 } else {
-                    // bc_map.type == BCType::None
                     auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
                     double eta          = world.surface(x, y);
                     double eta_l        = world.surface(x - dx, y);
@@ -2041,13 +1735,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
                     size_t direction    = 0;
                     if (eta * eta_l < 0)
-                        direction |= Direction::L; // L
+                        direction |= Direction::L;
                     if (eta * eta_r < 0)
-                        direction |= Direction::R; // R
+                        direction |= Direction::R;
                     if (eta * eta_b < 0)
-                        direction |= Direction::B; // B
+                        direction |= Direction::B;
                     if (eta * eta_t < 0)
-                        direction |= Direction::T; // T
+                        direction |= Direction::T;
 
                     int ncuts = std::popcount(direction);
                     if (ncuts == 0) {
@@ -2055,10 +1749,21 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                     } else if (ncuts == 1) {
                         coeff_case1(direction, i, j);
                     } else if (ncuts == 2) {
-                        coeff_case2(direction, i, j);
+                        size_t extra = case3_extra_dir(direction, i, j);
+                        int nextra   = std::popcount(extra);
+                        if (nextra == 0) {
+                            coeff_case2(direction, i, j);
+                        } else if (nextra == 1) {
+                            coeff_case3(direction, extra, i, j);
+                        } else {
+                            Kokkos::printf("Too many extra cuts at (%d,%d), use finer grid.\n", i, j);
+                            Kokkos::abort("Terminated");
+                        }
+                    } else if (ncuts == 3) {
+                        coeff_case4(direction, i, j);
                     } else {
-                        // Not implemented for >2 cuts
-                        throw std::runtime_error("More than 2 cuts not implemented yet.");
+                        Kokkos::printf("All four sides cut at (%d,%d), use finer grid.\n", i, j);
+                        Kokkos::abort("Terminated");
                     }
                 }
             }
@@ -2066,12 +1771,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         coo2crs();
     }
 
-    /**
-     * Construct Parallel threshold incomplete LU factorization ILU(t) preconditioner
-     * This must be called after the laplacian matrix A has been constructed
-     */
     void construct_preconditioner() {
-        // preconditioner
         kh.create_par_ilut_handle();
         auto par_ilut_handle = kh.get_par_ilut_handle();
         par_ilut_handle->set_max_iter(100);
@@ -2079,22 +1779,16 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         par_ilut_handle->set_fill_in_limit(5.0);
         par_ilut_handle->set_verbose(verbose);
 
-        // Pull out views from CRS
         auto row_map = A.graph.row_map;
         auto entries = A.graph.entries;
         auto values  = A.values;
 
-        // Allocate L and U CRS views as outputs
         Kokkos::View<int*> L_row_map("L_row_map", A.numRows() + 1);
         Kokkos::View<int*> U_row_map("U_row_map", A.numRows() + 1);
-
-        // Initial L/U approximations for A
         KokkosSparse::Experimental::par_ilut_symbolic(&kh, row_map, entries, L_row_map, U_row_map);
 
-        // estimates of nnz
         const int nnzL_est = par_ilut_handle->get_nnzL();
         const int nnzU_est = par_ilut_handle->get_nnzU();
-
         Kokkos::View<int*> L_entries("L_entries", nnzL_est);
         Kokkos::View<double*> L_values("L_values", nnzL_est);
         Kokkos::View<int*> U_entries("U_entries", nnzU_est);
@@ -2102,9 +1796,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
         KokkosSparse::Experimental::par_ilut_numeric(&kh, row_map, entries, values, L_row_map, L_entries, L_values,
                                                      U_row_map, U_entries, U_values);
-
-        // the get_nnzL/U are only estimates, use the actual numbers
-        // otherwise it throws runtime annz != this->nnz()
         const int nnzL      = L_values.extent(0);
         const int nnzU      = U_values.extent(0);
         CRS L               = CRS("L", A.numRows(), A.numCols(), nnzL, L_values, L_row_map, L_entries);
@@ -2116,77 +1807,37 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         Kokkos::printf("par ILU status: iters=%d, residual=%e\n", iters, residual);
     }
 
-    // void construct_preconditioner_spiluk() {
-    //     kh.create_spiluk_handle(KokkosSparse::Experimental::SPILUKAlgorithm::SEQLVLSCHD_TP1, A.numRows() + 1,
-    //                             A.numRows() + 1, A.numRows() + 1);
-    //
-    //     auto spiluk_handle = kh.get_spiluk_handle();
-    //
-    //     // estimates of nnz
-    //     const int nnzL_est = spiluk_handle->get_nnzL();
-    //     const int nnzU_est = spiluk_handle->get_nnzU();
-    //
-    //     Kokkos::View<int*> L_row_map("L_row_map", A.numRows() + 1);
-    //     Kokkos::View<int*> U_row_map("U_row_map", A.numRows() + 1);
-    //     Kokkos::View<int*> L_entries("L_entries", nnzL_est);
-    //     Kokkos::View<double*> L_values("L_values", nnzL_est);
-    //     Kokkos::View<int*> U_entries("U_entries", nnzU_est);
-    //     Kokkos::View<double*> U_values("U_values", nnzU_est);
-    //     const int fill_level = 5;
-    //
-    //     KokkosSparse::spiluk_numeric(&kh, fill_level, A.graph.row_map, A.graph.entries, A.values, L_row_map,
-    //     L_entries,
-    //                                  L_values, U_row_map, U_entries, U_values);
-    //
-    //     // the get_nnzL/U are only estimates, use the actual numbers
-    //     // otherwise it throws runtime annz != this->nnz()
-    //     const int nnzL = L_values.extent(0);
-    //     const int nnzU = U_values.extent(0);
-    //     CRS L          = CRS("L", A.numRows(), A.numCols(), nnzL, L_values, L_row_map, L_entries);
-    //     CRS U          = CRS("U", A.numRows(), A.numCols(), nnzU, U_values, U_row_map, U_entries);
-    //     prec           = std::make_unique<KokkosSparse::Experimental::LUPrec<CRS, KernelHandle>>(L, U);
-    // }
-
     void construct_rhs() {
         auto rho_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.rho);
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 PoissonBCPair bc_map = world.poisson_bc_map(i, j);
-                if (bc_map.type == PoissonBCType::None) {
-                    rhs_h(index(i, j)) = -rho_h(i, j);
-                } else {
+                if (bc_map.type == PoissonBCType::None)
+                    rhs_h(index(i, j)) += -rho_h(i, j);
+                else
                     rhs_h(index(i, j)) = bc_map.val;
-                }
             }
         }
         Kokkos::deep_copy(rhs, rhs_h);
     }
-    /**
-     * Solve the potential field by sparse GMRES
-     */
+
     void solve() {
         construct_rhs();
-
         KokkosSparse::Experimental::gmres(&kh, A, rhs, u, prec.get());
         Kokkos::View<double**, Kokkos::LayoutRight, Kokkos::MemoryTraits<Kokkos::Unmanaged>> u_2d(u.data(), nx, ny);
         Kokkos::deep_copy(world.phi, u_2d);
 
-        auto gmres_handle      = kh.get_gmres_handle();
-        const auto max_restart = gmres_handle->get_max_restart();
-        const auto gmres_m     = gmres_handle->get_m();
-        const auto iters       = gmres_handle->get_num_iters();
-        const auto conv        = gmres_handle->get_conv_flag_val();
-        const auto residual    = gmres_handle->get_end_rel_res();
-        using GMRESHandle      = typename std::remove_reference<decltype(*gmres_handle)>::type;
+        auto gmres_handle   = kh.get_gmres_handle();
+        const auto iters    = gmres_handle->get_num_iters();
+        const auto conv     = gmres_handle->get_conv_flag_val();
+        const auto residual = gmres_handle->get_end_rel_res();
+        using GMRESHandle   = typename std::remove_reference<decltype(*gmres_handle)>::type;
         Kokkos::printf("GMRES status: iters=%d, residual=%e, convergence=%s\n", iters, residual,
                        (conv == GMRESHandle::Conv     ? "Conv"
                         : conv == GMRESHandle::NoConv ? "NoConv"
                                                       : "LOA"));
     }
 
-    /**
-     * Compute electric field E = -grad phi
-     */
     void compute_electric_field() {
         using Kokkos::pow;
         auto E_h   = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
@@ -2219,9 +1870,19 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 } else if (ncuts == 1) {
                     ival = interface_value_case1(direction, i, j, phi_h);
                 } else if (ncuts == 2) {
-                    ival = interface_value_case2(direction, i, j, phi_h);
+                    size_t extra = case3_extra_dir(direction, i, j);
+                    int nextra   = std::popcount(extra);
+                    if (nextra == 0) {
+                        ival = interface_value_case2(direction, i, j, phi_h);
+                    } else if (nextra == 1) {
+                        ival = interface_value_case3(direction, extra, i, j, phi_h);
+                    } else {
+                        Kokkos::abort("compute_electric_field: too many extra cuts");
+                    }
+                } else if (ncuts == 3) {
+                    ival = interface_value_case4(direction, i, j, phi_h);
                 } else {
-                    Kokkos::abort("compute_electric_field(): More than 2 cuts not implemented yet.");
+                    Kokkos::abort("compute_electric_field: all four sides cut");
                 }
 
                 double u_c     = phi_h(i, j);

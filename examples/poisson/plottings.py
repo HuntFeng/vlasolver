@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-nx = ny = 32
+nx = ny = 256
 Lx, Ly = 1.0, 1.0
 G = 3
 
@@ -15,7 +15,7 @@ x = np.arange(dx / 2 - G * dx, Lx + G * dx, dx)
 y = np.arange(dy / 2 - G * dy, Ly + G * dy, dy)
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/../../data/poisson/poisson_0.h5",
+    f"{file_path}/poisson_{nx}_0.h5",
     "r",
 ) as f:
     phi = f["VTKHDF/CellData/phi"][:].reshape(nx + 2 * G, ny + 2 * G)

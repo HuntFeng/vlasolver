@@ -414,7 +414,7 @@ def coeff_case1(direction: int, i: int, j: int) -> None:
             vals.append(value)
 
 
-def case2(direction: int, i: int, j: int, debug=False) -> InterCaseResult:
+def case2(direction: int, i: int, j: int) -> InterCaseResult:
     x, y = center(i, j)
     eta = surface(x, y)
 
@@ -527,36 +527,6 @@ def case2(direction: int, i: int, j: int, debug=False) -> InterCaseResult:
     M, N, D = _assemble_MND(
         2, B, C, a_term, grad_coeff, a_tau_term, b_term, dir, offset, offset_ext, 25,
     )
-
-    if debug:
-        print(f"=== Python case2 i={i} j={j} dir={direction} ===")
-        print(f"x={x} y={y} dx={dx} dy={dy}")
-        print(f"eta={eta} s_eta={s_eta}")
-        print(f"theta_r={theta_r} theta_l={theta_l} theta_t={theta_t} theta_b={theta_b}")
-        print(f"x_r={x_r} x_l={x_l} y_t={y_t} y_b={y_b} x_ext={x_ext} y_ext={y_ext}")
-        print(f"bot_x={bot_x} bot_y={bot_y}")
-        print(f"eps_r={eps_r} eps_l={eps_l} eps_t={eps_t} eps_b={eps_b}")
-        print(f"dir = {dir}")
-        print(f"theta = {theta}")
-        print(f"eps = {eps}")
-        print(f"s = {s}")
-        print(f"eps_p = {eps_p}  eps_m = {eps_m}")
-        print(f"eps_jump = {eps_jump}")
-        print(f"n1_I = {n1_I}  n2_I = {n2_I}")
-        print(f"a_tau_I = {a_tau_I}  a_I = {a_I}  b_I = {b_I}")
-        print(f"B = {B}")
-        print(f"C[0] = {C[0]}")
-        print(f"C[1] = {C[1]}")
-        print(f"a_term = {a_term}")
-        print(f"grad_coeff[0] = {grad_coeff[0]}")
-        print(f"grad_coeff[1] = {grad_coeff[1]}")
-        print(f"a_tau_term = {a_tau_term}  b_term = {b_term}")
-        print(f"M = {M}")
-        print(f"D = {D}")
-        print(f"N[0] = {N[0]}")
-        print(f"N[1] = {N[1]}")
-        print(f"P_inv = {P_inv}")
-
     M_inv_d = np.linalg.solve(M, D)
     M_inv_N = np.linalg.solve(M, N)
 
@@ -2093,149 +2063,10 @@ def convergence_test5():
     ax[1].set_title("Example 4.3: numerical")
     plt.show()
 
-def test_case4():
-    global nx, ny, dx, dy
-    global x, y, X, Y
-    global f, u_exact
-    global a, b, a_tau, n1, n2
-    global rows, cols, vals
-    global surface, permittivity
-
-    x0 = 0.02 * np.sqrt(5)
-    y0 = 0.02 * np.sqrt(3)
-
-    def surface(x, y):
-        rr = np.sqrt((x - x0) ** 2 + (y - y0) ** 2)
-        ang = np.arctan2(y - y0, x - x0)
-        return rr - (0.5 + 0.15 * np.sin(5 * ang))
-
-    def permittivity(x, y):
-        return 1.0 if surface(x, y) < 0 else 10.0
-
-    eps_safe = 1e-30
-    n = 64
-    nx, ny = n, n
-    dx, dy = 2.0 / nx, 2.0 / ny
-    x = np.arange(-1.0 + dx / 2, 1.0 + dx / 2, dx)
-    y = np.arange(-1.0 + dy / 2, 1.0 + dy / 2, dy)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-
-    # Region mask via the level-set sign at every grid point.
-    Phi = surface(X, Y)
-    mask_minus = Phi < 0  # Omega^-: inside the irregular shape.
-
-    R2 = X**2 + Y**2
-    R2_safe = np.maximum(R2, eps_safe)
-
-    # u^+ - u^- and the two-sided u/grad fields, defined on the full grid.
-    u_minus = R2.copy()
-    u_plus = 0.1 * R2**2 - 0.01 * np.log(2.0 * np.sqrt(R2_safe))
-    u_exact = np.where(mask_minus, u_minus, u_plus)
-
-
-    # Right-hand side: f = div(beta grad u). Piecewise constant beta means
-    # f = beta * Laplace(u) on each side.
-    f = np.where(mask_minus, 4.0, 16.0 * R2)
-
-    # Jump in u, evaluated as a smooth function over the whole grid (the
-    # solver only samples it via cubic interpolation at interface points).
-    a = u_plus - u_minus
-
-    # Normals and a_tau need to be available before computing b, since the
-    # paper formula for [beta u_n] involves the unit normal explicitly.
-    n1, n2 = compute_normal_field()
-    b_factor = 4.0 * R2 - 0.1 / R2_safe - 2.0
-    b = (X * n1 + Y * n2) * b_factor
-    a_tau = compute_a_tau_field()
-
-    rows, cols, vals = [], [], []
-    A = construct_matrix()
-    u = spsolve(A, f.flatten())
-    u = u.reshape((nx, ny))
-    dudx, dudy = gradient(u)
-
-def test_case2():
-    global nx, ny, dx, dy
-    global x, y, X, Y
-    global f, u_exact
-    global a, b, a_tau, n1, n2
-    global rows, cols, vals
-    global surface, permittivity
-
-    x0 = 0.02 * np.sqrt(5)
-    y0 = 0.02 * np.sqrt(3)
-
-    def surface(x, y):
-        rr = np.sqrt((x - x0) ** 2 + (y - y0) ** 2)
-        ang = np.arctan2(y - y0, x - x0)
-        return rr - (0.5 + 0.15 * np.sin(5 * ang))
-
-    def permittivity(x, y):
-        return 1.0 if surface(x, y) < 0 else 10.0
-
-    eps_safe = 1e-30
-    n = 64
-    nx, ny = n, n
-    dx, dy = 2.0 / nx, 2.0 / ny
-    x = np.arange(-1.0 + dx / 2, 1.0 + dx / 2, dx)
-    y = np.arange(-1.0 + dy / 2, 1.0 + dy / 2, dy)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-
-    Phi = surface(X, Y)
-    mask_minus = Phi < 0
-
-    R2 = X**2 + Y**2
-    R2_safe = np.maximum(R2, eps_safe)
-
-    u_minus = R2.copy()
-    u_plus = 0.1 * R2**2 - 0.01 * np.log(2.0 * np.sqrt(R2_safe))
-    u_exact = np.where(mask_minus, u_minus, u_plus)
-
-    a = u_plus - u_minus
-
-    n1, n2 = compute_normal_field()
-    b_factor = 4.0 * R2 - 0.1 / R2_safe - 2.0
-    b = (X * n1 + Y * n2) * b_factor
-    a_tau = compute_a_tau_field()
-
-    # Find a case1 cell and print its debug info
-    found = False
-    for i in range(2, nx - 2):
-        for j in range(2, ny - 2):
-            eta_ij = surface(x[i], y[j])
-            eta_l = surface(x[i] - dx, y[j])
-            eta_r = surface(x[i] + dx, y[j])
-            eta_b = surface(x[i], y[j] - dy)
-            eta_t = surface(x[i], y[j] + dy)
-
-            direction = 0
-            if eta_ij * eta_l < 0:
-                direction |= Direction.L
-            if eta_ij * eta_r < 0:
-                direction |= Direction.R
-            if eta_ij * eta_b < 0:
-                direction |= Direction.B
-            if eta_ij * eta_t < 0:
-                direction |= Direction.T
-
-            if direction.bit_count() == 2:
-                extra = case3_extra_dir(direction, i, j)
-                if extra.bit_count() == 0:
-                    print(f"\nFound case2 cell at i={i}, j={j}, direction={direction}")
-                    case2(direction, i, j, debug=True)
-                    found = True
-                    break
-        if found:
-            break
-
-    if not found:
-        print("No case2 cell found!")
-
 
 if __name__ == "__main__":
     # convergence_test1()
     # convergence_test2()
-    # convergence_test3()
+    convergence_test3()
     convergence_test4()
-    # convergence_test5()
-    # test_case2()
+    convergence_test5()

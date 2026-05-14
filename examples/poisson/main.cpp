@@ -102,10 +102,8 @@ int main(int argc, char** argv) {
     Kokkos::Array<int, DIM> ncells_intr = {n, n, 1, 1};
     const int ngc                       = 3;
 
-    Kokkos::printf("Preparing grid and world...\n");
     Grid grid(origin, size, ncells_intr, ngc);
     ImmersedWorld world(grid);
-    Kokkos::printf("Initializing Poisson solver...\n");
     PoissonSolver2ndOrder poisson_solver(world);
 
     // Compute exact solution for error reporting
@@ -117,7 +115,6 @@ int main(int argc, char** argv) {
     Kokkos::View<double**, Kokkos::HostSpace> dudx_exact_h("dudx_exact", nx, ny);
     Kokkos::View<double**, Kokkos::HostSpace> dudy_exact_h("dudy_exact", nx, ny);
 
-    Kokkos::printf("Initializing charge density...\n");
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
             auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
@@ -134,9 +131,7 @@ int main(int argc, char** argv) {
 
     Kokkos::Timer timer;
     double start_time = timer.seconds();
-    Kokkos::printf("Start solving Poisson equation...\n");
     poisson_solver.solve();
-    Kokkos::printf("Start computing electric field...\n");
     poisson_solver.compute_electric_field();
     double end_time = timer.seconds();
     Kokkos::printf("Total time taken: %f seconds\n", end_time - start_time);

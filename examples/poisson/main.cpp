@@ -36,7 +36,11 @@ struct ImmersedWorld : World<ImmersedWorld> {
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
+                    auto [x,y,vx,vy] = grid.center({i, j, 0, 0});
+                    double R2      = x * x + y * y;
+                    double R2_safe      = R2 < 1e-30 ? 1e-30 : R2;
+                    double u_plus = 0.1 * R2*R2 - 0.01 * Kokkos::log(2.0 * Kokkos::sqrt(R2_safe));
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, u_plus);
                 } else {
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
                 }

@@ -16,7 +16,10 @@
 #include <KokkosSparse_gmres.hpp>
 #include <KokkosSparse_par_ilut.hpp>
 #include <KokkosSparse_spiluk.hpp>
+#include <Kokkos_Abort.hpp>
 #include <Kokkos_Core.hpp>
+#include <Kokkos_MathematicalFunctions.hpp>
+#include <Kokkos_Printf.hpp>
 #include <bit>
 #include <vector>
 
@@ -136,38 +139,22 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double dyy_eta      = (eta_t - 2 * eta + eta_b) / 2;
 
         double d1 = 0.0, d2 = 0.0;
-        double dir_sign = 0.0;
+        double s        = dirsign(direction);
         double eta_sign = eta > 0.0 ? 1.0 : -1.0;
-        switch (direction) {
-        case Direction::R:
-            d1       = dx_eta;
-            d2       = dxx_eta;
-            dir_sign = -1.0;
-            break;
-        case Direction::T:
-            d1       = dy_eta;
-            d2       = dyy_eta;
-            dir_sign = -1.0;
-            break;
-        case Direction::L:
-            d1       = dx_eta;
-            d2       = dxx_eta;
-            dir_sign = +1.0;
-            break;
-        case Direction::B:
-            d1       = dy_eta;
-            d2       = dyy_eta;
-            dir_sign = +1.0;
-            break;
-        default:
-            return 1.0;
+        bool is_x_dir   = (direction == Direction::R) || (direction == Direction::L);
+        if (is_x_dir) {
+            d1 = dx_eta;
+            d2 = dxx_eta;
+        } else {
+            d1 = dy_eta;
+            d2 = dyy_eta;
         }
 
         if (isclose(d2, 0.0))
             return abs(eta / d1);
 
         double disc  = d1 * d1 - 4.0 * d2 * eta;
-        double theta = (dir_sign * d1 - eta_sign * sqrt(disc)) / (2.0 * d2);
+        double theta = (-s * d1 - eta_sign * sqrt(disc)) / (2.0 * d2);
         if (theta < 1e-6 || theta > 1.0 - 1e-6)
             theta = 1.0;
         return theta;
@@ -243,11 +230,16 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                        double y_ext,
                        double P_inv[6][6]) {
         // Build P matrix (6x6), rows: R, L, T, B, ij, ext
+        // clang-format off
         double P_mat[6][6] = {
-            {x_r * x_r, x_r * y, y * y, x_r, y, 1.0}, {x_l * x_l, x_l * y, y * y, x_l, y, 1.0},
-            {x * x, x * y_t, y_t * y_t, x, y_t, 1.0}, {x * x, x * y_b, y_b * y_b, x, y_b, 1.0},
-            {x * x, x * y, y * y, x, y, 1.0},         {x_ext * x_ext, x_ext * y_ext, y_ext * y_ext, x_ext, y_ext, 1.0},
+            {x_r * x_r, x_r * y, y * y, x_r, y, 1.0}, // R
+            {x_l * x_l, x_l * y, y * y, x_l, y, 1.0}, // L
+            {x * x, x * y_t, y_t * y_t, x, y_t, 1.0}, // T
+            {x * x, x * y_b, y_b * y_b, x, y_b, 1.0}, // B
+            {x * x, x * y, y * y, x, y, 1.0},         // ij
+            {x_ext * x_ext, x_ext * y_ext, y_ext * y_ext, x_ext, y_ext, 1.0}, // ext
         };
+        // clang-format on
 
         // Solve P * X = I column by column using solve_linear_system<6>
         Kokkos::Array<Kokkos::Array<double, 6>, 6> A;
@@ -506,6 +498,41 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         r.eps_l   = eps_l;
         r.eps_t   = eps_t;
         r.eps_b   = eps_b;
+
+        // --- DEBUG: print all case1 values for comparison with Python ---
+        Kokkos::printf("=== CASE1 i=%d j=%d dir=%d ===\n", i, j, (int)direction);
+        Kokkos::printf("x=%.15e y=%.15e eta=%.15e theta=%.15e\n", x, y, eta, theta);
+        Kokkos::printf("a_tau_I=%.15e a_I=%.15e b_I=%.15e n1_I=%.15e n2_I=%.15e\n", a_tau_I, a_I, b_I, n1_I, n2_I);
+        Kokkos::printf("s=%.1f is_x_dir=%d s_eta=%.15e\n", s, (int)is_x_dir, s_eta);
+        Kokkos::printf("theta_r=%.15e theta_l=%.15e theta_t=%.15e theta_b=%.15e\n", theta_r, theta_l, theta_t, theta_b);
+        Kokkos::printf("eps_p=%.15e eps_m=%.15e eps_jump=%.15e\n", eps_p, eps_m, eps_jump);
+        Kokkos::printf("x_ext=%.15e y_ext=%.15e offset_ext=(%d,%d)\n", x_ext, y_ext, offset_ext[0], offset_ext[1]);
+        Kokkos::printf("x_r=%.15e x_l=%.15e y_t=%.15e y_b=%.15e\n", x_r, x_l, y_t, y_b);
+        Kokkos::printf("bot_x=%.15e bot_y=%.15e\n", bot_x, bot_y);
+        Kokkos::printf("eps_r=%.15e eps_l=%.15e eps_t=%.15e eps_b=%.15e\n", eps_r, eps_l, eps_t, eps_b);
+        Kokkos::printf("B_val=%.15e\n", B_val);
+        Kokkos::printf("C_arr=[%.15e, %.15e, %.15e, %.15e]\n", C_arr[0], C_arr[1], C_arr[2], C_arr[3]);
+        Kokkos::printf("a_term=%.15e\n", a_term);
+        Kokkos::printf("x_I=%.15e y_I=%.15e\n", x_I, y_I);
+        Kokkos::printf("dr=%.15e n_norm=%.15e n_tang=%.15e\n", dr, n_norm, n_tang);
+        for (int kk = 0; kk < 6; ++kk)
+            Kokkos::printf("grad_coeff[%d]=%.15e\n", kk, gc[0][kk]);
+        Kokkos::printf("a_tau_term=%.15e b_term=%.15e\n", a_tau_term, b_term);
+        Kokkos::printf("P_inv:\n");
+        for (int ii = 0; ii < 6; ++ii) {
+            for (int jj = 0; jj < 6; ++jj)
+                Kokkos::printf("  P_inv[%d][%d]=%.15e\n", ii, jj, P_inv[ii][jj]);
+        }
+        Kokkos::printf("M[0][0]=%.15e\n", M[0][0]);
+        for (int kk = 0; kk < 25; ++kk)
+            Kokkos::printf("N[0][%d]=%.15e\n", kk, N[0][kk]);
+        Kokkos::printf("D[0]=%.15e\n", D[0]);
+        Kokkos::printf("M_inv_d[0]=%.15e\n", r.M_inv_d[0]);
+        for (int kk = 0; kk < 25; ++kk)
+            Kokkos::printf("M_inv_N[0][%d]=%.15e\n", kk, r.M_inv_N[0][kk]);
+        Kokkos::printf("=== END CASE1 i=%d j=%d dir=%d ===\n", i, j, (int)direction);
+        // --- END DEBUG ---
+
         return r;
     }
 
@@ -709,50 +736,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double M[3][3], N[3][25], D[3];
         assemble_MND<25>(2, B, nullptr, C, 4, a_term, grad_coeff, a_tau_term, b_term, dir, offset25, offset_ext, M, N,
                          D);
-
-        Kokkos::printf("=== C++ case2 i=%d j=%d dir=%zu ===\n", i, j, direction);
-        Kokkos::printf("x=%f y=%f dx=%f dy=%f\n", x, y, dx, dy);
-        Kokkos::printf("eta=%f s_eta=%f\n", eta, s_eta);
-        Kokkos::printf("theta_r=%f theta_l=%f theta_t=%f theta_b=%f\n", theta_r, theta_l, theta_t, theta_b);
-        Kokkos::printf("x_r=%f x_l=%f y_t=%f y_b=%f x_ext=%f y_ext=%f\n", x_r, x_l, y_t, y_b, x_ext, y_ext);
-        Kokkos::printf("bot_x=%f bot_y=%f\n", bot_x, bot_y);
-        Kokkos::printf("eps_r=%f eps_l=%f eps_t=%f eps_b=%f\n", eps_r, eps_l, eps_t, eps_b);
-        Kokkos::printf("dir = [%zu, %zu]\n", dir[0], dir[1]);
-        Kokkos::printf("theta_arr = [%f, %f]\n", theta_arr[0], theta_arr[1]);
-        Kokkos::printf("eps_arr = [%f, %f]\n", eps_arr[0], eps_arr[1]);
-        Kokkos::printf("s = [%f, %f]\n", s[0], s[1]);
-        Kokkos::printf("eps_p = [%f, %f]  eps_m = [%f, %f]\n", eps_p[0], eps_p[1], eps_m[0], eps_m[1]);
-        Kokkos::printf("eps_jump = [%f, %f]\n", eps_jump[0], eps_jump[1]);
-        Kokkos::printf("n1_I = [%f, %f]  n2_I = [%f, %f]\n", n1_I[0], n1_I[1], n2_I[0], n2_I[1]);
-        Kokkos::printf("a_tau_I = [%f, %f]  a_I = [%f, %f]  b_I = [%f, %f]\n", a_tau_I[0], a_tau_I[1], a_I[0], a_I[1],
-                       b_I[0], b_I[1]);
-        Kokkos::printf("B = [%f, %f]\n", B[0], B[1]);
-        Kokkos::printf("C[0] = [%f, %f, %f, %f]\n", C[0][0], C[0][1], C[0][2], C[0][3]);
-        Kokkos::printf("C[1] = [%f, %f, %f, %f]\n", C[1][0], C[1][1], C[1][2], C[1][3]);
-        Kokkos::printf("a_term = [%f, %f]\n", a_term[0], a_term[1]);
-        Kokkos::printf("grad_coeff[0] = [%f, %f, %f, %f, %f, %f]\n", grad_coeff[0][0], grad_coeff[0][1],
-                       grad_coeff[0][2], grad_coeff[0][3], grad_coeff[0][4], grad_coeff[0][5]);
-        Kokkos::printf("grad_coeff[1] = [%f, %f, %f, %f, %f, %f]\n", grad_coeff[1][0], grad_coeff[1][1],
-                       grad_coeff[1][2], grad_coeff[1][3], grad_coeff[1][4], grad_coeff[1][5]);
-        Kokkos::printf("a_tau_term = [%f, %f]  b_term = [%f, %f]\n", a_tau_term[0], a_tau_term[1], b_term[0], b_term[1]);
-        Kokkos::printf("M = [[%f, %f], [%f, %f]]\n", M[0][0], M[0][1], M[1][0], M[1][1]);
-        Kokkos::printf("D = [%f, %f]\n", D[0], D[1]);
-        Kokkos::printf("N[0] = [");
-        for (int k = 0; k < 25; ++k)
-            Kokkos::printf("%f%s", N[0][k], (k < 24) ? ", " : "");
-        Kokkos::printf("]\n");
-        Kokkos::printf("N[1] = [");
-        for (int k = 0; k < 25; ++k)
-            Kokkos::printf("%f%s", N[1][k], (k < 24) ? ", " : "");
-        Kokkos::printf("]\n");
-        Kokkos::printf("P_inv = [\n");
-        for (int pi = 0; pi < 6; ++pi) {
-            Kokkos::printf("  [");
-            for (int pj = 0; pj < 6; ++pj)
-                Kokkos::printf("%f%s", P_inv[pi][pj], (pj < 5) ? ", " : "");
-            Kokkos::printf("]%s\n", (pi < 5) ? "," : "");
-        }
-        Kokkos::printf("]\n");
 
         double det    = M[0][0] * M[1][1] - M[0][1] * M[1][0];
         double invM00 = M[1][1] / det, invM01 = -M[0][1] / det;
@@ -1661,22 +1644,30 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         u     = Kokkos::View<double*>("u", nx * ny);
         rhs   = Kokkos::View<double*>("rhs", nx * ny);
         rhs_h = Kokkos::View<double*, Kokkos::HostSpace>("rhs_h", nx * ny);
-        Kokkos::deep_copy(rhs_h, 0.0);
 
         n1    = Kokkos::View<double**, Kokkos::HostSpace>("n1", nx, ny);
         n2    = Kokkos::View<double**, Kokkos::HostSpace>("n2", nx, ny);
         a     = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
         b     = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
         a_tau = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
+        Kokkos::deep_copy(n1, 0.0);
+        Kokkos::deep_copy(n2, 0.0);
+        Kokkos::deep_copy(a_tau, 0.0);
+        Kokkos::deep_copy(rhs_h, 0.0);
 
         using Kokkos::pow;
         using Kokkos::sqrt;
         int ngc = world.grid.ngc;
 
-        for (int i = ngc; i < nx - ngc; ++i) {
-            for (int j = ngc; j < ny - ngc; ++j) {
+        for (int i = 0; i < nx; ++i) {
+            for (int j = 0; j < ny; ++j) {
                 auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
-                double dx_eta       = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
+                a(i, j)             = world.poisson_jump_condition_a(x, y);
+                b(i, j)             = world.poisson_jump_condition_b(x, y);
+
+                if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc)
+                    continue;
+                double dx_eta = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
                                  8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
                                 (12 * dx);
                 double dy_eta = (-world.surface(x, y + 2 * dy) + 8 * world.surface(x, y + dy) -
@@ -1690,8 +1681,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                     n1(i, j) = dx_eta / norm;
                     n2(i, j) = dy_eta / norm;
                 }
-                a(i, j) = world.poisson_jump_condition_a(x, y);
-                b(i, j) = world.poisson_jump_condition_b(x, y);
             }
         }
         for (int i = ngc; i < nx - ngc; ++i) {
@@ -1853,7 +1842,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             for (int j = 0; j < ny; ++j) {
                 PoissonBCPair bc_map = world.poisson_bc_map(i, j);
                 if (bc_map.type == PoissonBCType::None)
-                    rhs_h(index(i, j)) += -rho_h(i, j);
+                    rhs_h(index(i, j)) -= rho_h(i, j);
                 else
                     rhs_h(index(i, j)) = bc_map.val;
             }
@@ -1863,15 +1852,26 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
     void solve() {
         construct_rhs();
+
+        // DEBUG: print RHS for comparison with Python
+        Kokkos::printf("=== RHS VECTOR (nx=%d, ny=%d) ===\n", nx, ny);
+        for (int i = 0; i < nx; ++i) {
+            for (int j = 0; j < ny; ++j) {
+                Kokkos::printf("rhs[%d,%d]=%.15e\n", i, j, rhs_h(index(i, j)));
+            }
+        }
+
         KokkosSparse::Experimental::gmres(&kh, A, rhs, u, prec.get());
         Kokkos::View<double**, Kokkos::LayoutRight, Kokkos::MemoryTraits<Kokkos::Unmanaged>> u_2d(u.data(), nx, ny);
         Kokkos::deep_copy(world.phi, u_2d);
 
-        auto gmres_handle   = kh.get_gmres_handle();
-        const auto iters    = gmres_handle->get_num_iters();
-        const auto conv     = gmres_handle->get_conv_flag_val();
-        const auto residual = gmres_handle->get_end_rel_res();
-        using GMRESHandle   = typename std::remove_reference<decltype(*gmres_handle)>::type;
+        auto gmres_handle      = kh.get_gmres_handle();
+        const auto max_restart = gmres_handle->get_max_restart();
+        const auto gmres_m     = gmres_handle->get_m();
+        const auto iters       = gmres_handle->get_num_iters();
+        const auto conv        = gmres_handle->get_conv_flag_val();
+        const auto residual    = gmres_handle->get_end_rel_res();
+        using GMRESHandle      = typename std::remove_reference<decltype(*gmres_handle)>::type;
         Kokkos::printf("GMRES status: iters=%d, residual=%e, convergence=%s\n", iters, residual,
                        (conv == GMRESHandle::Conv     ? "Conv"
                         : conv == GMRESHandle::NoConv ? "NoConv"

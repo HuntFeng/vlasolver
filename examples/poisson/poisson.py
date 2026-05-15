@@ -359,39 +359,6 @@ def case1(direction: int, i: int, j: int) -> InterCaseResult:
     n_norm = n1_I if is_x_dir else n2_I
     n_tang = -n2_I if is_x_dir else n1_I
 
-    # # --- DEBUG: print all case1 values for comparison with C++ ---
-    # print(f"=== CASE1 i={i} j={j} dir={direction} ===")
-    # print(f"x={x:.15e} y={y:.15e} eta={float(eta):.15e} theta={float(theta):.15e}")
-    # print(f"a_tau_I={float(a_tau_I):.15e} a_I={float(a_I):.15e} b_I={float(b_I):.15e} n1_I={float(n1_I):.15e} n2_I={float(n2_I):.15e}")
-    # print(f"s={float(s):.1f} is_x_dir={is_x_dir} s_eta={float(s_eta):.15e}")
-    # print(f"theta_r={float(theta_r):.15e} theta_l={float(theta_l):.15e} theta_t={float(theta_t):.15e} theta_b={float(theta_b):.15e}")
-    # print(f"eps_p={float(eps_p):.15e} eps_m={float(eps_m):.15e} eps_jump={float(eps_jump):.15e}")
-    # print(f"x_ext={float(x_ext):.15e} y_ext={float(y_ext):.15e} offset_ext={offset_ext}")
-    # print(f"x_r={float(x_r):.15e} x_l={float(x_l):.15e} y_t={float(y_t):.15e} y_b={float(y_b):.15e}")
-    # print(f"bot_x={float(bot_x):.15e} bot_y={float(bot_y):.15e}")
-    # print(f"eps_r={float(eps_r):.15e} eps_l={float(eps_l):.15e} eps_t={float(eps_t):.15e} eps_b={float(eps_b):.15e}")
-    # print(f"B_val={float(B_val):.15e}")
-    # print(f"C_arr={np.array2string(np.asarray(C_arr), precision=15, separator=', ', floatmode='unique')}")
-    # print(f"a_term={float(a_term):.15e}")
-    # print(f"x_I={float(x_I):.15e} y_I={float(y_I):.15e}")
-    # print(f"dr={float(dr):.15e} n_norm={float(n_norm):.15e} n_tang={float(n_tang):.15e}")
-    # for kk in range(6):
-    #     print(f"grad_coeff[{kk}]={float(grad_coeff[kk]):.15e}")
-    # print(f"a_tau_term={float(a_tau_term):.15e} b_term={float(b_term):.15e}")
-    # print("P_inv:")
-    # for ii in range(6):
-    #     for jj in range(6):
-    #         print(f"  P_inv[{ii}][{jj}]={float(P_inv[ii,jj]):.15e}")
-    # print(f"M[0][0]={float(M[0,0]):.15e}")
-    # for kk in range(25):
-    #     print(f"N[0][{kk}]={float(N[0,kk]):.15e}")
-    # print(f"D[0]={float(D[0]):.15e}")
-    # print(f"M_inv_d[0]={float(M_inv_d):.15e}")
-    # for kk in range(25):
-    #     print(f"M_inv_N[0][{kk}]={float(M_inv_N[kk]):.15e}")
-    # print(f"=== END CASE1 i={i} j={j} dir={direction} ===")
-    # # --- END DEBUG ---
-    #
     return InterCaseResult(
         M_inv_d=M_inv_d, M_inv_N=M_inv_N,
         theta_r=theta_r, theta_l=theta_l, theta_t=theta_t, theta_b=theta_b,
@@ -564,35 +531,6 @@ def case2(direction: int, i: int, j: int, debug=False) -> InterCaseResult:
     M, N, D = _assemble_MND(
         2, B, C, a_term, grad_coeff, a_tau_term, b_term, dir, offset, offset_ext, 25,
     )
-
-    # if debug:
-    #     print(f"=== Python case2 i={i} j={j} dir={direction} ===")
-    #     print(f"x={x} y={y} dx={dx} dy={dy}")
-    #     print(f"eta={eta} s_eta={s_eta}")
-    #     print(f"theta_r={theta_r} theta_l={theta_l} theta_t={theta_t} theta_b={theta_b}")
-    #     print(f"x_r={x_r} x_l={x_l} y_t={y_t} y_b={y_b} x_ext={x_ext} y_ext={y_ext}")
-    #     print(f"bot_x={bot_x} bot_y={bot_y}")
-    #     print(f"eps_r={eps_r} eps_l={eps_l} eps_t={eps_t} eps_b={eps_b}")
-    #     print(f"dir = {dir}")
-    #     print(f"theta = {theta}")
-    #     print(f"eps = {eps}")
-    #     print(f"s = {s}")
-    #     print(f"eps_p = {eps_p}  eps_m = {eps_m}")
-    #     print(f"eps_jump = {eps_jump}")
-    #     print(f"n1_I = {n1_I}  n2_I = {n2_I}")
-    #     print(f"a_tau_I = {a_tau_I}  a_I = {a_I}  b_I = {b_I}")
-    #     print(f"B = {B}")
-    #     print(f"C[0] = {C[0]}")
-    #     print(f"C[1] = {C[1]}")
-    #     print(f"a_term = {a_term}")
-    #     print(f"grad_coeff[0] = {grad_coeff[0]}")
-    #     print(f"grad_coeff[1] = {grad_coeff[1]}")
-    #     print(f"a_tau_term = {a_tau_term}  b_term = {b_term}")
-    #     print(f"M = {M}")
-    #     print(f"D = {D}")
-    #     print(f"N[0] = {N[0]}")
-    #     print(f"N[1] = {N[1]}")
-    #     print(f"P_inv = {P_inv}")
 
     M_inv_d = np.linalg.solve(M, D)
     M_inv_N = np.linalg.solve(M, N)
@@ -878,7 +816,8 @@ def case3(direction: int, extra: int, i: int, j: int) -> InterCaseResult:
             "Invalid direction/extra combination for case 3", direction, extra
         )
 
-    dr = [dx if dir[d] in (Direction.R, Direction.L) else dy for d in range(3)]
+    is_x = [dir[d] in (Direction.R, Direction.L) for d in range(3)]
+    dr = [dx if is_x[d] else dy for d in range(3)]
     eps_jump = np.array([eps_p[d] - eps_m[d] for d in range(3)])
     if eta > 0:
         eps_jump = -eps_jump
@@ -1082,7 +1021,7 @@ def case3(direction: int, extra: int, i: int, j: int) -> InterCaseResult:
         bot_x=bot_x, bot_y=bot_y,
         eps_r=eps_r, eps_l=eps_l, eps_t=eps_t, eps_b=eps_b,
         offset=offset,
-        eps=eps, theta=theta,
+        eps=eps, theta=theta, is_x=is_x,
     )
 
 
@@ -1090,7 +1029,7 @@ def coeff_case3(direction: int, extra: int, i: int, j: int) -> None:
     r = case3(direction, extra, i, j)
     row_idx = index(i, j)
 
-    sub_coeff = [r.eps[0] / r.theta[0] / r.bot_x, r.eps[1] / r.theta[1] / r.bot_y]
+    sub_coeff = [r.eps[d] / r.theta[d] / (r.bot_x if r.is_x[d] else r.bot_y) for d in range(2)]
     f[i, j] -= r.M_inv_d[0] * sub_coeff[0] + r.M_inv_d[1] * sub_coeff[1]
 
     # Extra stencil entries for directions orthogonal to the current one
@@ -1325,14 +1264,12 @@ def construct_matrix():
                     if extra.bit_count() == 0:
                         coeff_case2(direction, i, j)
                     elif extra.bit_count() == 1:
-                        breakpoint()
                         coeff_case3(direction, extra, i, j)
                     else:
                         raise ValueError(
                             f"Invalid extra direction {extra} at ({i},{j}), use finer grid."
                         )
                 case 3:
-                    breakpoint()
                     coeff_case4(direction, i, j)
                 case _:
                     raise ValueError("All four sides cut at ({i},{j}), use finer grid.")
@@ -2132,113 +2069,10 @@ def convergence_test5():
     ax[1].set_title("Example 4.3: numerical")
     plt.show()
 
-def test_case4(n: int=64):
-    global nx, ny, dx, dy
-    global x, y, X, Y
-    global f, u_exact
-    global a, b, a_tau, n1, n2
-    global rows, cols, vals
-    global surface, permittivity
-
-    x0 = 0.02 * np.sqrt(5)
-    y0 = 0.02 * np.sqrt(3)
-
-    def surface(x, y):
-        rr = np.sqrt((x - x0) ** 2 + (y - y0) ** 2)
-        ang = np.arctan2(y - y0, x - x0)
-        return rr - (0.5 + 0.15 * np.sin(5 * ang))
-
-    def permittivity(x, y):
-        return 1.0 if surface(x, y) < 0 else 10.0
-
-    G = 3
-    eps_safe = 1e-30
-    n = n + 6
-    nx, ny = n, n
-    dx, dy = 2.0 / (nx - 2*G), 2.0 / (ny - 2*G)
-    x = np.arange(-1.0 + dx / 2 -G*dx, 1.0 + dx / 2 + G*dx, dx)
-    y = np.arange(-1.0 + dy / 2 -G*dy, 1.0 + dy / 2 + G*dy, dy)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-
-    # Region mask via the level-set sign at every grid point.
-    Phi = surface(X, Y)
-    mask_minus = Phi < 0  # Omega^-: inside the irregular shape.
-
-    R2 = X**2 + Y**2
-    R2_safe = np.maximum(R2, eps_safe)
-
-    # u^+ - u^- and the two-sided u/grad fields, defined on the full grid.
-    u_minus = R2.copy()
-    u_plus = 0.1 * R2**2 - 0.01 * np.log(2.0 * np.sqrt(R2_safe))
-    u_exact = np.where(mask_minus, u_minus, u_plus)
-    dudx_minus = 2.0 * X
-    dudy_minus = 2.0 * Y
-    coeff_plus = 0.4 * R2 - 0.01 / R2_safe
-    dudx_plus = X * coeff_plus
-    dudy_plus = Y * coeff_plus
-    dudx_exact = np.where(mask_minus, dudx_minus, dudx_plus)
-    dudy_exact = np.where(mask_minus, dudy_minus, dudy_plus)
-
-
-    # Right-hand side: f = div(beta grad u). Piecewise constant beta means
-    # f = beta * Laplace(u) on each side.
-    f = np.where(mask_minus, 4.0, 16.0 * R2)
-
-    # Jump in u, evaluated as a smooth function over the whole grid (the
-    # solver only samples it via cubic interpolation at interface points).
-    a = u_plus - u_minus
-
-    # Normals and a_tau need to be available before computing b, since the
-    # paper formula for [beta u_n] involves the unit normal explicitly.
-    n1, n2 = compute_normal_field()
-    b_factor = 4.0 * R2 - 0.1 / R2_safe - 2.0
-    b = (X * n1 + Y * n2) * b_factor
-    a_tau = compute_a_tau_field()
-
-    rows, cols, vals = [], [], []
-    A = construct_matrix()
-    # # DEBUG: print RHS for comparison with C++
-    # print(f"=== RHS VECTOR (nx={nx}, ny={ny}) ===")
-    # for ii in range(nx):
-    #     for jj in range(ny):
-    #         print(f"rhs[{ii},{jj}]={float(f[ii, jj]):.15e}")
-    u = spsolve(A, f.flatten())
-    u = u.reshape((nx, ny))
-    dudx, dudy = gradient(u)
-    
-    error_u = np.linalg.norm((u - u_exact)[G:-G, G:-G].flat, np.inf)
-    error_du = np.linalg.norm(
-        np.append(
-            (dudx - dudx_exact)[G:-G, G:-G].flat,
-            (dudy - dudy_exact)[G:-G, G:-G].flat,
-        ),
-        np.inf,
-    )
-    print(
-        f"Max error: {error_u:.3e}, "
-        f"Max grad error: {error_du:.3e}"
-    )
-
-    # fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
-    # ax[0].plot_surface(X, Y, u_exact, edgecolor="black", cmap=cm.coolwarm)
-    # ax[0].set_title("Example 4.2: exact")
-    # ax[1].plot_surface(X, Y, u, edgecolor="black", cmap=cm.coolwarm)
-    # ax[1].set_title("Example 4.2: numerical")
-    # plt.show()
-
-
-
-
-
 
 if __name__ == "__main__":
     # convergence_test1()
     # convergence_test2()
     # convergence_test3()
-    # convergence_test4()
+    convergence_test4()
     # convergence_test5()
-    import sys
-    if len(sys.argv) > 1:
-        test_case4(int(sys.argv[1]))
-    else:
-        test_case4()

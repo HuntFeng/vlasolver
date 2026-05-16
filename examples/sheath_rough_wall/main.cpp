@@ -1,5 +1,5 @@
 #include "grid.hpp"
-#include "full/poisson_1st_order.hpp"
+#include "poisson_1st_order.hpp"
 #include "full/vlasov.hpp"
 #include "full/world.hpp"
 #include "full/writer.hpp"

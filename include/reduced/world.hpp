@@ -1,10 +1,7 @@
 #pragma once
 #include "../grid.hpp"
 #include "../poisson.hpp"
-#include <KokkosCore_Config_SetupBackend.hpp>
-#include <Kokkos_Array.hpp>
 #include <Kokkos_Core.hpp>
-#include <decl/Kokkos_Declare_OPENMP.hpp>
 
 /**
  * World struct contains physical properties of the particles, fields, and the immersed boundary.

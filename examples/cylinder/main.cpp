@@ -1,5 +1,5 @@
 #include "grid.hpp"
-#include "reduced/poisson_1st_order.hpp"
+#include "poisson_2nd_order.hpp"
 #include "reduced/vlasov.hpp"
 #include "reduced/world.hpp"
 #include "reduced/writer.hpp"
@@ -57,14 +57,13 @@ struct ImmersedWorld : World<ImmersedWorld> {
     KOKKOS_INLINE_FUNCTION
     double permittivity(double x, double y) const { return surface(x, y) < 0.0 ? 1000.0 : 1.0; }
 
-    void potential_boundary_conditions(Kokkos::View<double**>& u) {
+    void potential_boundary_conditions() {
         using Kokkos::abs;
         auto& grid   = this->grid;
         int ngc      = grid.ngc;
-        int nx       = u.extent(0);
-        int ny       = u.extent(1);
-        double dx    = grid.size[0][0] / (nx - 2 * ngc);
-        double dy    = grid.size[0][1] / (ny - 2 * ngc);
+        int nx       = phi.extent(0);
+        int ny       = phi.extent(1);
+        auto [dx, dy] = grid.spacing(0, 0);
         double phi_w = -20.0 / (2 * 0.15); // cylinder potential normalized to ion quantities
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
@@ -72,21 +71,21 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 double y   = (j - ngc + 0.5) * dy;
                 double eta = surface(x, y);
                 if (eta < 0.0) {
-                    u(i, j) = phi_w; // inside the immersed object, set potential to a constant value
+                    phi(i, j) = phi_w; // inside the immersed object, set potential to a constant value
                 }
             });
 
         for (int k = 0; k < ngc; ++k) {
             // left boundary, dirichlet
-            Kokkos::deep_copy(Kokkos::subview(u, k, Kokkos::ALL), 0.0);
+            Kokkos::deep_copy(Kokkos::subview(phi, k, Kokkos::ALL), 0.0);
             // right boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL),
-                              Kokkos::subview(u, nx - 2 * ngc + k, Kokkos::ALL));
+            Kokkos::deep_copy(Kokkos::subview(phi, nx - k - 1, Kokkos::ALL),
+                              Kokkos::subview(phi, nx - 2 * ngc + k, Kokkos::ALL));
             // bottom boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, 2 * ngc - k - 1));
+            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, k), Kokkos::subview(phi, Kokkos::ALL, 2 * ngc - k - 1));
             // top boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1),
-                              Kokkos::subview(u, Kokkos::ALL, ny - 2 * ngc + k));
+            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, ny - k - 1),
+                              Kokkos::subview(phi, Kokkos::ALL, ny - 2 * ngc + k));
         }
     }
 };
@@ -144,7 +143,7 @@ int main(int argc, char* argv[]) {
     world.total_steps = total_steps; // number of total_steps
     world.diag_steps  = diag_steps;  // number of steps between diagnostics
 
-    PoissonSolver1stOrder poisson_solver(world, 1e-6, 1e6);
+    PoissonSolver2ndOrder poisson_solver(world);
     Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

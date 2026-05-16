@@ -35,7 +35,7 @@ class Vlasolver {
 
     void construct_normal_field() {
         auto [nx, ny, nvx, nvy] = world.grid.ncells;
-        auto [dx, dy, dvx, dvy] = world.grid.spacing;
+        auto [dx, dy, dvx, dvy] = world.grid.spacing(0);
         int ngc                 = world.grid.ngc;
         // pre-compute normal field
         using Kokkos::abs;
@@ -46,7 +46,7 @@ class Vlasolver {
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                auto [x, y] = grid.center(i, j);
 
                 double dx_eta       = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
                                  8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
@@ -74,13 +74,13 @@ class Vlasolver {
         auto& norm_vec          = world.norm_vec;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dx               = grid.spacing[0];
-        double dy               = grid.spacing[1];
+        double dx               = grid.spacing(0, 0)[0];
+        double dy               = grid.spacing(0, 0)[1];
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
 
                 // always extrapolate dist function from the interior of the immersed object
                 double eta = world.surface(x, y);
@@ -145,8 +145,8 @@ class Vlasolver {
         auto& norm_vec          = world.norm_vec;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dx               = grid.spacing[0];
-        double dy               = grid.spacing[1];
+        double dx               = grid.spacing(0, 0)[0];
+        double dy               = grid.spacing(0, 0)[1];
 
         // first point must be further enough so interpolation won't involve ghost cell
         double s = sqrt(dx * dx + dy * dy); // cell diagonal length
@@ -154,7 +154,7 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
 
                 // always extrapolate dist function from the interior of the immersed object
                 double eta = world.surface(x, y);
@@ -182,7 +182,7 @@ class Vlasolver {
                         double x_k                = x + s_vals[k] * n1;
                         double y_k                = y + s_vals[k] * n2;
                         auto [ic, jc, ivxc, ivyc] = grid.coord({x_k, y_k, vx, vy});
-                        auto [xc, yc, vxc, vyc]   = grid.center({ic, jc, ivxc, ivyc});
+                        auto [xc, yc, vxc, vyc]   = grid.center(ic, jc, ivxc, ivyc);
                         f_vals[k] = f(ic, jc, iv, jv) * (1.0 - (x_k - xc) / dx) * (1.0 - (y_k - yc) / dy) +
                                     f(ic + 1, jc, iv, jv) * ((x_k - xc) / dx) * (1.0 - (y_k - yc) / dy) +
                                     f(ic, jc + 1, iv, jv) * (1.0 - (x_k - xc) / dx) * ((y_k - yc) / dy) +
@@ -225,7 +225,7 @@ class Vlasolver {
                     //     double x1                 = x + s1 * n1;
                     //     double y1                 = y + s1 * n2;
                     //     auto [ic, jc, ivxc, ivyc] = grid.coord({x1, y1, vx, vy});
-                    //     auto [xc, yc, vxc, vyc]   = grid.center({ic, jc, ivxc, ivyc});
+                    //     auto [xc, yc, vxc, vyc]   = grid.center(ic, jc, ivxc, ivyc);
                     //     f_F1 = f(ic, jc, iv, jv) * (1.0 - (x1 - xc) / dx) * (1.0 - (y1 - yc) / dy) +
                     //            f(ic + 1, jc, iv, jv) * ((x1 - xc) / dx) * (1.0 - (y1 - yc) / dy) +
                     //            f(ic, jc + 1, iv, jv) * (1.0 - (x1 - xc) / dx) * ((y1 - yc) / dy) +
@@ -235,7 +235,7 @@ class Vlasolver {
                     //     double x2                 = x + s2 * n1;
                     //     double y2                 = y + s2 * n2;
                     //     auto [ic, jc, ivxc, ivyc] = grid.coord({x2, y2, vx, vy});
-                    //     auto [xc, yc, vxc, vyc]   = grid.center({ic, jc, ivxc, ivyc});
+                    //     auto [xc, yc, vxc, vyc]   = grid.center(ic, jc, ivxc, ivyc);
                     //     f_F2 = f(ic, jc, iv, jv) * (1.0 - (x2 - xc) / dx) * (1.0 - (y2 - yc) / dy) +
                     //            f(ic + 1, jc, iv, jv) * ((x2 - xc) / dx) * (1.0 - (y2 - yc) / dy) +
                     //            f(ic, jc + 1, iv, jv) * (1.0 - (x2 - xc) / dx) * ((y2 - yc) / dy) +
@@ -259,14 +259,14 @@ class Vlasolver {
         auto& norm_vec          = world.norm_vec;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dx               = grid.spacing[0];
-        double dy               = grid.spacing[1];
+        double dx               = grid.spacing(0, 0)[0];
+        double dy               = grid.spacing(0, 0)[1];
         // search region range from -offset_range to +offset_range
         const int offset_range = 5;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x0, y0, vx, vy] = grid.center({i, j, iv, jv});
+                auto [x0, y0, vx, vy] = grid.center(i, j, iv, jv);
 
                 // always extrapolate dist function from the interior of the immersed object
                 double eta = world.surface(x0, y0);
@@ -297,7 +297,7 @@ class Vlasolver {
                         for (int y_offset = -offset_range; y_offset <= offset_range; ++y_offset) {
                             int I               = i + x_offset;
                             int J               = j + y_offset;
-                            auto [x, y, vx, vy] = grid.center({I, J, iv, jv});
+                            auto [x, y, vx, vy] = grid.center(I, J, iv, jv);
                             // skip ghost cells
                             if (I < ngc || I > nx - ngc - 1 || J < ngc || J > ny - ngc - 1 || world.surface(x, y) < 0)
                                 continue;
@@ -349,7 +349,7 @@ class Vlasolver {
         auto& f                 = world.f;
         auto& n                 = world.n;
         auto& grid              = world.grid;
-        auto [dx, dy, dvx, dvy] = grid.spacing;
+        auto [dx, dy, dvx, dvy] = grid.spacing(0);
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
@@ -357,7 +357,7 @@ class Vlasolver {
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                auto [x, y] = grid.center(i, j);
                 if (world.surface(x, y) < 0.0)
                     return;
 
@@ -389,7 +389,7 @@ class Vlasolver {
         auto& ep_l              = world.ep_l;
         auto& ep_r              = world.ep_r;
 
-        auto [dx, dy, dvx, dvy] = grid.spacing;
+        auto [dx, dy, dvx, dvy] = grid.spacing(0);
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
@@ -402,7 +402,7 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc - 1, ngc - 1, ngc - 1, ngc - 1}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy]       = grid.center({i, j, iv, jv});
+                auto [x, y, vx, vy]       = grid.center(i, j, iv, jv);
                 double advection_velocity = (axis == 0)   ? vx * dt / dx
                                             : (axis == 1) ? vy * dt / dy
                                             : (axis == 2) ? E(i, j, 0) * dt / dvx
@@ -519,7 +519,7 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
                 double eta          = world.surface(x, y);
                 double eta_l        = world.surface(x - dx, y);
                 double eta_r        = world.surface(x + dx, y);

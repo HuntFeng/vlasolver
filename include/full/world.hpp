@@ -1,33 +1,7 @@
 #pragma once
-#include "grid.hpp"
+#include "../grid.hpp"
+#include "../poisson.hpp"
 #include <Kokkos_Core.hpp>
-
-enum PoissonBCType {
-    Dirichlet,
-    Neumann,
-    Periodic,
-    None,
-};
-
-struct PoissonBCPair {
-    PoissonBCType type;
-    double val;
-
-    KOKKOS_INLINE_FUNCTION
-    PoissonBCPair()
-        : type(PoissonBCType::None),
-          val(0.0) {}
-
-    KOKKOS_INLINE_FUNCTION
-    PoissonBCPair(PoissonBCType t)
-        : type(t),
-          val(0.0) {}
-
-    KOKKOS_INLINE_FUNCTION
-    PoissonBCPair(PoissonBCType t, double v)
-        : type(t),
-          val(v) {}
-};
 
 /**
  * World struct contains physical properties of the particles, fields, and the immersed boundary.

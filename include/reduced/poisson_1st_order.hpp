@@ -4,7 +4,7 @@
  * by Xu-Dong Liu 2000, Jornal of Computational Physics, doi:10.1006/jcph.2000.6444
  **/
 #pragma once
-#include "reduced/poisson.hpp"
+#include "../poisson.hpp"
 #include <Kokkos_Core.hpp>
 
 /**
@@ -59,7 +59,7 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         eps        = Kokkos::View<double**>("eps", nx, ny);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                auto [x, y] = grid.center(i, j);
                 a(i, j)             = world.poisson_jump_condition_a(x, y);
                 b(i, j)             = world.poisson_jump_condition_b(x, y);
                 eps(i, j)           = world.permittivity(x, y);
@@ -87,8 +87,8 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         int ngc    = grid.ngc;
         int nx     = u.extent(0);
         int ny     = u.extent(1);
-        double dx  = grid.size[0] / (nx - 2 * ngc);
-        double dy  = grid.size[1] / (ny - 2 * ngc);
+        double dx  = grid.size[0][0] / (nx - 2 * ngc);
+        double dy  = grid.size[0][1] / (ny - 2 * ngc);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 if ((i + j) % 2 != is_update_red)
@@ -203,8 +203,8 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         auto& E    = world.E;
         auto& phi  = world.phi;
         auto& grid = world.grid;
-        double dx  = grid.spacing[0];
-        double dy  = grid.spacing[1];
+        double dx  = grid.spacing(0, 0)[0];
+        double dy  = grid.spacing(0, 0)[1];
         int nx     = grid.ncells[0];
         int ny     = grid.ncells[1];
         int ngc    = grid.ngc;
@@ -218,7 +218,7 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                 E(i, j, 1) = -(phi(i, j + 1) - phi(i, j - 1)) / (2.0 * dy);
 
                 // for boundary cells, compute electric field using jump conditions
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                auto [x, y] = grid.center(i, j);
                 double eta          = world.surface(x, y);
                 double eta_l        = world.surface(x - dx, y);
                 double eta_r        = world.surface(x + dx, y);
@@ -440,8 +440,8 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         int ngc      = grid.ngc;
         int nx       = u.extent(0);
         int ny       = u.extent(1);
-        double dx    = grid.size[0] / (nx - 2 * ngc);
-        double dy    = grid.size[1] / (ny - 2 * ngc);
+        double dx    = grid.size[0][0] / (nx - 2 * ngc);
+        double dy    = grid.size[0][1] / (ny - 2 * ngc);
         double x_min = grid.space_ranges[0];
         double y_min = grid.space_ranges[1];
         Kokkos::View<double**> eps("eps", nx, ny);
@@ -487,8 +487,8 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         int ngc    = grid.ngc;
         int nx     = u.extent(0);
         int ny     = u.extent(1);
-        double dx  = grid.size[0] / (nx - 2 * ngc);
-        double dy  = grid.size[1] / (ny - 2 * ngc);
+        double dx  = grid.size[0][0] / (nx - 2 * ngc);
+        double dy  = grid.size[0][1] / (ny - 2 * ngc);
         Kokkos::View<double**> lhs("lhs", nx, ny);
         Kokkos::deep_copy(lhs, 0.0);
         Kokkos::parallel_for(

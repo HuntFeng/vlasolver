@@ -37,14 +37,14 @@ class Vlasolver {
         auto& f                 = world.f;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dx               = grid.spacing[0][0]; // species doesn't matter here
-        double dy               = grid.spacing[0][1];
+        double dx               = grid.spacing(0, 0)[0]; // species doesn't matter here
+        double dy               = grid.spacing(0, 0)[1];
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 for (int sp = 0; sp < 2; ++sp) {
-                    auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, sp);
+                    auto [x, y, vx, vy] = grid.center(i, j, iv, jv, sp);
 
                     // always extrapolate dist function from the interior of the immersed object
                     double eta = world.surface(x, y);
@@ -106,15 +106,15 @@ class Vlasolver {
         auto& f                 = world.f;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dx               = grid.spacing[0][0]; // species doesn't matter here
-        double dy               = grid.spacing[0][1];
+        double dx               = grid.spacing(0, 0)[0]; // species doesn't matter here
+        double dy               = grid.spacing(0, 0)[1];
         // search region range from -offset_range to +offset_range
         const int offset_range = 5;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 for (int sp = 0; sp < 2; ++sp) {
-                    auto [x0, y0, vx, vy] = grid.center({i, j, iv, jv}, sp);
+                    auto [x0, y0, vx, vy] = grid.center(i, j, iv, jv, sp);
 
                     // always extrapolate dist function from the interior of the immersed object
                     double eta = world.surface(x0, y0);
@@ -143,7 +143,7 @@ class Vlasolver {
                             for (int y_offset = -offset_range; y_offset <= offset_range; ++y_offset) {
                                 int I               = i + x_offset;
                                 int J               = j + y_offset;
-                                auto [x, y, vx, vy] = grid.center({I, J, iv, jv}, sp);
+                                auto [x, y, vx, vy] = grid.center(I, J, iv, jv, sp);
                                 // skip ghost cells
                                 if (I < ngc || I > nx - ngc - 1 || J < ngc || J > ny - ngc - 1 ||
                                     world.surface(x, y) < 0)
@@ -206,8 +206,8 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
-                    auto [dx, dy, dvx, dvy] = grid.spacing[sp];
-                    auto [x, y, vx, vy]     = grid.center({i, j, 0, 0}, sp);
+                    auto [dx, dy, dvx, dvy] = grid.spacing(sp);
+                    auto [x, y]     = grid.center(i, j);
                     if (world.surface(x, y) < 0.0)
                         return;
 
@@ -245,8 +245,8 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc - 1, ngc - 1, ngc - 1, ngc - 1}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy]     = grid.center({i, j, iv, jv}, sp);
-                auto [dx, dy, dvx, dvy] = grid.spacing[sp];
+                auto [x, y, vx, vy]     = grid.center(i, j, iv, jv, sp);
+                auto [dx, dy, dvx, dvy] = grid.spacing(sp);
                 double f0 = 0.0, fp1 = 0.0, fm1 = 0.0;
                 double advection_velocity = 0;
                 int floor_v               = 0;

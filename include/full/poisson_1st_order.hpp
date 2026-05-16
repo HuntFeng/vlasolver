@@ -1,5 +1,5 @@
 #pragma once
-#include "poisson.hpp"
+#include "../poisson.hpp"
 #include <Kokkos_Core.hpp>
 #include <Kokkos_MathematicalFunctions.hpp>
 #include <impl/Kokkos_Profiling.hpp>
@@ -57,7 +57,7 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         eps        = Kokkos::View<double**>("eps", nx, ny);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, 0); // species does not matter here
+                auto [x, y] = grid.center(i, j); // species does not matter here
                 a(i, j)             = world.poisson_jump_condition_a(x, y);
                 b(i, j)             = world.poisson_jump_condition_b(x, y);
                 eps(i, j)           = world.permittivity(x, y);
@@ -203,8 +203,8 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         auto& phi  = world.phi;
         auto& grid = world.grid;
         // species does not matter here
-        double dx = grid.spacing[0][0];
-        double dy = grid.spacing[0][1];
+        double dx = grid.spacing(0, 0)[0];
+        double dy = grid.spacing(0, 0)[1];
         int nx    = grid.ncells[0];
         int ny    = grid.ncells[1];
         int ngc   = grid.ngc;
@@ -218,7 +218,7 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                 E(i, j, 1) = -(phi(i, j + 1) - phi(i, j - 1)) / (2.0 * dy);
 
                 // for boundary cells, compute electric field using jump conditions
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, 0); // species does not matter here
+                auto [x, y] = grid.center(i, j); // species does not matter here
                 double eta          = world.surface(x, y);
                 double eta_l        = world.surface(x - dx, y);
                 double eta_r        = world.surface(x + dx, y);

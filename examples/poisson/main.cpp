@@ -1,5 +1,5 @@
-#include "reduced/grid.hpp"
-#include "reduced/poisson_2nd_order.hpp"
+#include "grid.hpp"
+#include "poisson_2nd_order.hpp"
 #include "reduced/world.hpp"
 #include "reduced/writer.hpp"
 #include <Kokkos_Core.hpp>
@@ -36,7 +36,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
-                    auto [x,y,vx,vy] = grid.center({i, j, 0, 0});
+                    auto [x,y] = grid.center(i, j);
                     double R2      = x * x + y * y;
                     double R2_safe      = R2 < 1e-30 ? 1e-30 : R2;
                     double u_plus = 0.1 * R2*R2 - 0.01 * Kokkos::log(2.0 * Kokkos::sqrt(R2_safe));
@@ -77,8 +77,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
         double factor = 4.0 * R2 - 0.1 / R2 - 2.0;
 
         // Compute normal using the same 4th-order formula as construct_fields
-        double dx = grid.spacing[0];
-        double dy = grid.spacing[1];
+        double dx = grid.spacing(0, 0)[0];
+        double dy = grid.spacing(0, 0)[1];
         double dx_s =
             (-surface(x + 2 * dx, y) + 8.0 * surface(x + dx, y) - 8.0 * surface(x - dx, y) + surface(x - 2 * dx, y)) /
             (12.0 * dx);
@@ -106,7 +106,8 @@ int main(int argc, char** argv) {
     Kokkos::Array<int, DIM> ncells_intr = {n, n, 1, 1};
     const int ngc                       = 3;
 
-    Grid grid(origin, size, ncells_intr, ngc);
+    Grid grid(ncells_intr, ngc);
+    grid.set_grid(origin, size, 0);
     ImmersedWorld world(grid);
     PoissonSolver2ndOrder poisson_solver(world);
 
@@ -121,7 +122,7 @@ int main(int argc, char** argv) {
 
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
-            auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+            auto [x, y] = grid.center(i, j);
             double R2           = x * x + y * y;
             double phi          = world.surface(x, y);
             bool inside         = phi < 0.0;
@@ -146,7 +147,7 @@ int main(int argc, char** argv) {
 
     for (int i = ngc; i < nx - ngc; ++i) {
         for (int j = ngc; j < ny - ngc; ++j) {
-            auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+            auto [x, y] = grid.center(i, j);
             double R2           = x * x + y * y;
             double R2_safe      = R2 < 1e-30 ? 1e-30 : R2;
             double phi          = world.surface(x, y);

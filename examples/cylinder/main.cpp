@@ -1,4 +1,4 @@
-#include "reduced/grid.hpp"
+#include "grid.hpp"
 #include "reduced/poisson_1st_order.hpp"
 #include "reduced/vlasov.hpp"
 #include "reduced/world.hpp"
@@ -33,7 +33,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
                 if (i < ngc) {
                     f(i, j, iv, jv) =
                         (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
@@ -63,8 +63,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
         int ngc      = grid.ngc;
         int nx       = u.extent(0);
         int ny       = u.extent(1);
-        double dx    = grid.size[0] / (nx - 2 * ngc);
-        double dy    = grid.size[1] / (ny - 2 * ngc);
+        double dx    = grid.size[0][0] / (nx - 2 * ngc);
+        double dy    = grid.size[0][1] / (ny - 2 * ngc);
         double phi_w = -20.0 / (2 * 0.15); // cylinder potential normalized to ion quantities
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
@@ -135,7 +135,8 @@ int main(int argc, char* argv[]) {
     Kokkos::Array<double, DIM> size     = {Lx, Ly, Lvx, Lvy};                     // size of the grid
     Kokkos::Array<int, DIM> ncells_intr = {nx_intr, ny_intr, nvx_intr, nvy_intr}; // number of interior cells
 
-    Grid grid(origin, size, ncells_intr, ngc);
+    Grid grid(ncells_intr, ngc);
+    grid.set_grid(origin, size, 0);
     ImmersedWorld world(grid);
 
     world.dt          = dt;          // time step size

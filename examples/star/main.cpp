@@ -1,5 +1,5 @@
-#include "reduced/grid.hpp"
-#include "reduced/poisson_2nd_order.hpp"
+#include "grid.hpp"
+#include "poisson_2nd_order.hpp"
 #include "reduced/vlasov.hpp"
 #include "reduced/world.hpp"
 #include "reduced/writer.hpp"
@@ -15,11 +15,11 @@ struct ImmersedWorld : World<ImmersedWorld> {
         int ngc      = grid.ngc;
         int nx       = grid.ncells[0];
         int ny       = grid.ncells[1];
-        double dx    = grid.spacing[0];
-        double dy    = grid.spacing[1];
+        double dx    = grid.spacing(0, 0)[0];
+        double dy    = grid.spacing(0, 0)[1];
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
-                auto [x, y, vx, vy] = grid.center({i, j, 0, 0});
+                auto [x, y] = grid.center(i, j);
                 double eta          = surface(x, y);
                 double eta_l        = surface(x - dx, y);
                 double eta_r        = surface(x + dx, y);
@@ -70,7 +70,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
                 if (i < ngc) {
                     f(i, j, iv, jv) =
                         (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
@@ -138,7 +138,8 @@ int main(int argc, char* argv[]) {
     Kokkos::Array<double, DIM> size     = {Lx, Ly, Lvx, Lvy};                     // size of the grid
     Kokkos::Array<int, DIM> ncells_intr = {nx_intr, ny_intr, nvx_intr, nvy_intr}; // number of interior cells
 
-    Grid grid(origin, size, ncells_intr, ngc);
+    Grid grid(ncells_intr, ngc);
+    grid.set_grid(origin, size, 0);
     ImmersedWorld world(grid);
 
     world.dt          = dt;          // time step size

@@ -7,8 +7,7 @@
  **/
 #pragma once
 #include "matrix/solve.hpp"
-#include "reduced/poisson.hpp"
-#include "reduced/world.hpp"
+#include "poisson.hpp"
 #include <KokkosKernels_Handle.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>
 #include <KokkosSparse_IOUtils.hpp>
@@ -70,8 +69,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // some useful params
     const int nx    = world.grid.ncells[0];
     const int ny    = world.grid.ncells[1];
-    const double dx = world.grid.spacing[0];
-    const double dy = world.grid.spacing[1];
+    const double dx = world.grid.spacing(0, 0)[0];
+    const double dy = world.grid.spacing(0, 0)[1];
 
     // using coordinate format for constructing sparse matrix -nabla^2
     std::vector<int> rows_coo;
@@ -129,7 +128,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         using Kokkos::pow;
         using Kokkos::sqrt;
 
-        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        auto [x, y] = world.grid.center(i, j);
         double eta          = world.surface(x, y);
         double eta_r        = world.surface(x + dx, y);
         double eta_l        = world.surface(x - dx, y);
@@ -365,7 +364,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 0 -- no cut
     // -----------------------------------------------------------------------
     void coeff_case0(int i, int j) {
-        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        auto [x, y] = world.grid.center(i, j);
         double bot_x        = dx * dx;
         double bot_y        = dy * dy;
 
@@ -396,7 +395,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 1 -- one interface cut
     // -----------------------------------------------------------------------
     InterCaseResult case1(size_t direction, int i, int j) {
-        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        auto [x, y] = world.grid.center(i, j);
         double eta          = world.surface(x, y);
         double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
         double theta        = compute_theta(direction, i, j);
@@ -556,7 +555,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 2 -- two interface cuts
     // -----------------------------------------------------------------------
     InterCaseResult case2(size_t direction, int i, int j) {
-        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        auto [x, y] = world.grid.center(i, j);
         double eta          = world.surface(x, y);
         double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
 
@@ -770,7 +769,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 3 -- two cuts + one extra on outer ray
     // -----------------------------------------------------------------------
     size_t case3_extra_dir(size_t direction, int i, int j) {
-        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        auto [x, y] = world.grid.center(i, j);
         size_t extra        = 0;
         if ((direction & Direction::R) && (world.surface(x + dx, y) * world.surface(x + 2 * dx, y) < 0))
             extra |= Direction::R;
@@ -784,7 +783,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     InterCaseResult case3(size_t direction, size_t extra, int i, int j) {
-        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        auto [x, y] = world.grid.center(i, j);
         double eta          = world.surface(x, y);
         double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
 
@@ -1223,7 +1222,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 4 -- three interface cuts
     // -----------------------------------------------------------------------
     InterCaseResult case4(size_t direction, int i, int j) {
-        auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+        auto [x, y] = world.grid.center(i, j);
         double eta          = world.surface(x, y);
         double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
 
@@ -1630,7 +1629,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
-                auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+                auto [x, y] = world.grid.center(i, j);
                 a(i, j)             = world.poisson_jump_condition_a(x, y);
                 b(i, j)             = world.poisson_jump_condition_b(x, y);
 
@@ -1724,7 +1723,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                         Kokkos::abort("Terminated");
                     }
                 } else {
-                    auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+                    auto [x, y] = world.grid.center(i, j);
                     double eta          = world.surface(x, y);
                     double eta_l        = world.surface(x - dx, y);
                     double eta_r        = world.surface(x + dx, y);
@@ -1850,7 +1849,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
         for (int i = ngc; i < nx - ngc; ++i) {
             for (int j = ngc; j < ny - ngc; ++j) {
-                auto [x, y, vx, vy] = world.grid.center({i, j, 0, 0});
+                auto [x, y] = world.grid.center(i, j);
                 double eta          = world.surface(x, y);
                 double eta_l        = world.surface(x - dx, y);
                 double eta_r        = world.surface(x + dx, y);

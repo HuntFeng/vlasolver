@@ -55,10 +55,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
         return rr - (0.3 + 0.1 * sin(4 * ang));
     }
 
-    KOKKOS_INLINE_FUNCTION Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
-        return {0.0, 0.0};
-    }
-
     void initialize_distribution() {
         // no particles initially
     };

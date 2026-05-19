@@ -38,24 +38,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
         return pow(x - xc, 2) + y * y - R * R;
     }
 
-    KOKKOS_INLINE_FUNCTION
-    Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
-        using Kokkos::abs;
-        using Kokkos::pow;
-        using Kokkos::sqrt;
-        double Lx = 20.0;      // manually set domain width since KOKKOS_INLINE_FUNCTION can't access class member
-        double x0 = 0.13 * Lx; // x center of the first wedget
-        double xs = 0.24 * Lx; // spacing between wedget
-        double xc = x0;        // x center of the closest wedget
-        for (int n = 0; n < 4; ++n) {
-            xc = x0 + n * xs;
-            if (abs(x - xc) < xs / 2)
-                break;
-        }
-        double norm = sqrt(pow((x - xc), 2) + pow(y, 2));
-        return {(x - xc) / norm, y / norm};
-    }
-
     void initialize_distribution() {
         using Kokkos::abs;
         using Kokkos::exp;
@@ -124,7 +106,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
-                    auto [n1, n2]       = normal(x, y, grid.spacing(0, 0)[0], grid.spacing(0, 0)[1]);
+                    double n1 = normal(i, j, 0);
+                    double n2 = normal(i, j, 1);
                     // double v_ce         = sqrt(2 * (phi(i, j) - phi_w) / m[0]); // electron cutoff velocity
                     double v_ce = sqrt(2 * (phi(i, j) - phi(i, ngc)) / m[0]);
                     if (j < ngc && vy > 0.0) {
@@ -142,7 +125,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 // ion
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
-                    auto [n1, n2]       = normal(x, y, grid.spacing(1)[0], grid.spacing(1)[1]);
+                    double n1 = normal(i, j, 0);
+                    double n2 = normal(i, j, 1);
                     double v_ci         = -sqrt(2 * abs(phi(i, j)) / m[1]); // ion cutoff velocity
                     if (j < ngc && vy > 0.0) {
                         f(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow

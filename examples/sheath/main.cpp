@@ -24,9 +24,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const { return y + 1.0; }
 
-    KOKKOS_INLINE_FUNCTION
-    Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const { return {0.0, 1.0}; }
-
     // void load_initial_potential() {
     //     Kokkos::printf("Loading initial potential from initial_potential.csv\n");
     //     std::ifstream file("examples/sheath/initial_potential.csv");

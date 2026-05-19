@@ -17,13 +17,13 @@ struct World {
     Kokkos::View<double****> flux_1st_l; // storing first order fluxes to update distribution function
     Kokkos::View<double****> flux_1st_r; // storing first order fluxes to update distribution function
     // Kokkos::View<double****> ep; // storing first order fluxes to update distribution function
-    Kokkos::View<double****> ep_l; // storing first order fluxes to update distribution function
-    Kokkos::View<double****> ep_r; // storing first order fluxes to update distribution function
-    Kokkos::View<double***> n;     // number density of species
-    Kokkos::View<double**> rho;    // ion charge density
-    Kokkos::View<double**> phi;    // potential field (assuming Boltzmann distribution for electron)
-    Kokkos::View<double***> E;     // Ex(x,y), E_y(x,y)
-    Kokkos::View<double***> normal; // unit normal vector
+    Kokkos::View<double****> ep_l;  // storing first order fluxes to update distribution function
+    Kokkos::View<double****> ep_r;  // storing first order fluxes to update distribution function
+    Kokkos::View<double***> n;      // number density of species
+    Kokkos::View<double**> rho;     // ion charge density
+    Kokkos::View<double**> phi;     // potential field (assuming Boltzmann distribution for electron)
+    Kokkos::View<double***> E;      // Ex(x,y), Ey(x,y)
+    Kokkos::View<double***> normal; // n1(x,y), n2(x,y) unit normal vector
     Kokkos::View<PoissonBCPair**, Kokkos::HostSpace> poisson_bc_map;
     Kokkos::Array<double, 2> m = {1.0, 1836.0};     // relative mass of electrons and ions
     Kokkos::Array<double, 2> q = {-1.0, 1.0};       // charge number of electrons and ions
@@ -41,17 +41,18 @@ struct World {
         // Initialize the views with appropriate dimensions
         auto [nx, ny, nvx, nvy] = grid.ncells;
         f                       = Kokkos::View<double*****>("f", nx, ny, nvx, nvy, 2);
-        flux_l         = Kokkos::View<double****>("flux_l", nx, ny, nvx, nvy);
-        flux_r         = Kokkos::View<double****>("flux_r", nx, ny, nvx, nvy);
-        flux_1st_l     = Kokkos::View<double****>("flux_1st_l", nx, ny, nvx, nvy);
-        flux_1st_r     = Kokkos::View<double****>("flux_1st_r", nx, ny, nvx, nvy);
-        ep_l           = Kokkos::View<double****>("ep_l", nx, ny, nvx, nvy);
-        ep_r           = Kokkos::View<double****>("ep_r", nx, ny, nvx, nvy);
-        n              = Kokkos::View<double***>("n", nx, ny, 2);
-        rho            = Kokkos::View<double**>("rho", nx, ny);
-        phi            = Kokkos::View<double**>("phi", nx, ny);
-        E              = Kokkos::View<double***>("E", nx, ny, 2);
-        poisson_bc_map = Kokkos::View<PoissonBCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
+        flux_l                  = Kokkos::View<double****>("flux_l", nx, ny, nvx, nvy);
+        flux_r                  = Kokkos::View<double****>("flux_r", nx, ny, nvx, nvy);
+        flux_1st_l              = Kokkos::View<double****>("flux_1st_l", nx, ny, nvx, nvy);
+        flux_1st_r              = Kokkos::View<double****>("flux_1st_r", nx, ny, nvx, nvy);
+        ep_l                    = Kokkos::View<double****>("ep_l", nx, ny, nvx, nvy);
+        ep_r                    = Kokkos::View<double****>("ep_r", nx, ny, nvx, nvy);
+        n                       = Kokkos::View<double***>("n", nx, ny, 2);
+        rho                     = Kokkos::View<double**>("rho", nx, ny);
+        phi                     = Kokkos::View<double**>("phi", nx, ny);
+        E                       = Kokkos::View<double***>("E", nx, ny, 2);
+        normal                  = Kokkos::View<double***>("norm_vec", nx, ny, 2);
+        poisson_bc_map          = Kokkos::View<PoissonBCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
         Kokkos::deep_copy(f, 0.0);
         Kokkos::deep_copy(flux_l, 0.0);
         Kokkos::deep_copy(flux_r, 0.0);
@@ -63,11 +64,19 @@ struct World {
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::deep_copy(phi, 0.0);
         Kokkos::deep_copy(E, 0.0);
+        Kokkos::deep_copy(normal, 0.0);
 
         construct_normal_field();
     }
 
+    KOKKOS_INLINE_FUNCTION
+    bool isclose(double val1, double val2, double rtol = 1e-12, double atol = 1e-12) const {
+        return Kokkos::abs(val1 - val2) <= atol + rtol * Kokkos::abs(val2);
+    }
+
     void construct_normal_field() {
+        auto& grid              = this->grid;
+        auto& normal            = this->normal;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         auto [dx, dy, dvx, dvy] = grid.spacing(0);
         int ngc                 = grid.ngc;
@@ -89,8 +98,7 @@ struct World {
                 double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
 
                 // normal field
-                bool is_close = abs(norm - 0.0) < 1e-6 ? true : false;
-                if (is_close) {
+                if (isclose(norm, 0.0)) {
                     normal(i, j, 0) = 0.0;
                     normal(i, j, 1) = 0.0;
                 } else {

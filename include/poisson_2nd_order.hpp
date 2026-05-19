@@ -115,8 +115,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     KOKKOS_INLINE_FUNCTION
     int index(int i, int j) const { return i * ny + j; }
 
-    inline bool isclose(double val1, double val2,
-                         double rtol = 1e-12, double atol = 1e-12) {
+    inline bool isclose(double val1, double val2, double rtol = 1e-12, double atol = 1e-12) {
         return Kokkos::abs(val1 - val2) <= atol + rtol * Kokkos::abs(val2);
     }
 
@@ -125,17 +124,17 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         using Kokkos::pow;
         using Kokkos::sqrt;
 
-        auto [x, y] = world.grid.center(i, j);
-        double eta          = world.surface(x, y);
-        double eta_r        = world.surface(x + dx, y);
-        double eta_l        = world.surface(x - dx, y);
-        double eta_t        = world.surface(x, y + dy);
-        double eta_b        = world.surface(x, y - dy);
+        auto [x, y]    = world.grid.center(i, j);
+        double eta     = world.surface(x, y);
+        double eta_r   = world.surface(x + dx, y);
+        double eta_l   = world.surface(x - dx, y);
+        double eta_t   = world.surface(x, y + dy);
+        double eta_b   = world.surface(x, y - dy);
 
-        double dx_eta       = (eta_r - eta_l) / 2;
-        double dy_eta       = (eta_t - eta_b) / 2;
-        double dxx_eta      = (eta_r - 2 * eta + eta_l) / 2;
-        double dyy_eta      = (eta_t - 2 * eta + eta_b) / 2;
+        double dx_eta  = (eta_r - eta_l) / 2;
+        double dy_eta  = (eta_t - eta_b) / 2;
+        double dxx_eta = (eta_r - 2 * eta + eta_l) / 2;
+        double dyy_eta = (eta_t - 2 * eta + eta_b) / 2;
 
         double d1 = 0.0, d2 = 0.0;
         double s        = dirsign(direction);
@@ -361,16 +360,16 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 0 -- no cut
     // -----------------------------------------------------------------------
     void coeff_case0(int i, int j) {
-        auto [x, y] = world.grid.center(i, j);
-        double bot_x        = dx * dx;
-        double bot_y        = dy * dy;
+        auto [x, y]  = world.grid.center(i, j);
+        double bot_x = dx * dx;
+        double bot_y = dy * dy;
 
-        double eps_l        = world.permittivity(x - dx / 2, y);
-        double eps_r        = world.permittivity(x + dx / 2, y);
-        double eps_b        = world.permittivity(x, y - dy / 2);
-        double eps_t        = world.permittivity(x, y + dy / 2);
+        double eps_l = world.permittivity(x - dx / 2, y);
+        double eps_r = world.permittivity(x + dx / 2, y);
+        double eps_b = world.permittivity(x, y - dy / 2);
+        double eps_t = world.permittivity(x, y + dy / 2);
 
-        int row_idx         = index(i, j);
+        int row_idx  = index(i, j);
         rows_coo.insert(rows_coo.end(), {row_idx, row_idx, row_idx, row_idx, row_idx});
         cols_coo.insert(cols_coo.end(), {
                                             index(i - 1, j),
@@ -392,22 +391,22 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 1 -- one interface cut
     // -----------------------------------------------------------------------
     InterCaseResult case1(size_t direction, int i, int j) {
-        auto [x, y] = world.grid.center(i, j);
-        double eta          = world.surface(x, y);
-        double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
-        double theta        = compute_theta(direction, i, j);
-        double a_tau_I      = interp(direction, theta, i, j, a_tau);
-        double a_I          = interp(direction, theta, i, j, a);
-        double b_I          = interp(direction, theta, i, j, b);
-        double n1_I         = interp(direction, theta, i, j, n1);
-        double n2_I         = interp(direction, theta, i, j, n2);
-        double s            = dirsign(direction);
-        bool is_x_dir       = (direction == Direction::R || direction == Direction::L);
+        auto [x, y]    = world.grid.center(i, j);
+        double eta     = world.surface(x, y);
+        double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
+        double theta   = compute_theta(direction, i, j);
+        double a_tau_I = interp(direction, theta, i, j, a_tau);
+        double a_I     = interp(direction, theta, i, j, a);
+        double b_I     = interp(direction, theta, i, j, b);
+        double n1_I    = interp(direction, theta, i, j, n1);
+        double n2_I    = interp(direction, theta, i, j, n2);
+        double s       = dirsign(direction);
+        bool is_x_dir  = (direction == Direction::R || direction == Direction::L);
 
-        double theta_r      = (direction == Direction::R) ? theta : 1.0;
-        double theta_l      = (direction == Direction::L) ? theta : 1.0;
-        double theta_t      = (direction == Direction::T) ? theta : 1.0;
-        double theta_b      = (direction == Direction::B) ? theta : 1.0;
+        double theta_r = (direction == Direction::R) ? theta : 1.0;
+        double theta_l = (direction == Direction::L) ? theta : 1.0;
+        double theta_t = (direction == Direction::T) ? theta : 1.0;
+        double theta_b = (direction == Direction::B) ? theta : 1.0;
 
         double eps_p, eps_m;
         if (is_x_dir) {
@@ -552,25 +551,25 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 2 -- two interface cuts
     // -----------------------------------------------------------------------
     InterCaseResult case2(size_t direction, int i, int j) {
-        auto [x, y] = world.grid.center(i, j);
-        double eta          = world.surface(x, y);
-        double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
+        auto [x, y]    = world.grid.center(i, j);
+        double eta     = world.surface(x, y);
+        double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
 
-        double theta_r      = compute_theta(Direction::R, i, j);
-        double theta_t      = compute_theta(Direction::T, i, j);
-        double theta_l      = compute_theta(Direction::L, i, j);
-        double theta_b      = compute_theta(Direction::B, i, j);
+        double theta_r = compute_theta(Direction::R, i, j);
+        double theta_t = compute_theta(Direction::T, i, j);
+        double theta_l = compute_theta(Direction::L, i, j);
+        double theta_b = compute_theta(Direction::B, i, j);
 
-        double x_r          = x + theta_r * dx;
-        double x_l          = x - theta_l * dx;
-        double y_t          = y + theta_t * dy;
-        double y_b          = y - theta_b * dy;
-        double bot_x        = (theta_r + theta_l) / 2.0 * dx * dx;
-        double bot_y        = (theta_t + theta_b) / 2.0 * dy * dy;
-        double eps_r        = world.permittivity(x + theta_r * dx / 2.0, y);
-        double eps_l        = world.permittivity(x - theta_l * dx / 2.0, y);
-        double eps_t        = world.permittivity(x, y + theta_t * dy / 2.0);
-        double eps_b        = world.permittivity(x, y - theta_b * dy / 2.0);
+        double x_r     = x + theta_r * dx;
+        double x_l     = x - theta_l * dx;
+        double y_t     = y + theta_t * dy;
+        double y_b     = y - theta_b * dy;
+        double bot_x   = (theta_r + theta_l) / 2.0 * dx * dx;
+        double bot_y   = (theta_t + theta_b) / 2.0 * dy * dy;
+        double eps_r   = world.permittivity(x + theta_r * dx / 2.0, y);
+        double eps_l   = world.permittivity(x - theta_l * dx / 2.0, y);
+        double eps_t   = world.permittivity(x, y + theta_t * dy / 2.0);
+        double eps_b   = world.permittivity(x, y - theta_b * dy / 2.0);
 
         size_t dir[2];
         double theta_arr[2], eps_arr[2];
@@ -766,8 +765,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 3 -- two cuts + one extra on outer ray
     // -----------------------------------------------------------------------
     size_t case3_extra_dir(size_t direction, int i, int j) {
-        auto [x, y] = world.grid.center(i, j);
-        size_t extra        = 0;
+        auto [x, y]  = world.grid.center(i, j);
+        size_t extra = 0;
         if ((direction & Direction::R) && (world.surface(x + dx, y) * world.surface(x + 2 * dx, y) < 0))
             extra |= Direction::R;
         if ((direction & Direction::T) && (world.surface(x, y + dy) * world.surface(x, y + 2 * dy) < 0))
@@ -780,16 +779,16 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     InterCaseResult case3(size_t direction, size_t extra, int i, int j) {
-        auto [x, y] = world.grid.center(i, j);
-        double eta          = world.surface(x, y);
-        double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
+        auto [x, y]     = world.grid.center(i, j);
+        double eta      = world.surface(x, y);
+        double s_eta    = (eta > 0.0) ? 1.0 : -1.0;
 
-        double theta_r      = compute_theta(Direction::R, i, j);
-        double theta_t      = compute_theta(Direction::T, i, j);
-        double theta_l      = compute_theta(Direction::L, i, j);
-        double theta_b      = compute_theta(Direction::B, i, j);
-        double bot_x        = (theta_r + theta_l) / 2.0 * dx * dx;
-        double bot_y        = (theta_t + theta_b) / 2.0 * dy * dy;
+        double theta_r  = compute_theta(Direction::R, i, j);
+        double theta_t  = compute_theta(Direction::T, i, j);
+        double theta_l  = compute_theta(Direction::L, i, j);
+        double theta_b  = compute_theta(Direction::B, i, j);
+        double bot_x    = (theta_r + theta_l) / 2.0 * dx * dx;
+        double bot_y    = (theta_t + theta_b) / 2.0 * dy * dy;
 
         double theta_rr = 0, theta_tt = 0, theta_ll = 0, theta_bb = 0;
         if (extra & Direction::R)
@@ -1219,25 +1218,25 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 4 -- three interface cuts
     // -----------------------------------------------------------------------
     InterCaseResult case4(size_t direction, int i, int j) {
-        auto [x, y] = world.grid.center(i, j);
-        double eta          = world.surface(x, y);
-        double s_eta        = (eta > 0.0) ? 1.0 : -1.0;
+        auto [x, y]    = world.grid.center(i, j);
+        double eta     = world.surface(x, y);
+        double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
 
-        double theta_r      = compute_theta(Direction::R, i, j);
-        double theta_t      = compute_theta(Direction::T, i, j);
-        double theta_l      = compute_theta(Direction::L, i, j);
-        double theta_b      = compute_theta(Direction::B, i, j);
+        double theta_r = compute_theta(Direction::R, i, j);
+        double theta_t = compute_theta(Direction::T, i, j);
+        double theta_l = compute_theta(Direction::L, i, j);
+        double theta_b = compute_theta(Direction::B, i, j);
 
-        double x_r          = x + theta_r * dx;
-        double x_l          = x - theta_l * dx;
-        double y_t          = y + theta_t * dy;
-        double y_b          = y - theta_b * dy;
-        double bot_x        = (theta_r + theta_l) / 2.0 * dx * dx;
-        double bot_y        = (theta_t + theta_b) / 2.0 * dy * dy;
-        double eps_r        = world.permittivity(x + theta_r * dx / 2.0, y);
-        double eps_l        = world.permittivity(x - theta_l * dx / 2.0, y);
-        double eps_t        = world.permittivity(x, y + theta_t * dy / 2.0);
-        double eps_b        = world.permittivity(x, y - theta_b * dy / 2.0);
+        double x_r     = x + theta_r * dx;
+        double x_l     = x - theta_l * dx;
+        double y_t     = y + theta_t * dy;
+        double y_b     = y - theta_b * dy;
+        double bot_x   = (theta_r + theta_l) / 2.0 * dx * dx;
+        double bot_y   = (theta_t + theta_b) / 2.0 * dy * dy;
+        double eps_r   = world.permittivity(x + theta_r * dx / 2.0, y);
+        double eps_l   = world.permittivity(x - theta_l * dx / 2.0, y);
+        double eps_t   = world.permittivity(x, y + theta_t * dy / 2.0);
+        double eps_b   = world.permittivity(x, y - theta_b * dy / 2.0);
 
         size_t dir[3];
         double theta_arr[3], eps_arr[3];
@@ -1606,32 +1605,49 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     void construct_fields() {
-        u     = Kokkos::View<double*>("u", nx * ny);
-        rhs   = Kokkos::View<double*>("rhs", nx * ny);
-        rhs_h = Kokkos::View<double*, Kokkos::HostSpace>("rhs_h", nx * ny);
+        u           = Kokkos::View<double*>("u", nx * ny);
+        rhs         = Kokkos::View<double*>("rhs", nx * ny);
+        rhs_h       = Kokkos::View<double*, Kokkos::HostSpace>("rhs_h", nx * ny);
 
-        n1    = Kokkos::View<double**, Kokkos::HostSpace>("n1", nx, ny);
-        n2    = Kokkos::View<double**, Kokkos::HostSpace>("n2", nx, ny);
-        a     = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
-        b     = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
-        a_tau = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
-        Kokkos::deep_copy(n1, 0.0);
-        Kokkos::deep_copy(n2, 0.0);
+        n1          = Kokkos::View<double**, Kokkos::HostSpace>("n1", nx, ny);
+        n2          = Kokkos::View<double**, Kokkos::HostSpace>("n2", nx, ny);
+        a           = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
+        b           = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
+        a_tau       = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
         Kokkos::deep_copy(a_tau, 0.0);
         Kokkos::deep_copy(rhs_h, 0.0);
+        Kokkos::deep_copy(n1, 0.0);
+        Kokkos::deep_copy(n2, 0.0);
+        // FIXME: not working, possibly the layout is not right
+        // auto normal = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.normal);
+        // Kokkos::deep_copy(n1, Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0));
+        // Kokkos::deep_copy(n2, Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1));
 
         using Kokkos::pow;
         using Kokkos::sqrt;
         int ngc = world.grid.ngc;
 
-        Kokkos::deep_copy(n1, Kokkos::subview(world.normal, Kokkos::ALL, Kokkos::ALL, 0));
-        Kokkos::deep_copy(n2, Kokkos::subview(world.normal, Kokkos::ALL, Kokkos::ALL, 1));
-
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 auto [x, y] = world.grid.center(i, j);
-                a(i, j)             = world.poisson_jump_condition_a(x, y);
-                b(i, j)             = world.poisson_jump_condition_b(x, y);
+                a(i, j)     = world.poisson_jump_condition_a(x, y);
+                b(i, j)     = world.poisson_jump_condition_b(x, y);
+                if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc)
+                    continue;
+                double dx_eta = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
+                                 8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
+                                (12 * dx);
+                double dy_eta = (-world.surface(x, y + 2 * dy) + 8 * world.surface(x, y + dy) -
+                                 8 * world.surface(x, y - dy) + world.surface(x, y - 2 * dy)) /
+                                (12 * dy);
+                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
+                if (isclose(norm, 0.0)) {
+                    n1(i, j) = 0.0;
+                    n2(i, j) = 0.0;
+                } else {
+                    n1(i, j) = dx_eta / norm;
+                    n2(i, j) = dy_eta / norm;
+                }
             }
         }
         for (int i = ngc; i < nx - ngc; ++i) {
@@ -1706,14 +1722,14 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                         Kokkos::abort("Terminated");
                     }
                 } else {
-                    auto [x, y] = world.grid.center(i, j);
-                    double eta          = world.surface(x, y);
-                    double eta_l        = world.surface(x - dx, y);
-                    double eta_r        = world.surface(x + dx, y);
-                    double eta_b        = world.surface(x, y - dy);
-                    double eta_t        = world.surface(x, y + dy);
+                    auto [x, y]      = world.grid.center(i, j);
+                    double eta       = world.surface(x, y);
+                    double eta_l     = world.surface(x - dx, y);
+                    double eta_r     = world.surface(x + dx, y);
+                    double eta_b     = world.surface(x, y - dy);
+                    double eta_t     = world.surface(x, y + dy);
 
-                    size_t direction    = 0;
+                    size_t direction = 0;
                     if (eta * eta_l < 0)
                         direction |= Direction::L;
                     if (eta * eta_r < 0)
@@ -1804,9 +1820,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     void solve() {
         construct_rhs();
 
-        // // DEBUG: print RHS for comparison with Python
-        // ...
-
         KokkosSparse::Experimental::gmres(&kh, A, rhs, u, prec.get());
         Kokkos::View<double**, Kokkos::LayoutRight, Kokkos::MemoryTraits<Kokkos::Unmanaged>> u_2d(u.data(), nx, ny);
         Kokkos::deep_copy(world.phi, u_2d);
@@ -1832,14 +1845,14 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
         for (int i = ngc; i < nx - ngc; ++i) {
             for (int j = ngc; j < ny - ngc; ++j) {
-                auto [x, y] = world.grid.center(i, j);
-                double eta          = world.surface(x, y);
-                double eta_l        = world.surface(x - dx, y);
-                double eta_r        = world.surface(x + dx, y);
-                double eta_b        = world.surface(x, y - dy);
-                double eta_t        = world.surface(x, y + dy);
+                auto [x, y]      = world.grid.center(i, j);
+                double eta       = world.surface(x, y);
+                double eta_l     = world.surface(x - dx, y);
+                double eta_r     = world.surface(x + dx, y);
+                double eta_b     = world.surface(x, y - dy);
+                double eta_t     = world.surface(x, y + dy);
 
-                size_t direction    = 0;
+                size_t direction = 0;
                 if (eta * eta_l < 0)
                     direction |= Direction::L;
                 if (eta * eta_r < 0)

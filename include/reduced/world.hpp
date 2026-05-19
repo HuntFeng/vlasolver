@@ -2,6 +2,7 @@
 #include "../grid.hpp"
 #include "../poisson.hpp"
 #include <Kokkos_Core.hpp>
+#include <Kokkos_Macros.hpp>
 
 /**
  * World struct contains physical properties of the particles, fields, and the immersed boundary.
@@ -54,7 +55,14 @@ struct World {
         construct_normal_field();
     }
 
+    KOKKOS_INLINE_FUNCTION
+    bool isclose(double val1, double val2, double rtol = 1e-12, double atol = 1e-12) const {
+        return Kokkos::abs(val1 - val2) <= atol + rtol * Kokkos::abs(val2);
+    }
+
     void construct_normal_field() {
+        auto& grid = this->grid;
+        auto& normal = this->normal;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         auto [dx, dy, dvx, dvy] = grid.spacing(0);
         int ngc                 = grid.ngc;
@@ -76,8 +84,7 @@ struct World {
                 double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
 
                 // normal field
-                bool is_close = abs(norm - 0.0) < 1e-6 ? true : false;
-                if (is_close) {
+                if (isclose(norm, 0.0)) {
                     normal(i, j, 0) = 0.0;
                     normal(i, j, 1) = 0.0;
                 } else {

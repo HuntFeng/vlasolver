@@ -98,7 +98,7 @@ struct World {
      * @return The value of the surface function at (x,y).
      */
     KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const { return static_cast<WorldType*>(this)->surface(x, y); }
+    double surface(double x, double y) const { return static_cast<const WorldType*>(this)->surface(x, y); }
 
     /**
      * Permittivity as function of spatial coordinate
@@ -108,16 +108,16 @@ struct World {
      * @return The permittivity at (x,y).
      */
     KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) const { return static_cast<WorldType*>(this)->permittivity(x, y); }
+    double permittivity(double x, double y) const { return static_cast<const WorldType*>(this)->permittivity(x, y); }
 
     KOKKOS_INLINE_FUNCTION
     double poisson_jump_condition_a(double x, double y) const {
-        return static_cast<WorldType*>(this)->poisson_jump_condition_a(x, y);
+        return static_cast<const WorldType*>(this)->poisson_jump_condition_a(x, y);
     };
 
     KOKKOS_INLINE_FUNCTION
     double poisson_jump_condition_b(double x, double y) const {
-        return static_cast<WorldType*>(this)->poisson_jump_condition_b(x, y);
+        return static_cast<const WorldType*>(this)->poisson_jump_condition_b(x, y);
     };
 
     /**

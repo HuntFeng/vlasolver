@@ -35,6 +35,7 @@ class Vlasolver {
     void extrapolate_distribution_1st_order() const {
         auto& grid              = world.grid;
         auto& f                 = world.f;
+        auto& normal            = world.normal;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         double dx               = grid.spacing(0, 0)[0]; // species doesn't matter here
@@ -52,11 +53,12 @@ class Vlasolver {
                         return;
 
                     // now (x,y) is the interior of the immersed object
-                    double eta_l  = world.surface(x - dx, y);
-                    double eta_r  = world.surface(x + dx, y);
-                    double eta_b  = world.surface(x, y - dy);
-                    double eta_t  = world.surface(x, y + dy);
-                    auto [n1, n2] = world.normal(x, y, dx, dy);
+                    double eta_l = world.surface(x - dx, y);
+                    double eta_r = world.surface(x + dx, y);
+                    double eta_b = world.surface(x, y - dy);
+                    double eta_t = world.surface(x, y + dy);
+                    double n1    = normal(i, j, 0);
+                    double n2    = normal(i, j, 1);
                     // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
                     int Ng                    = 0;
                     double extrapolated_value = 0.0;
@@ -104,6 +106,7 @@ class Vlasolver {
         using Kokkos::sqrt;
         auto& grid              = world.grid;
         auto& f                 = world.f;
+        auto& normal            = world.normal;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         double dx               = grid.spacing(0, 0)[0]; // species doesn't matter here
@@ -126,7 +129,8 @@ class Vlasolver {
                     double eta_r   = world.surface(x0 + dx, y0);
                     double eta_b   = world.surface(x0, y0 - dy);
                     double eta_t   = world.surface(x0, y0 + dy);
-                    auto [n1, n2]  = world.normal(x0, y0, dx, dy);
+                    double n1      = normal(i, j, 0);
+                    double n2      = normal(i, j, 1);
                     double v_dot_n = vx * n1 + vy * n2;
 
                     if (eta * eta_l < 0.0 || eta * eta_r < 0.0 || eta * eta_b < 0.0 || eta * eta_t < 0.0) {
@@ -207,7 +211,7 @@ class Vlasolver {
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [dx, dy, dvx, dvy] = grid.spacing(sp);
-                    auto [x, y]     = grid.center(i, j);
+                    auto [x, y]             = grid.center(i, j);
                     if (world.surface(x, y) < 0.0)
                         return;
 

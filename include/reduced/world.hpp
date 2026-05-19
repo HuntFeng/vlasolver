@@ -17,9 +17,9 @@ struct World {
     Kokkos::View<double**> n;          // number density of ion
     Kokkos::View<double**> rho;        // ion charge density
     Kokkos::View<double**> phi;        // potential field (assuming Boltzmann distribution for electron)
-    Kokkos::View<double***> E;         // Ex(x,y), E_y(x,y)
+    Kokkos::View<double***> E;         // Ex(x,y), Ey(x,y) electric field
+    Kokkos::View<double***> normal;    // n1(x,y), n2(x,y) unit normal vector
     Kokkos::View<PoissonBCPair**, Kokkos::HostSpace> poisson_bc_map;
-    Kokkos::View<double***> norm_vec; // normal vector
 
     // simulation time control
     double dt           = 0.0; // time step size
@@ -41,16 +41,52 @@ struct World {
         rho                     = Kokkos::View<double**>("rho", nx, ny);
         phi                     = Kokkos::View<double**>("phi", nx, ny);
         E                       = Kokkos::View<double***>("E", nx, ny, 2);
+        normal                  = Kokkos::View<double***>("norm_vec", nx, ny, 2);
         poisson_bc_map          = Kokkos::View<PoissonBCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
-        norm_vec                  = Kokkos::View<double***>("norm_vec", nx, ny, 2);
         Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_1st, 0.0);
         Kokkos::deep_copy(ep_l, 0.0);
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::deep_copy(phi, 0.0);
         Kokkos::deep_copy(E, 0.0);
-        Kokkos::deep_copy(norm_vec, 0.0);
+        Kokkos::deep_copy(normal, 0.0);
+
+        construct_normal_field();
     }
+
+    void construct_normal_field() {
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        auto [dx, dy, dvx, dvy] = grid.spacing(0);
+        int ngc                 = grid.ngc;
+        // pre-compute normal field
+        using Kokkos::abs;
+        using Kokkos::pow;
+        using Kokkos::sqrt;
+
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y]   = grid.center(i, j);
+
+                double dx_eta = (-surface(x + 2 * dx, y) + 8 * surface(x + dx, y) - 8 * surface(x - dx, y) +
+                                 surface(x - 2 * dx, y)) /
+                                (12 * dx);
+                double dy_eta = (-surface(x, y + 2 * dy) + 8 * surface(x, y + dy) - 8 * surface(x, y - dy) +
+                                 surface(x, y - 2 * dy)) /
+                                (12 * dy);
+                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
+
+                // normal field
+                bool is_close = abs(norm - 0.0) < 1e-6 ? true : false;
+                if (is_close) {
+                    normal(i, j, 0) = 0.0;
+                    normal(i, j, 1) = 0.0;
+                } else {
+                    normal(i, j, 0) = dx_eta / norm;
+                    normal(i, j, 1) = dy_eta / norm;
+                }
+            });
+    }
+
     /**
      * Expression of the immersed boundary.
      * S(x) = 0 is the surface of the immersed boundary.
@@ -63,21 +99,6 @@ struct World {
      */
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const { return static_cast<WorldType*>(this)->surface(x, y); }
-
-    /**
-     * Unit normal vector at the surface.
-     * The normal vector is pointing inward, i.e. into the computational domain.
-     *
-     * @param x The x coordinate at which to evaluate the normal vector.
-     * @param y The y coordinate at which to evaluate the normal vector.
-     * @param dx Spacing in the x direction.
-     * @param dy Spacing in the y direction.
-     * @return The unit normal vector at (x,y).
-     */
-    KOKKOS_INLINE_FUNCTION
-    Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
-        return static_cast<WorldType*>(this)->normal(x, y, dx, dy);
-    }
 
     /**
      * Permittivity as function of spatial coordinate

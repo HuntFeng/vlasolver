@@ -23,10 +23,8 @@ struct World {
     Kokkos::View<double**> rho;    // ion charge density
     Kokkos::View<double**> phi;    // potential field (assuming Boltzmann distribution for electron)
     Kokkos::View<double***> E;     // Ex(x,y), E_y(x,y)
+    Kokkos::View<double***> normal; // unit normal vector
     Kokkos::View<PoissonBCPair**, Kokkos::HostSpace> poisson_bc_map;
-    // Kokkos::View<double**> eps;                     // permittivity field
-    // Kokkos::View<double**> a;                       // jump condition for poisson
-    // Kokkos::View<double**> b;                       // jump condition for poisson
     Kokkos::Array<double, 2> m = {1.0, 1836.0};     // relative mass of electrons and ions
     Kokkos::Array<double, 2> q = {-1.0, 1.0};       // charge number of electrons and ions
     Kokkos::Array<double, 2> T = {1.0, 1.0 / 10.0}; // relative temperature of electrons and ions
@@ -43,9 +41,6 @@ struct World {
         // Initialize the views with appropriate dimensions
         auto [nx, ny, nvx, nvy] = grid.ncells;
         f                       = Kokkos::View<double*****>("f", nx, ny, nvx, nvy, 2);
-        // flux                    = Kokkos::View<double****>("flux", nx, ny, nvx, nvy);
-        // flux_1st                = Kokkos::View<double****>("flux_1st", nx, ny, nvx, nvy);
-        // ep                      = Kokkos::View<double****>("ep", nx, ny, nvx, nvy);
         flux_l         = Kokkos::View<double****>("flux_l", nx, ny, nvx, nvy);
         flux_r         = Kokkos::View<double****>("flux_r", nx, ny, nvx, nvy);
         flux_1st_l     = Kokkos::View<double****>("flux_1st_l", nx, ny, nvx, nvy);
@@ -57,11 +52,7 @@ struct World {
         phi            = Kokkos::View<double**>("phi", nx, ny);
         E              = Kokkos::View<double***>("E", nx, ny, 2);
         poisson_bc_map = Kokkos::View<PoissonBCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
-        // eps        = Kokkos::View<double**>("eps", nx, ny);
-        // a          = Kokkos::View<double**>("a", nx, ny); // jump condition for poisson
-        // b          = Kokkos::View<double**>("b", nx, ny); // jump condition for poisson
         Kokkos::deep_copy(f, 0.0);
-        // Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_l, 0.0);
         Kokkos::deep_copy(flux_r, 0.0);
         Kokkos::deep_copy(flux_1st_l, 0.0);
@@ -72,10 +63,43 @@ struct World {
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::deep_copy(phi, 0.0);
         Kokkos::deep_copy(E, 0.0);
-        // Kokkos::deep_copy(eps, 1.0);
-        // Kokkos::deep_copy(a, 0.0);
-        // Kokkos::deep_copy(b, 0.0);
+
+        construct_normal_field();
     }
+
+    void construct_normal_field() {
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        auto [dx, dy, dvx, dvy] = grid.spacing(0);
+        int ngc                 = grid.ngc;
+        // pre-compute normal field
+        using Kokkos::abs;
+        using Kokkos::pow;
+        using Kokkos::sqrt;
+
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y]   = grid.center(i, j);
+
+                double dx_eta = (-surface(x + 2 * dx, y) + 8 * surface(x + dx, y) - 8 * surface(x - dx, y) +
+                                 surface(x - 2 * dx, y)) /
+                                (12 * dx);
+                double dy_eta = (-surface(x, y + 2 * dy) + 8 * surface(x, y + dy) - 8 * surface(x, y - dy) +
+                                 surface(x, y - 2 * dy)) /
+                                (12 * dy);
+                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
+
+                // normal field
+                bool is_close = abs(norm - 0.0) < 1e-6 ? true : false;
+                if (is_close) {
+                    normal(i, j, 0) = 0.0;
+                    normal(i, j, 1) = 0.0;
+                } else {
+                    normal(i, j, 0) = dx_eta / norm;
+                    normal(i, j, 1) = dy_eta / norm;
+                }
+            });
+    }
+
     /**
      * Expression of the immersed boundary.
      * S(x) = 0 is the surface of the immersed boundary.

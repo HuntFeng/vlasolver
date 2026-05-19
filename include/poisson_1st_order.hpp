@@ -79,6 +79,7 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                           int is_update_red) {
         using Kokkos::abs;
         auto& grid    = world.grid;
+        auto& normal  = world.normal;
         int ngc       = grid.ngc;
         int nx        = u.extent(0);
         int ny        = u.extent(1);
@@ -107,18 +108,21 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                 double eta_b = world.surface(x, y - dy);
                 double eta_t = world.surface(x, y + dy);
 
+                // normal vector
+                double n1 = normal(i, j, 0);
+                double n2 = normal(i, j, 1);
                 // modify eps and F if discontinuity is detected
                 if (eta * eta_l <= 0.0) {
                     double eta_p = (eta > 0.0) ? eta : eta_l;
                     double eta_m = (eta <= 0.0) ? eta : eta_l;
                     double eps_p = (eta > 0.0) ? eps(i, j) : eps(i - 1, j);
                     double eps_m = (eta <= 0.0) ? eps(i, j) : eps(i - 1, j);
-                    eps_l = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
+                    eps_l       = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
 
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_l, n2_l] = world.normal(x - dx, y, dx, dy);
-                    double theta      = abs(eta_l) / (abs(eta) + abs(eta_l));
-                    double a_gamma    = (a(i, j) * abs(eta_l) + a(i - 1, j) * abs(eta)) / (abs(eta) + abs(eta_l));
+                    double n1_l = normal(i - 1, j, 0);
+                    double n2_l = normal(i - 1, j, 1);
+                    double theta   = abs(eta_l) / (abs(eta) + abs(eta_l));
+                    double a_gamma = (a(i, j) * abs(eta_l) + a(i - 1, j) * abs(eta)) / (abs(eta) + abs(eta_l));
                     double b_gamma =
                         (b(i, j) * n1 * abs(eta_l) + b(i - 1, j) * n1_l * abs(eta)) / (abs(eta) + abs(eta_l));
                     if (eta <= 0.0)
@@ -131,12 +135,12 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                     double eta_m = (eta <= 0.0) ? eta : eta_r;
                     double eps_p = (eta > 0.0) ? eps(i, j) : eps(i + 1, j);
                     double eps_m = (eta <= 0.0) ? eps(i, j) : eps(i + 1, j);
-                    eps_r = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
+                    eps_r       = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
 
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_r, n2_r] = world.normal(x + dx, y, dx, dy);
-                    double theta      = abs(eta_r) / (abs(eta) + abs(eta_r));
-                    double a_gamma    = (a(i, j) * abs(eta_r) + a(i + 1, j) * abs(eta)) / (abs(eta) + abs(eta_r));
+                    double n1_r = normal(i + 1, j, 0);
+                    double n2_r = normal(i + 1, j, 1);
+                    double theta   = abs(eta_r) / (abs(eta) + abs(eta_r));
+                    double a_gamma = (a(i, j) * abs(eta_r) + a(i + 1, j) * abs(eta)) / (abs(eta) + abs(eta_r));
                     double b_gamma =
                         (b(i, j) * n1 * abs(eta_r) + b(i + 1, j) * n1_r * abs(eta)) / (abs(eta) + abs(eta_r));
                     if (eta <= 0.0)
@@ -151,8 +155,8 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                     double eps_m = (eta <= 0.0) ? eps(i, j) : eps(i, j - 1);
                     eps_b = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
 
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_b, n2_b] = world.normal(x, y - dy, dx, dy);
+                    double n1_b  = normal(i, j - 1, 0);
+                    double n2_b  = normal(i, j - 1, 1);
                     double theta      = abs(eta_b) / (abs(eta) + abs(eta_b));
                     double a_gamma    = (a(i, j) * abs(eta_b) + a(i, j - 1) * abs(eta)) / (abs(eta) + abs(eta_b));
                     double b_gamma =
@@ -167,12 +171,12 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                     double eta_m = (eta <= 0.0) ? eta : eta_t;
                     double eps_p = (eta > 0.0) ? eps(i, j) : eps(i, j + 1);
                     double eps_m = (eta <= 0.0) ? eps(i, j) : eps(i, j + 1);
-                    eps_t = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
+                    eps_t       = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
 
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_t, n2_t] = world.normal(x, y + dy, dx, dy);
-                    double theta      = abs(eta_t) / (abs(eta) + abs(eta_t));
-                    double a_gamma    = (a(i, j) * abs(eta_t) + a(i, j + 1) * abs(eta)) / (abs(eta) + abs(eta_t));
+                    double n1_t = normal(i, j + 1, 0);
+                    double n2_t = normal(i, j + 1, 1);
+                    double theta   = abs(eta_t) / (abs(eta) + abs(eta_t));
+                    double a_gamma = (a(i, j) * abs(eta_t) + a(i, j + 1) * abs(eta)) / (abs(eta) + abs(eta_t));
                     double b_gamma =
                         (b(i, j) * n2 * abs(eta_t) + b(i, j + 1) * n2_t * abs(eta)) / (abs(eta) + abs(eta_t));
                     if (eta <= 0.0)
@@ -194,14 +198,15 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
     }
 
     void compute_electric_field() const {
-        auto& E    = world.E;
-        auto& phi  = world.phi;
-        auto& grid = world.grid;
-        double dx  = grid.spacing(0, 0)[0];
-        double dy  = grid.spacing(0, 0)[1];
-        int nx     = grid.ncells[0];
-        int ny     = grid.ncells[1];
-        int ngc    = grid.ngc;
+        auto& E      = world.E;
+        auto& phi    = world.phi;
+        auto& normal = world.normal;
+        auto& grid   = world.grid;
+        double dx    = grid.spacing(0, 0)[0];
+        double dy    = grid.spacing(0, 0)[1];
+        int nx       = grid.ncells[0];
+        int ny       = grid.ncells[1];
+        int ngc      = grid.ngc;
         using Kokkos::abs;
 
         Kokkos::deep_copy(E, 0.0);
@@ -218,12 +223,15 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                 double eta_r = world.surface(x + dx, y);
                 double eta_b = world.surface(x, y - dy);
                 double eta_t = world.surface(x, y + dy);
+
+                double n1    = normal(i, j, 0);
+                double n2    = normal(i, j, 1);
                 if (eta * eta_l <= 0.0) {
-                    double eps_c      = eps(i, j);
-                    double eps_l      = eps(i - 1, j);
-                    double theta      = abs(eta_l) / (abs(eta) + abs(eta_l));
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_l, n2_l] = world.normal(x - dx, y, dx, dy);
+                    double eps_c = eps(i, j);
+                    double eps_l = eps(i - 1, j);
+                    double theta = abs(eta_l) / (abs(eta) + abs(eta_l));
+                    double n1_l  = normal(i - 1, j, 0);
+                    double n2_l  = normal(i - 1, j, 1);
                     double b_gamma =
                         (b(i, j) * n1 * abs(eta_l) + b(i - 1, j) * n1_l * abs(eta)) / (abs(eta) + abs(eta_l));
                     double phi_I = eps_c * theta * phi(i, j) + eps_l * (1 - theta) * phi(i - 1, j);
@@ -234,8 +242,8 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                 if (eta * eta_r <= 0.0) {
                     double eps_c      = eps(i, j);
                     double eps_r      = eps(i + 1, j);
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_r, n2_r] = world.normal(x + dx, y, dx, dy);
+                    double n1_r  = normal(i + 1, j, 0);
+                    double n2_r  = normal(i + 1, j, 1);
                     double theta      = abs(eta_r) / (abs(eta) + abs(eta_r));
                     double b_gamma =
                         (b(i, j) * n1 * abs(eta_r) + b(i + 1, j) * n1_r * abs(eta)) / (abs(eta) + abs(eta_r));
@@ -247,8 +255,8 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                 if (eta * eta_b <= 0.0) {
                     double eps_c      = eps(i, j);
                     double eps_b      = eps(i, j - 1);
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_b, n2_b] = world.normal(x, y - dy, dx, dy);
+                    double n1_b  = normal(i, j - 1, 0);
+                    double n2_b  = normal(i, j - 1, 1);
                     double theta      = abs(eta_b) / (abs(eta) + abs(eta_b));
                     double b_gamma =
                         (b(i, j) * n2 * abs(eta_b) + b(i, j - 1) * n2_b * abs(eta)) / (abs(eta) + abs(eta_b));
@@ -260,8 +268,8 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                 if (eta * eta_t <= 0.0) {
                     double eps_c      = eps(i, j);
                     double eps_t      = eps(i, j + 1);
-                    auto [n1, n2]     = world.normal(x, y, dx, dy);
-                    auto [n1_t, n2_t] = world.normal(x, y + dy, dx, dy);
+                    double n1_t  = normal(i, j + 1, 0);
+                    double n2_t  = normal(i, j + 1, 1);
                     double theta      = abs(eta_t) / (abs(eta) + abs(eta_t));
                     double b_gamma =
                         (b(i, j) * n2 * abs(eta_t) + b(i, j + 1) * n2_t * abs(eta)) / (abs(eta) + abs(eta_t));

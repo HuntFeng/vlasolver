@@ -15,10 +15,7 @@
 #include <KokkosSparse_gmres.hpp>
 #include <KokkosSparse_par_ilut.hpp>
 #include <KokkosSparse_spiluk.hpp>
-#include <Kokkos_Abort.hpp>
 #include <Kokkos_Core.hpp>
-#include <Kokkos_MathematicalFunctions.hpp>
-#include <Kokkos_Printf.hpp>
 #include <bit>
 #include <vector>
 
@@ -1627,28 +1624,14 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         using Kokkos::sqrt;
         int ngc = world.grid.ngc;
 
+        Kokkos::deep_copy(n1, Kokkos::subview(world.normal, Kokkos::ALL, Kokkos::ALL, 0));
+        Kokkos::deep_copy(n2, Kokkos::subview(world.normal, Kokkos::ALL, Kokkos::ALL, 1));
+
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 auto [x, y] = world.grid.center(i, j);
                 a(i, j)             = world.poisson_jump_condition_a(x, y);
                 b(i, j)             = world.poisson_jump_condition_b(x, y);
-
-                if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc)
-                    continue;
-                double dx_eta = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
-                                 8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
-                                (12 * dx);
-                double dy_eta = (-world.surface(x, y + 2 * dy) + 8 * world.surface(x, y + dy) -
-                                 8 * world.surface(x, y - dy) + world.surface(x, y - 2 * dy)) /
-                                (12 * dy);
-                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
-                if (isclose(norm, 0.0)) {
-                    n1(i, j) = 0.0;
-                    n2(i, j) = 0.0;
-                } else {
-                    n1(i, j) = dx_eta / norm;
-                    n2(i, j) = dy_eta / norm;
-                }
             }
         }
         for (int i = ngc; i < nx - ngc; ++i) {

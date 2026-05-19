@@ -29,49 +29,12 @@ class Vlasolver {
     Vlasolver(World& world, PoissonSolver& poisson_solver, Writer<World>& writer)
         : world(world),
           poisson_solver(poisson_solver),
-          writer(writer) {
-        construct_normal_field();
-    }
-
-    void construct_normal_field() {
-        auto [nx, ny, nvx, nvy] = world.grid.ncells;
-        auto [dx, dy, dvx, dvy] = world.grid.spacing(0);
-        int ngc                 = world.grid.ngc;
-        // pre-compute normal field
-        using Kokkos::abs;
-        using Kokkos::pow;
-        using Kokkos::sqrt;
-        auto& norm_vec = world.norm_vec;
-        auto& grid     = world.grid;
-
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y] = grid.center(i, j);
-
-                double dx_eta       = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
-                                 8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
-                                (12 * dx);
-                double dy_eta = (-world.surface(x, y + 2 * dy) + 8 * world.surface(x, y + dy) -
-                                 8 * world.surface(x, y - dy) + world.surface(x, y - 2 * dy)) /
-                                (12 * dy);
-                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
-
-                // normal field
-                bool is_close = abs(norm - 0.0) < 1e-6 ? true : false;
-                if (is_close) {
-                    norm_vec(i, j, 0) = 0.0;
-                    norm_vec(i, j, 1) = 0.0;
-                } else {
-                    norm_vec(i, j, 0) = dx_eta / norm;
-                    norm_vec(i, j, 1) = dy_eta / norm;
-                }
-            });
-    }
+          writer(writer) {}
 
     void extrapolate_distribution_1st_order() const {
         auto& grid              = world.grid;
         auto& f                 = world.f;
-        auto& norm_vec          = world.norm_vec;
+        auto& normal          = world.normal;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         double dx               = grid.spacing(0, 0)[0];
@@ -92,9 +55,8 @@ class Vlasolver {
                 double eta_r  = world.surface(x + dx, y);
                 double eta_b  = world.surface(x, y - dy);
                 double eta_t  = world.surface(x, y + dy);
-                auto [n1, n2] = world.normal(x, y, dx, dy);
-                // double n1 = norm_vec(i, j, 0);
-                // double n2 = norm_vec(i, j, 1);
+                double n1 = normal(i, j, 0);
+                double n2 = normal(i, j, 1);
                 // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
                 int Ng                    = 0;
                 double extrapolated_value = 0.0;
@@ -142,7 +104,7 @@ class Vlasolver {
         using Kokkos::sqrt;
         auto& grid              = world.grid;
         auto& f                 = world.f;
-        auto& norm_vec          = world.norm_vec;
+        auto& normal          = world.normal;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         double dx               = grid.spacing(0, 0)[0];
@@ -166,9 +128,8 @@ class Vlasolver {
                 double eta_r  = world.surface(x + dx, y);
                 double eta_b  = world.surface(x, y - dy);
                 double eta_t  = world.surface(x, y + dy);
-                auto [n1, n2] = world.normal(x, y, dx, dy);
-                // double n1      = norm_vec(i, j, 0);
-                // double n2      = norm_vec(i, j, 1);
+                double n1      = normal(i, j, 0);
+                double n2      = normal(i, j, 1);
                 double v_dot_n = vx * n1 + vy * n2;
                 // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
                 if (eta * eta_l < 0.0 || eta * eta_r < 0.0 || eta * eta_b < 0.0 || eta * eta_t < 0.0) {
@@ -256,7 +217,7 @@ class Vlasolver {
         using Kokkos::sqrt;
         auto& grid              = world.grid;
         auto& f                 = world.f;
-        auto& norm_vec          = world.norm_vec;
+        auto& normal          = world.normal;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         double dx               = grid.spacing(0, 0)[0];
@@ -278,9 +239,8 @@ class Vlasolver {
                 double eta_r  = world.surface(x0 + dx, y0);
                 double eta_b  = world.surface(x0, y0 - dy);
                 double eta_t  = world.surface(x0, y0 + dy);
-                auto [n1, n2] = world.normal(x0, y0, dx, dy);
-                // double n1      = norm_vec(i, j, 0);
-                // double n2      = norm_vec(i, j, 1);
+                double n1      = normal(i, j, 0);
+                double n2      = normal(i, j, 1);
                 double v_dot_n = vx * n1 + vy * n2;
 
                 if (eta * eta_l < 0.0 || eta * eta_r < 0.0 || eta * eta_b < 0.0 || eta * eta_t < 0.0) {

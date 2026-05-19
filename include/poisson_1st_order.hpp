@@ -25,7 +25,6 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
     Kokkos::View<double**> b;
     Kokkos::View<double**> eps;
     int max_iter; // max iterations for the solver
-    int levels;   // default multigrid levels
 
   public:
     /**

@@ -1,5 +1,5 @@
-#include "reduced/grid.hpp"
-#include "reduced/poisson.hpp"
+#include "grid.hpp"
+#include "poisson.hpp"
 #include "reduced/vlasov.hpp"
 #include "reduced/world.hpp"
 #include "reduced/writer.hpp"
@@ -16,12 +16,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
         return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
     }
 
-    KOKKOS_INLINE_FUNCTION Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
-        // return {1.0, 0.0};
-        double norm = Kokkos::sqrt(Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2));
-        return {(x - 0.375) / norm, y / norm};
-    }
-
     void initialize_distribution() {
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
@@ -31,15 +25,15 @@ struct ImmersedWorld : World<ImmersedWorld> {
         double sigma_x          = 0.05;
         int ivx_peak            = ngc + 1;
         int ivy_peak            = ngc;
-        auto [x, y, vx, vy]     = grid.center({0, 0, ivx_peak, ivy_peak});
+        auto [x, y, vx, vy]     = grid.center(0, 0, ivx_peak, ivy_peak);
         Kokkos::printf("Velocity of peak: (%f, %f)\n", vx, vy);
 
-        auto [dx, dy, dvx, dvy] = grid.spacing;
+        auto [dx, dy, dvx, dvy] = grid.spacing(0);
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
                 if (surface(x, y) <= 0.0)
                     return;
                 double f0 = Kokkos::exp(-Kokkos::pow((x - x0) / sigma_x, 2)) / (dvx * dvy);
@@ -125,11 +119,12 @@ int main(int argc, char* argv[]) {
     Kokkos::Array<double, DIM> size     = {Lx, Ly, Lvx, Lvy};             // size of the grid
     Kokkos::Array<int, DIM> ncells_intr = {nx, ny, nvx, nvy};             // number of interior cells
 
-    Grid grid(origin, size, ncells_intr, ngc);
+    Grid grid(ncells_intr, ngc);
+    grid.set_grid(origin, size, 0);
     ImmersedWorld world(grid);
     double total_time = 1.0;
     double CFL        = 1.0; // I know vx is 0.1, so CFL=1.0 is enough
-    double dt         = CFL * grid.spacing[0] / Lvx;
+    double dt         = CFL * grid.spacing(0, 0)[0] / Lvx;
     int total_steps   = total_time / dt;
     int diag_steps    = total_steps;
     Kokkos::printf("Simulation control: dt: %f, total_time: %f, total_steps: %d, diag_steps: %d\n", dt, total_time,

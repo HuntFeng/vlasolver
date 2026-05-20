@@ -1,5 +1,5 @@
-#include "full/grid.hpp"
-#include "full/poisson_1st_order.hpp"
+#include "grid.hpp"
+#include "poisson_1st_order.hpp"
 #include "full/vlasov.hpp"
 #include "full/world.hpp"
 #include "full/writer.hpp"
@@ -23,9 +23,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const { return y + 1.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const { return {0.0, 1.0}; }
 
     // void load_initial_potential() {
     //     Kokkos::printf("Loading initial potential from initial_potential.csv\n");
@@ -57,7 +54,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
         // Kokkos::parallel_for(
         //     Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-        //         auto [x, y, vx, vy] = grid.center({i, j, 0, 0}, 0); // species does not matter here
+        //         auto [x, y] = grid.center(i, j); // species does not matter here
         //         phi(i, j)           = phi_w * Kokkos::exp(-y / 2.5);
         //     });
 
@@ -73,7 +70,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
             KOKKOS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // electron
                 {
-                    auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 0);
+                    auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
                     double v_ce         = sqrt(2 * (phi_local(i, j) - phi_w_local) / m_local[0]);
                     f_local(i, j, iv, jv, 0) =
                         (vy <= v_ce)
@@ -83,7 +80,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 };
                 // ion
                 {
-                    auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 1);
+                    auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
                     double v_ci         = -sqrt(2 * abs(phi_local(i, j)) / m_local[1]); // ion cutoff velocity
                     f_local(i, j, iv, jv, 1) =
                         (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0_local, 2)) /
@@ -127,7 +124,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
             KOKKOS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // electron
                 {
-                    auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 0);
+                    auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
                     double v_ce         = sqrt(2 * (0.0 - phi_w_local) / m_local[0]); // electron cutoff velocity
                     if (j < ngc && vy > 0.0) {
                         f_local(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
@@ -145,7 +142,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 };
                 // ion
                 {
-                    auto [x, y, vx, vy] = grid.center({i, j, iv, jv}, 1);
+                    auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
                     double v_ci         = 0.0; // ion cutoff velocity, since phi(y=Lx) = 0
                     if (j < ngc && vy > 0.0) {
                         f_local(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
@@ -188,7 +185,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dy               = grid.spacing[0][1]; // species does not matter here
+        double dy               = grid.spacing(0, 0)[1]; // species does not matter here
 
         // top boundary, dirichlet
         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
@@ -205,7 +202,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         //         {
         //             // electron
         //             auto [x, y, vx, vy]     = grid.center({nx_mid, ngc, iv, jv}, 0);
-        //             auto [dx, dy, dvx, dvy] = grid.spacing[0];
+        //             auto [dx, dy, dvx, dvy] = grid.spacing(0, 0)[0];
         //             double v_ce             = sqrt(2 * (phi(nx_mid, ngc) - phi_w) / m[0]);
         //             double f_e              = (vy <= v_ce)
         //                                           ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) +
@@ -217,7 +214,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         //         {
         //             // ion
         //             auto [x, y, vx, vy]     = grid.center({nx_mid, ngc, iv, jv}, 1);
-        //             auto [dx, dy, dvx, dvy] = grid.spacing[1];
+        //             auto [dx, dy, dvx, dvy] = grid.spacing(0, 0)[1];
         //             double v_ci             = -sqrt(2 * abs(phi(nx_mid, ngc)) / m[1]); // ion cutoff velocity
         //             double f_i = (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
         //                                             (2.0 * pow(v_th_i, 2))) /

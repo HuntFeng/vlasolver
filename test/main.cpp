@@ -14,7 +14,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
     ImmersedWorld(Grid& grid)
         : World<ImmersedWorld>(grid) {
         // load_initial_potential();
-        dy = grid.spacing[0][1];
+        dy = grid.spacing(0, 0)[1];
     }
 
     KOKKOS_INLINE_FUNCTION
@@ -33,8 +33,8 @@ class TestClass {
     TestClass(World& world)
         : world(world),
           phi(world.phi) {
-        dx = world.grid.spacing[0][0];
-        dy = world.grid.spacing[0][0];
+        dx = world.grid.spacing(0, 0)[0];
+        dy = world.grid.spacing(0, 0)[0];
     }
 
     KOKKOS_INLINE_FUNCTION

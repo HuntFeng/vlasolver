@@ -1,5 +1,5 @@
-#include "reduced/grid.hpp"
-#include "reduced/poisson_1st_order.hpp"
+#include "grid.hpp"
+#include "poisson_1st_order.hpp"
 #include "reduced/vlasov.hpp"
 #include "reduced/world.hpp"
 #include "reduced/writer.hpp"
@@ -17,11 +17,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
         return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
     }
 
-    KOKKOS_INLINE_FUNCTION Kokkos::Array<double, 2> normal(double x, double y, double dx, double dy) const {
-        double norm = Kokkos::sqrt(Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2));
-        return {(x - 0.375) / norm, y / norm};
-    }
-
     void initialize_distribution() {
         // no particles initially
     };
@@ -33,7 +28,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center({i, j, iv, jv});
+                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
                 if (i < ngc) {
                     f(i, j, iv, jv) =
                         (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
@@ -57,36 +52,35 @@ struct ImmersedWorld : World<ImmersedWorld> {
     KOKKOS_INLINE_FUNCTION
     double permittivity(double x, double y) const { return surface(x, y) < 0.0 ? 1000.0 : 1.0; }
 
-    void potential_boundary_conditions(Kokkos::View<double**>& u) {
+    void potential_boundary_conditions() {
         using Kokkos::abs;
-        auto& grid   = this->grid;
-        int ngc      = grid.ngc;
-        int nx       = u.extent(0);
-        int ny       = u.extent(1);
-        double dx    = grid.size[0] / (nx - 2 * ngc);
-        double dy    = grid.size[1] / (ny - 2 * ngc);
-        double phi_w = -20.0 / (2 * 0.15); // cylinder potential normalized to electron quantities
+        auto& grid    = this->grid;
+        int ngc       = grid.ngc;
+        int nx        = phi.extent(0);
+        int ny        = phi.extent(1);
+        auto [dx, dy] = grid.spacing(0, 0);
+        double phi_w  = -20.0 / (2 * 0.15); // cylinder potential normalized to ion quantities
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 double x   = (i - ngc + 0.5) * dx;
                 double y   = (j - ngc + 0.5) * dy;
                 double eta = surface(x, y);
                 if (eta < 0.0) {
-                    u(i, j) = phi_w; // inside the immersed object, set potential to a constant value
+                    phi(i, j) = phi_w; // inside the immersed object, set potential to a constant value
                 }
             });
 
         for (int k = 0; k < ngc; ++k) {
             // left boundary, dirichlet
-            Kokkos::deep_copy(Kokkos::subview(u, k, Kokkos::ALL), 0.0);
+            Kokkos::deep_copy(Kokkos::subview(phi, k, Kokkos::ALL), 0.0);
             // right boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(u, nx - k - 1, Kokkos::ALL),
-                              Kokkos::subview(u, nx - 2 * ngc + k, Kokkos::ALL));
+            Kokkos::deep_copy(Kokkos::subview(phi, nx - k - 1, Kokkos::ALL),
+                              Kokkos::subview(phi, nx - 2 * ngc + k, Kokkos::ALL));
             // bottom boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, k), Kokkos::subview(u, Kokkos::ALL, 2 * ngc - k - 1));
+            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, k), Kokkos::subview(phi, Kokkos::ALL, 2 * ngc - k - 1));
             // top boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(u, Kokkos::ALL, ny - k - 1),
-                              Kokkos::subview(u, Kokkos::ALL, ny - 2 * ngc + k));
+            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, ny - k - 1),
+                              Kokkos::subview(phi, Kokkos::ALL, ny - 2 * ngc + k));
         }
     }
 };
@@ -135,7 +129,8 @@ int main(int argc, char* argv[]) {
     Kokkos::Array<double, DIM> size     = {Lx, Ly, Lvx, Lvy};                     // size of the grid
     Kokkos::Array<int, DIM> ncells_intr = {nx_intr, ny_intr, nvx_intr, nvy_intr}; // number of interior cells
 
-    Grid grid(origin, size, ncells_intr, ngc);
+    Grid grid(ncells_intr, ngc);
+    grid.set_grid(origin, size, 0);
     ImmersedWorld world(grid);
 
     world.dt          = dt;          // time step size
@@ -143,7 +138,7 @@ int main(int argc, char* argv[]) {
     world.total_steps = total_steps; // number of total_steps
     world.diag_steps  = diag_steps;  // number of steps between diagnostics
 
-    PoissonSolver1stOrder poisson_solver(world, 1e-6, 1e6);
+    PoissonSolver1stOrder poisson_solver(world);
     Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

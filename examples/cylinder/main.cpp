@@ -1,5 +1,5 @@
 #include "grid.hpp"
-#include "poisson_2nd_order.hpp"
+#include "poisson_1st_order.hpp"
 #include "reduced/vlasov.hpp"
 #include "reduced/world.hpp"
 #include "reduced/writer.hpp"
@@ -54,12 +54,12 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     void potential_boundary_conditions() {
         using Kokkos::abs;
-        auto& grid   = this->grid;
-        int ngc      = grid.ngc;
-        int nx       = phi.extent(0);
-        int ny       = phi.extent(1);
+        auto& grid    = this->grid;
+        int ngc       = grid.ngc;
+        int nx        = phi.extent(0);
+        int ny        = phi.extent(1);
         auto [dx, dy] = grid.spacing(0, 0);
-        double phi_w = -20.0 / (2 * 0.15); // cylinder potential normalized to ion quantities
+        double phi_w  = -20.0 / (2 * 0.15); // cylinder potential normalized to ion quantities
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 double x   = (i - ngc + 0.5) * dx;
@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
     world.total_steps = total_steps; // number of total_steps
     world.diag_steps  = diag_steps;  // number of steps between diagnostics
 
-    PoissonSolver2ndOrder poisson_solver(world);
+    PoissonSolver1stOrder poisson_solver(world);
     Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

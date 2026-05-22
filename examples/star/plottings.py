@@ -16,15 +16,15 @@ plt.rcParams.update(
     }
 )
 
-nx, ny = 128, 128
-Lx, Ly = 1, 1
+nx, ny = 256, 128
+Lx, Ly = 2, 1
 G = 3
-is_include_star = True
+is_include_star = False
 
-step = 300
+step = 1000
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/../../data/star/output_{step:03d}.h5",
+    f"{file_path}/../../data/star/output_{step:04d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)

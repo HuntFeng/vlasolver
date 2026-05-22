@@ -48,11 +48,11 @@ struct ImmersedWorld : World<ImmersedWorld> {
         using Kokkos::pow;
         using Kokkos::atan2;
         using Kokkos::sin;
-        double x0 = 1.0;
+        double x0 = 0.5;
         double y0 = 0.5;
         double rr = sqrt(pow(x - x0, 2) + pow(y - y0, 2));
         double ang = atan2(y - y0, x - x0);
-        return rr - (0.1 + 0.04 * sin(4 * ang));
+        return rr - (0.15 + 0.04 * sin(4 * ang));
     }
 
     void initialize_distribution() {

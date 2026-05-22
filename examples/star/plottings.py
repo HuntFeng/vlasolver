@@ -16,15 +16,15 @@ plt.rcParams.update(
     }
 )
 
-nx, ny = 256, 128
-Lx, Ly = 2, 1
+nx, ny = 128, 128
+Lx, Ly = 1, 1
 G = 3
 is_include_star = False
 
-step = 1000
+step = 500
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/../../data/star/output_{step:04d}.h5",
+    f"{file_path}/../../data/star/output_{step:03d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -42,7 +42,7 @@ def surface(x, y):
     y0 = 0.5
     rr = np.sqrt(np.pow(x - x0, 2) + np.pow(y - y0, 2));
     ang = np.atan2(y - y0, x - x0);
-    return rr - (0.3 + 0.1 * np.sin(4 * ang));
+    return rr - (0.15 + 0.04 * np.sin(4 * ang));
 
 fig, ax = plt.subplots()
 c = ax.contourf(X, Y, ni, cmap="jet", levels=50)
@@ -51,8 +51,8 @@ plt.title("$n_i$")
 if is_include_star:
     ax.contourf(X, Y, surface(X,Y), levels=[-100, 0], colors='white')
     ax.contour(X, Y, surface(X,Y), levels=[0], colors='black', linewidths=2)
-ax.set_xlim(0, 1)
-ax.set_ylim(0, 1)
+ax.set_xlim(0, Lx)
+ax.set_ylim(0, Ly)
 ax.set_xlabel("$x/L_x$")
 ax.set_ylabel("$y/L_x$")
 ax.set_aspect("equal")
@@ -66,8 +66,8 @@ plt.title("$e\\phi/2k_BT_i$")
 if is_include_star:
     ax.contourf(X, Y, surface(X,Y), levels=[-100, 0], colors='white')
     ax.contour(X, Y, surface(X,Y), levels=[0], colors='black', linewidths=2)
-ax.set_xlim(0, 1)
-ax.set_ylim(0, 1)
+ax.set_xlim(0, Lx)
+ax.set_ylim(0, Ly)
 ax.set_xlabel("$x/L_x$")
 ax.set_ylabel("$y/L_x$")
 ax.set_aspect("equal")

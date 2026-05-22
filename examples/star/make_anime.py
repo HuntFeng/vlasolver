@@ -18,7 +18,7 @@ plt.rcParams.update(
 )
 
 # Animation parameters
-total_steps = 500
+total_steps = 1000
 frame_interval = 5
 start_step = 0
 
@@ -47,7 +47,7 @@ def surface(x, y):
 def load_data(step):
     try:
         with h5py.File(
-            f"{file_path}/../../data/star/output_{step:03d}.h5", "r"
+            f"{file_path}/../../data/star/output_{step:04d}.h5", "r"
         ) as f:
             ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
             phi = f["VTKHDF/CellData/phi"][:].reshape(nx + 2 * G, ny + 2 * G)

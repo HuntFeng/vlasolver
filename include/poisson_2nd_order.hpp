@@ -63,11 +63,20 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     int max_restart;
     bool verbose;
 
+    // preconditioner params
+    double ilut_drop_tol;
+    int ilut_max_iter;
+    double ilut_fill_limit;
+    bool enable_scaling;
+
     // some useful params
     const int nx    = world.grid.ncells[0];
     const int ny    = world.grid.ncells[1];
     const double dx = world.grid.spacing(0, 0)[0];
     const double dy = world.grid.spacing(0, 0)[1];
+
+    // diagonal scaling vector (D^{-1/2}) for preconditioner equilibration
+    Kokkos::View<double*> D_inv_sqrt;
 
     // using coordinate format for constructing sparse matrix -nabla^2
     std::vector<int> rows_coo;
@@ -93,12 +102,24 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
   public:
     PoissonSolver2ndOrder(
-        World& world, double tol = 1e-12, int gmres_m = 100, int max_restart = 30, bool verbose = false)
+        World& world,
+        double tol = 1e-12,
+        int gmres_m = 100,
+        int max_restart = 30,
+        bool verbose = false,
+        double ilut_drop_tol = 1e-10,
+        int ilut_max_iter = 500,
+        double ilut_fill_limit = 20.0,
+        bool enable_scaling = true)
         : world(world),
           tol(tol),
           gmres_m(gmres_m),
           max_restart(max_restart),
-          verbose(verbose) {
+          verbose(verbose),
+          ilut_drop_tol(ilut_drop_tol),
+          ilut_max_iter(ilut_max_iter),
+          ilut_fill_limit(ilut_fill_limit),
+          enable_scaling(enable_scaling) {
 
         construct_fields();
         construct_matrix();
@@ -108,7 +129,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         kh.create_gmres_handle(gmres_m, tol, max_restart);
         auto gmres_handle = kh.get_gmres_handle();
         using GMRESHandle = typename std::remove_reference<decltype(*gmres_handle)>::type;
-        gmres_handle->set_ortho(GMRESHandle::Ortho::CGS2);
+        gmres_handle->set_ortho(GMRESHandle::Ortho::MGS);
         gmres_handle->set_verbose(verbose);
     }
 
@@ -1768,19 +1789,54 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     void construct_preconditioner() {
-        kh.create_par_ilut_handle();
-        auto par_ilut_handle = kh.get_par_ilut_handle();
-        par_ilut_handle->set_max_iter(100);
-        par_ilut_handle->set_residual_norm_delta_stop(1e-3);
-        par_ilut_handle->set_fill_in_limit(5.0);
-        par_ilut_handle->set_verbose(verbose);
-
         auto row_map = A.graph.row_map;
         auto entries = A.graph.entries;
         auto values  = A.values;
+        int nrows    = A.numRows();
 
-        Kokkos::View<int*> L_row_map("L_row_map", A.numRows() + 1);
-        Kokkos::View<int*> U_row_map("U_row_map", A.numRows() + 1);
+        // Symmetric diagonal scaling (Jacobi equilibration) for better ILU quality
+        D_inv_sqrt = Kokkos::View<double*>("D_inv_sqrt", nrows);
+        auto D_inv_sqrt_h = Kokkos::create_mirror_view(D_inv_sqrt);
+        if (enable_scaling) {
+            auto row_map_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), row_map);
+            auto entries_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), entries);
+            auto values_h  = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), values);
+            for (int i = 0; i < nrows; ++i) {
+                double diag = 0.0;
+                for (int k = row_map_h(i); k < row_map_h(i + 1); ++k) {
+                    if (entries_h(k) == i) {
+                        diag = Kokkos::abs(values_h(k));
+                        break;
+                    }
+                }
+                D_inv_sqrt_h(i) = (diag > 1e-30) ? 1.0 / Kokkos::sqrt(diag) : 1.0;
+            }
+            Kokkos::deep_copy(D_inv_sqrt, D_inv_sqrt_h);
+
+            // Symmetrically scale the CRS matrix in-place on host
+            for (int i = 0; i < nrows; ++i) {
+                double di = D_inv_sqrt_h(i);
+                for (int k = row_map_h(i); k < row_map_h(i + 1); ++k) {
+                    int j    = entries_h(k);
+                    double dj = D_inv_sqrt_h(j);
+                    values_h(k) *= di * dj;
+                }
+            }
+            Kokkos::deep_copy(values, values_h);
+        } else {
+            Kokkos::deep_copy(D_inv_sqrt_h, 1.0);
+            Kokkos::deep_copy(D_inv_sqrt, D_inv_sqrt_h);
+        }
+
+        kh.create_par_ilut_handle();
+        auto par_ilut_handle = kh.get_par_ilut_handle();
+        par_ilut_handle->set_max_iter(ilut_max_iter);
+        par_ilut_handle->set_residual_norm_delta_stop(ilut_drop_tol);
+        par_ilut_handle->set_fill_in_limit(ilut_fill_limit);
+        par_ilut_handle->set_verbose(verbose);
+
+        Kokkos::View<int*> L_row_map("L_row_map", nrows + 1);
+        Kokkos::View<int*> U_row_map("U_row_map", nrows + 1);
         KokkosSparse::Experimental::par_ilut_symbolic(&kh, row_map, entries, L_row_map, U_row_map);
 
         const int nnzL_est = par_ilut_handle->get_nnzL();
@@ -1794,8 +1850,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                                                      U_row_map, U_entries, U_values);
         const int nnzL      = L_values.extent(0);
         const int nnzU      = U_values.extent(0);
-        CRS L               = CRS("L", A.numRows(), A.numCols(), nnzL, L_values, L_row_map, L_entries);
-        CRS U               = CRS("U", A.numRows(), A.numCols(), nnzU, U_values, U_row_map, U_entries);
+        CRS L               = CRS("L", nrows, A.numCols(), nnzL, L_values, L_row_map, L_entries);
+        CRS U               = CRS("U", nrows, A.numCols(), nnzU, U_values, U_row_map, U_entries);
         prec                = std::make_unique<KokkosSparse::Experimental::LUPrec<CRS, KernelHandle>>(L, U);
 
         const auto iters    = par_ilut_handle->get_num_iters();
@@ -1820,7 +1876,28 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     void solve() {
         construct_rhs();
 
+        // Apply diagonal scaling to RHS
+        if (enable_scaling) {
+            auto rhs_h = Kokkos::create_mirror_view(rhs);
+            Kokkos::deep_copy(rhs_h, rhs);
+            auto D_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), D_inv_sqrt);
+            for (int i = 0; i < nx * ny; ++i)
+                rhs_h(i) *= D_h(i);
+            Kokkos::deep_copy(rhs, rhs_h);
+        }
+
         KokkosSparse::Experimental::gmres(&kh, A, rhs, u, prec.get());
+
+        // Undo diagonal scaling on solution
+        if (enable_scaling) {
+            auto u_h = Kokkos::create_mirror_view(u);
+            Kokkos::deep_copy(u_h, u);
+            auto D_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), D_inv_sqrt);
+            for (int i = 0; i < nx * ny; ++i)
+                u_h(i) *= D_h(i);
+            Kokkos::deep_copy(u, u_h);
+        }
+
         Kokkos::View<double**, Kokkos::LayoutRight, Kokkos::MemoryTraits<Kokkos::Unmanaged>> u_2d(u.data(), nx, ny);
         Kokkos::deep_copy(world.phi, u_2d);
 

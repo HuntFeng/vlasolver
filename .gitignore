@@ -7,6 +7,7 @@ reports/
 *.png
 *.svg
 *.mp4
+!**/figures/*.png
 .DS_Store
 .devcontainer/*
 !.devcontainer/*.def

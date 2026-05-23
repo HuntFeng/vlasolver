@@ -19,9 +19,9 @@ plt.rcParams.update(
 nx, ny = 128, 128
 Lx, Ly = 1, 1
 G = 3
-is_include_star = False
+is_include_star = True
 
-step = 1000
+step = 400
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
     f"{file_path}/../../data/star/output_{step:04d}.h5",
@@ -57,7 +57,7 @@ ax.set_xlabel("$x/L_x$")
 ax.set_ylabel("$y/L_x$")
 ax.set_aspect("equal")
 plt.tight_layout()
-plt.savefig(f"{file_path}/number_density.svg")
+plt.savefig(f"{file_path}/number_density.png")
 
 fig, ax = plt.subplots()
 c = ax.contourf(X, Y, phi, cmap="jet", levels=50)
@@ -72,7 +72,7 @@ ax.set_xlabel("$x/L_x$")
 ax.set_ylabel("$y/L_x$")
 ax.set_aspect("equal")
 plt.tight_layout()
-plt.savefig(f"{file_path}/potential.svg")
+plt.savefig(f"{file_path}/potential.png")
 
 fig, ax = plt.subplots()
 c = ax.contourf(X, Y, Ex, cmap="jet", levels=50)
@@ -87,7 +87,7 @@ ax.set_xlabel("$x/L_x$")
 ax.set_ylabel("$y/L_x$")
 ax.set_aspect("equal")
 plt.tight_layout()
-plt.savefig(f"{file_path}/electric_field.svg")
+plt.savefig(f"{file_path}/electric_field.png")
 
 plt.figure()
 plt.plot(x, Ex[:, G], "o-", label="$y=0$")
@@ -104,6 +104,6 @@ plt.plot(x, phi[:, -G], "o-", label="$y=0.5$")
 plt.xlabel("$x/L_x$")
 plt.ylabel("$\\phi$")
 plt.legend()
-plt.savefig(f"{file_path}/potential_profiles.svg")
+plt.savefig(f"{file_path}/potential_profiles.png")
 
 plt.show()

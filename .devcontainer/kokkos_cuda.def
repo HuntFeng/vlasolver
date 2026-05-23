@@ -10,7 +10,6 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
       - HDF5 and HighFive for HDF5 file handling
       - Kokkos framework for parallel programming
       - KokkosKernels for sparse matrix support
-      - Google Test (gtest) for unit testing
 
 %post
     # update and install core tools
@@ -95,18 +94,6 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
     cmake --build build --parallel 4
     cmake --install build --prefix /usr/local
     rm -rf kokkos-kernels-${KOKKOS_VERSION}
-
-    # gtest for unit testing
-    export GTEST_VERSION=1.17.0
-    wget https://github.com/google/googletest/releases/download/v${GTEST_VERSION}/googletest-${GTEST_VERSION}.tar.gz
-    tar -xvzf googletest-${GTEST_VERSION}.tar.gz
-    rm googletest-${GTEST_VERSION}.tar.gz
-    cd googletest-${GTEST_VERSION}
-    cmake -B build \
-    -DCMAKE_BUILD_TYPE=Release
-    cmake --build build --parallel 4
-    cmake --install build --prefix /usr/local
-    rm -rf googletest-${GTEST_VERSION}
 
 %environment
     export PATH="/usr/local/cuda/bin:$PATH"

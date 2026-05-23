@@ -564,19 +564,15 @@ class Vlasolver {
 
                 double ep_left = 0.0, ep_right = 0.0;
                 if (axis == 0) {
-                    // ep_left =
-                    //     (eta_l < 0.0) ? ep_l(i, j, iv, jv) : Kokkos::min(ep_r(i - 1, j, iv, jv), ep_l(i, j, iv, jv));
-                    // ep_right =
-                    //     (eta_r < 0.0) ? ep_r(i, j, iv, jv) : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv));
-                    ep_left  = Kokkos::min(ep_r(i - 1, j, iv, jv), ep_l(i, j, iv, jv));
-                    ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv));
+                    ep_left =
+                        (eta_l < 0.0) ? ep_l(i, j, iv, jv) : Kokkos::min(ep_r(i - 1, j, iv, jv), ep_l(i, j, iv, jv));
+                    ep_right =
+                        (eta_r < 0.0) ? ep_r(i, j, iv, jv) : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv));
                 } else if (axis == 1) {
-                    // ep_left =
-                    //     (eta_b < 0.0) ? ep_l(i, j, iv, jv) : Kokkos::min(ep_r(i, j - 1, iv, jv), ep_l(i, j, iv, jv));
-                    // ep_right =
-                    //     (eta_t < 0.0) ? ep_r(i, j, iv, jv) : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
-                    ep_left  = Kokkos::min(ep_r(i, j - 1, iv, jv), ep_l(i, j, iv, jv));
-                    ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
+                    ep_left =
+                        (eta_b < 0.0) ? ep_l(i, j, iv, jv) : Kokkos::min(ep_r(i, j - 1, iv, jv), ep_l(i, j, iv, jv));
+                    ep_right =
+                        (eta_t < 0.0) ? ep_r(i, j, iv, jv) : Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
                 } else if (axis == 2) {
                     ep_left  = Kokkos::min(ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
                     ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));

@@ -2,6 +2,11 @@
 
 Vlasolver is a high-performance C++ code for simulating the **Vlasov-Poisson system** on Cartesian grids with **complex boundaries** (objects embedded in the plasma domain). It is built on the [Kokkos](https://github.com/kokkos/kokkos) ecosystem for performance portability across CPUs and GPUs (CUDA, HIP, OpenMP, Serial, etc).
 
+Plasma flow around a star!
+|Number density (Ion) | Potential |
+|--|--|
+| ![Star](examples/star/figures/number_density.png) | ![Star](examples/star/figures/potential.png) |
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -19,7 +24,7 @@ Vlasolver is a high-performance C++ code for simulating the **Vlasov-Poisson sys
   - [Development in Container](#development-in-container)
   - [Debugging](#debugging)
   - [Profiling](#profiling)
-- [Running Tests](#running-tests)
+- [Contribution](#contribution)
 - [References](#references)
 
 ## Overview
@@ -65,7 +70,7 @@ module load apptainer
 apptainer build .devcontainer/kokkos_cuda.sif .devcontainer/kokkos_cuda.def
 ```
 
-This creates a SIF image containing CUDA 12.3, Kokkos 4.5, HDF5, HighFive, Google Test, and all other required libraries. To use a different backend (e.g., HIP or CPU-only), edit `.devcontainer/kokkos_cuda.def` to adjust the Kokkos configuration before building. Building takes a few minutes the first time but only needs to be done once.
+This creates a SIF image containing CUDA 12.3, Kokkos 4.5, HDF5, HighFive, and all other required libraries. To use a different backend (e.g., HIP or CPU-only), edit `.devcontainer/kokkos_cuda.def` to adjust the Kokkos configuration before building. Building takes a few minutes the first time but only needs to be done once.
 
 **3. You're ready.** Skip to [Usage](#usage).
 
@@ -76,11 +81,10 @@ All dependencies and their exact build recipes are documented in `.devcontainer/
 | Dependency | Version | Notes |
 |---|---|---|
 | CUDA | ≥ 12.3 | GPU toolchain (optional — only needed for CUDA backend) |
-| Kokkos | 4.5.01 | `CUDA`, `OpenMP`, `Serial` backends (customize backends as needed); `TURING75` architecture |
+| Kokkos | 4.5.01 | `CUDA`, `OpenMP`, `Serial` backends (customize backends as needed) |
 | KokkosKernels | 4.5.01 | Sparse linear algebra |
 | HDF5 | 1.14.5 | Parallel I/O |
 | HighFive | 2.10.1 | C++ HDF5 wrapper |
-| Google Test | 1.17.0 | Unit testing |
 | libinih | (system) | INI file parsing |
 
 After installing dependencies, configure CMake with C++20 and the same Kokkos backends you intend to use:
@@ -214,22 +218,15 @@ nsys profile --stats=true ./build/star ./examples/star/input.ini
 ncu --set full ./build/star ./examples/star/input.ini
 ```
 
-## Running Tests
+## Contribution
 
-Tests use Google Test and are configured as a separate CMake project:
+You are welcome to contribute! Fell free to
+- Add new examples (e.g., new geometries, physics scenarios, or test cases).
+- Implement new features (e.g., new boundary conditions, higher-order schemes, etc).
+- Improve documentation or add new Python post-processing tools.
+- Add apptainer definitions for other platforms (e.g., HIP for AMD GPUs, or CPU-only images).
 
-```bash
-cd test
-cmake -B build
-cmake --build build
-cd build && ctest
-```
-
-Or run the test binary directly:
-
-```bash
-./test/build/main
-```
+For major changes, please open an issue first to discuss what you would like to change.
 
 ## References
 

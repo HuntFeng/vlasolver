@@ -1,8 +1,8 @@
-#include "grid.hpp"
-#include "poisson_1st_order.hpp"
 #include "full/vlasov.hpp"
 #include "full/world.hpp"
 #include "full/writer.hpp"
+#include "grid.hpp"
+#include "poisson_1st_order.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
 #include <iostream>
@@ -10,12 +10,12 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     // all quantities are normalized by electron parameters
-    double phi_w  = -4;                                                       // rough spikes potential
-    double v_th_e = Kokkos::sqrt(T[0] / m[0]);                                // electron thermal velocity
-    double v_th_i = Kokkos::sqrt(T[1] / m[1]);                                // ion thermal velocity
-    double u0     = Kokkos::sqrt(T[0] / m[1]);                                // Bohm velocity
-                                                                              //
-    Kokkos::View<double*> E_w = Kokkos::View<double*>("E_w", grid.ncells[0]); // wall electric field
+    double phi_w  = -4;                        // rough spikes potential
+    double v_th_e = Kokkos::sqrt(T[0] / m[0]); // electron thermal velocity
+    double v_th_i = Kokkos::sqrt(T[1] / m[1]); // ion thermal velocity
+    double u0     = Kokkos::sqrt(T[0] / m[1]); // Bohm velocity
+                                               //
+    // Kokkos::View<double*> E_w = Kokkos::View<double*>("E_w", grid.ncells[0]); // wall electric field
 
     ImmersedWorld(Grid& grid)
         : World<ImmersedWorld>(grid) {}
@@ -48,6 +48,16 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
+
+        // Initialize potential with Debye-shielded profile for faster relaxation
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y] = grid.center(i, j);
+                if (surface(x, y) > 0.0) {
+                    phi(i, j) = phi_w * Kokkos::exp(-y / 2.5);
+                }
+            });
+        Kokkos::fence();
 
         Kokkos::deep_copy(f, 0.0);
         Kokkos::parallel_for(
@@ -106,8 +116,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
-                    double n1 = normal(i, j, 0);
-                    double n2 = normal(i, j, 1);
+                    double n1           = normal(i, j, 0);
+                    double n2           = normal(i, j, 1);
                     // double v_ce         = sqrt(2 * (phi(i, j) - phi_w) / m[0]); // electron cutoff velocity
                     double v_ce = sqrt(2 * (phi(i, j) - phi(i, ngc)) / m[0]);
                     if (j < ngc && vy > 0.0) {
@@ -125,8 +135,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 // ion
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
-                    double n1 = normal(i, j, 0);
-                    double n2 = normal(i, j, 1);
+                    double n1           = normal(i, j, 0);
+                    double n2           = normal(i, j, 1);
                     double v_ci         = -sqrt(2 * abs(phi(i, j)) / m[1]); // ion cutoff velocity
                     if (j < ngc && vy > 0.0) {
                         f(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
@@ -159,7 +169,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
     double poisson_jump_condition_b(double x, double y) { return 0.0; }
 
     KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) { return surface(x, y) <= 0 ? 1000.0 : 0.0; }
+    double permittivity(double x, double y) { return surface(x, y) <= 0 ? 1000.0 : 1.0; }
 
     void potential_boundary_conditions() {
         using Kokkos::abs;
@@ -186,19 +196,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                         // E_w(i) += (flux_i - flux_e) * dt;
                         // phi(i, j) = phi(i, ngc + 1) + E_w(i) * 2 * dy;
 
-                        // floating dist
-                        // for (int sp = 0; sp < 2; ++sp) {
-                        //     auto [dx, dy, dvx, dvy] = grid.spacing[sp];
-                        //     for (int iv = 0; iv < nvx; ++iv)
-                        //         for (int jv = 0; jv < nvy; ++jv)
-                        //             E_w(i) += q[sp] * f(i, ngc, iv, jv, sp) * dvx * dvy * dt;
-                        // }
-                        // phi(i, j) = phi(i, ngc + 1) + E_w(i) * 2 * dy;
-
-                        // dirichlet
-                        // phi(i, j) = phi_w;
-
-                        // neumann
+                        // neumann (use neumann here, it's not really a sheath edge here)
                         phi(i, j) = phi(i, ngc + 1);
                     }
                     if (surface(x, y) < 0.0) {
@@ -294,7 +292,7 @@ int main(int argc, char* argv[]) {
     world.v_th_i      = v_th_i;
     world.u0          = u0;
 
-    PoissonSolver1stOrder poisson_solver(world, 1e-6, 5e3);
+    PoissonSolver1stOrder poisson_solver(world, 1e-6, 5e3, 1.5);
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

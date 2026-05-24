@@ -208,7 +208,7 @@ class Vlasolver {
         Kokkos::deep_copy(n, 0.0);
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [dx, dy, dvx, dvy] = grid.spacing(sp);
                     auto [x, y]             = grid.center(i, j);

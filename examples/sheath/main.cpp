@@ -17,29 +17,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
     double u0     = Kokkos::sqrt(T[0] / m[1]);                                           // Bohm velocity
 
     ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {
-        // load_initial_potential();
-    }
+        : World<ImmersedWorld>(grid) {}
 
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const { return y + 1.0; }
-
-    // void load_initial_potential() {
-    //     Kokkos::printf("Loading initial potential from initial_potential.csv\n");
-    //     std::ifstream file("examples/sheath/initial_potential.csv");
-    //     std::string line;
-    //     int j = 0;
-    //     while (std::getline(file, line)) {
-    //         try {
-    //             double value = std::stod(line);
-    //             Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, j), value);
-    //             j++;
-    //         } catch (const std::invalid_argument& e) {
-    //             // Handle the case where conversion fails
-    //             Kokkos::printf("Invalid line in initial_potential.csv: %s\n", line.c_str());
-    //         }
-    //     }
-    // }
 
     void initialize_distribution() {
         using Kokkos::abs;
@@ -190,23 +171,23 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dy               = grid.spacing(0, 0)[1]; // species does not matter here
+        double dy               = grid.spacing(0, 0)[1];
 
         // top boundary, dirichlet
         Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
+
         // bottom boundary, floating potential
+        // electron flux to wall: Boltzmann approximation ne * v_th_e / sqrt(2π)
         int nx_mid = nx / 2;
-        // copy single element instead of entire array
         auto phi_mid = Kokkos::subview(phi, nx_mid, ngc);
         auto phi_mid_host = Kokkos::create_mirror_view(phi_mid);
         Kokkos::deep_copy(phi_mid_host, phi_mid);
         double flux_e = exp(phi_mid_host()) * v_th_e / sqrt(2 * pi);
-        // use actual ion density at sheath edge rather than assuming n_i = 1
-        auto n_i_mid = Kokkos::subview(n, nx_mid, ngc, 1);
-        auto n_i_mid_host = Kokkos::create_mirror_view(n_i_mid);
-        Kokkos::deep_copy(n_i_mid_host, n_i_mid);
-        double flux_i = n_i_mid_host() * u0;
+
+        // ion flux: conserved from source (Bohm flux, n_0 * u0 ≈ u0)
+        double flux_i = u0;
         E_w += (flux_i - flux_e) * dt;
+
         auto phi_local   = this->phi;
         double E_w_local = this->E_w;
         Kokkos::parallel_for(

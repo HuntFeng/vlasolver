@@ -1,4 +1,4 @@
-# Plasma Sheath with Rough (Corrugated) Wall
+# Plasma Sheath with Rough Wall
 
 A two-species Vlasov-Poisson simulation of a plasma sheath adjacent to a rough wall with four hemispherical bumps. Demonstrates how non-planar geometry affects the sheath structure.
 

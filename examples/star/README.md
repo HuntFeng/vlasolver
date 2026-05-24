@@ -39,6 +39,6 @@ python examples/star/make_anime.py   # generate star.mp4
 
 ![E-field](figures/electric_field.png)
 
-A wake forms behind the star, visible in the number density depletion downstream. The potential drops sharply across the star boundary due to the high permittivity ratio (1000:1). The electric field is strongest at the star tips where curvature is highest.
+A wake forms behind the star, visible in the number density depletion downstream. The electric field is strongest at the star tips where curvature is highest.
 
 The `star.mp4` animation shows the time evolution of number density, potential and electric field.

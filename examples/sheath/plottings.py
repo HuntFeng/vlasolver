@@ -26,8 +26,7 @@ Lvx_e, Lvy_e = 8, 10
 vx_min_i, vy_min_i = -4, -15
 Lvx_i, Lvy_i = 8, 16
 G = 3
-step = 40000
-is_include_ghost = False
+step = 2700
 Te = 1.0  # eV
 Ti = 0.1  # eV
 me = 1.0
@@ -40,7 +39,7 @@ u0 = np.sqrt(Te / mi)
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/../../data/sheath/output_{step:05d}.h5",
+    f"{file_path}/../../data/sheath/output_{step:04d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -53,42 +52,24 @@ with h5py.File(
         nx + 2 * G, ny + 2 * G, nvx + 2 * G, nvy + 2 * G
     )
 
-if is_include_ghost:
-    dx, dy = Lx / nx, Ly / ny
-    x = np.arange(x_min - G * dx + dx / 2, x_min + Lx + G * dx, dx)
-    y = np.arange(y_min - G * dy + dy / 2, y_min + Ly + G * dy, dy)
-    dvx_e, dvy_e = Lvx_e / nvx, Lvy_e / nvy
-    vx_e = np.arange(
-        vx_min_e - G * dvx_e + dvx_e / 2, vx_min_e + Lvx_e + G * dvx_e, dvx_e
-    )
-    vy_e = np.arange(
-        vy_min_e - G * dvy_e + dvy_e / 2, vy_min_e + Lvy_e + G * dvy_e, dvy_e
-    )
-    dvx_i, dvy_i = Lvx_i / nvx, Lvy_i / nvy
-    vx_i = np.arange(
-        vx_min_i - G * dvx_i + dvx_i / 2, vx_min_i + Lvx_i + G * dvx_i, dvx_i
-    )
-    vy_i = np.arange(
-        vy_min_i - G * dvy_i + dvy_i / 2, vy_min_i + Lvy_i + G * dvy_i, dvy_i
-    )
-else:
-    ni = ni[G:-G, G:-G]
-    ne = ne[G:-G, G:-G]
-    phi = phi[G:-G, G:-G]
-    fi = fi[G:-G, G:-G, G:-G, G:-G]
-    fe = fe[G:-G, G:-G, G:-G, G:-G]
-
-    dx, dy = Lx / nx, Ly / ny
-    x = np.arange(x_min + dx / 2, x_min + Lx, dx)
-    y = np.arange(y_min + dy / 2, y_min + Ly, dy)
-
-    dvx_e, dvy_e = Lvx_e / nvx, Lvy_e / nvy
-    vx_e = np.arange(vx_min_e + dvx_e / 2, vx_min_e + Lvx_e, dvx_e)
-    vy_e = np.arange(vy_min_e + dvy_e / 2, vy_min_e + Lvy_e, dvy_e)
-    dvx_i, dvy_i = Lvx_i / nvx, Lvy_i / nvy
-    vx_i = np.arange(vx_min_i + dvx_i / 2, vx_min_i + Lvx_i, dvx_i)
-    vy_i = np.arange(vy_min_i + dvy_i / 2, vy_min_i + Lvy_i, dvy_i)
-
+# Always include ghost cells
+dx, dy = Lx / nx, Ly / ny
+x = np.arange(x_min - G * dx + dx / 2, x_min + Lx + G * dx, dx)
+y = np.arange(y_min - G * dy + dy / 2, y_min + Ly + G * dy, dy)
+dvx_e, dvy_e = Lvx_e / nvx, Lvy_e / nvy
+vx_e = np.arange(
+    vx_min_e - G * dvx_e + dvx_e / 2, vx_min_e + Lvx_e + G * dvx_e, dvx_e
+)
+vy_e = np.arange(
+    vy_min_e - G * dvy_e + dvy_e / 2, vy_min_e + Lvy_e + G * dvy_e, dvy_e
+)
+dvx_i, dvy_i = Lvx_i / nvx, Lvy_i / nvy
+vx_i = np.arange(
+    vx_min_i - G * dvx_i + dvx_i / 2, vx_min_i + Lvx_i + G * dvx_i, dvx_i
+)
+vy_i = np.arange(
+    vy_min_i - G * dvy_i + dvy_i / 2, vy_min_i + Lvy_i + G * dvy_i, dvy_i
+)
 
 phi_w = -np.log(np.sqrt(mr / (2 * np.pi)))
 n_ea = np.zeros(ne.shape[1])
@@ -97,32 +78,38 @@ dvy_i = dvy_i * vr
 vy_i = vy_i * vr
 f_ea = np.zeros((fi.shape[1], fi.shape[3]))
 f_ia = np.zeros((fi.shape[1], fi.shape[3]))
-# phi_a = np.tile(np.loadtxt(f"{file_path}/potential.csv"), (phi.shape[0], 1))
 phi_a = phi.copy()
+cx = phi.shape[0] // 2
 for j in range(ne.shape[1]):
-    v_ce = np.sqrt(2 * (phi_a[nx // 2, j] - phi_w))
-    for jv, vy in enumerate(vy_e):
-        if vy <= v_ce:
-            f_ea[j, jv] = np.exp(-(vy**2) / 2 + phi_a[nx // 2, j]) / np.sqrt(2 * np.pi)
-            # n_ea[j] += f_ea[j, jv] * dvy_e
+    v_ce = np.sqrt(2 * (phi_a[cx, j] - phi_w))
+    for jv, vy_val in enumerate(vy_e):
+        if vy_val <= v_ce:
+            f_ea[j, jv] = np.exp(-(vy_val**2) / 2 + phi_a[cx, j]) / np.sqrt(2 * np.pi)
 
-    v_ci = -np.sqrt(2 * np.abs(phi_a[nx // 2, j]) / mr)
-    for jv, vy in enumerate(vy_i):
-        if vy <= v_ci:
+    v_ci = -np.sqrt(2 * np.abs(phi_a[cx, j]) / mr)
+    for jv, vy_val in enumerate(vy_i):
+        if vy_val <= v_ci:
             f_ia[j, jv] = (
-                np.exp(-((np.sqrt(vy**2 - v_ci**2) - u0) ** 2) / (2 * vr**2))
+                np.exp(-((np.sqrt(vy_val**2 - v_ci**2) - u0) ** 2) / (2 * vr**2))
                 / np.sqrt(2 * np.pi)
                 / vr
             )
-            # n_ia[j] += f_ia[j, jv] * dvy_i
 
 n_ea = np.exp(phi_a.mean(axis=0))
 n_ia = 1.0 / np.sqrt(1 - 2 * phi_a.mean(axis=0))
+
+# === 1D potential and density ===
+theoretical_potential = -np.log(np.sqrt(mi / (2 * np.pi * me))) / (2 * Tr)
+wall_potential = phi[cx, G] / (2 * Tr)
+print(
+    f"theoretical wall potential {theoretical_potential}"
+)
+print(f"simulation wall potential {wall_potential}")
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
 phi_norm = phi.mean(axis=0) / (2 * Tr)
 plt.plot(y, phi_norm, label="$\\phi$")
-plt.ylim(-16, 1)
+plt.ylim(wall_potential*1.1, 1)
 plt.xlim(0, 1)
 plt.legend()
 plt.ylabel("$e\\phi/2k_BT_i$")
@@ -138,10 +125,6 @@ plt.xlabel("$y/L_y$")
 plt.ylabel("$n/n_0$")
 plt.tight_layout()
 plt.savefig(f"{file_path}/potential_and_density.png")
-print(
-    f"theoretical wall potential {-np.log(np.sqrt(mi / (2 * np.pi * me))) / (2 * Tr)}"
-)
-print(f"simulation wall potential {phi[phi.shape[0] // 2, 0] / (2 * Tr)}")
 
 plt.figure(figsize=(12, 8))
 plt.subplot(2, 2, 1)
@@ -158,6 +141,9 @@ plt.yticks(np.arange(-5, 6, 2))
 plt.ylabel("$v_y/v_{th,e}$")
 plt.xlabel("$y/L_y$")
 plt.title("$f_e$")
+plt.xlim(0, Ly)
+plt.ylim(vy_min_e, vy_min_e + Lvy_e)
+
 plt.subplot(2, 2, 3)
 plt.contourf(
     Y,
@@ -171,6 +157,9 @@ plt.yticks(np.arange(-5, 6, 2))
 plt.ylabel("$v_y/v_{th,e}$")
 plt.xlabel("$y/L_y$")
 plt.title("$f_{ea}$")
+plt.xlim(0, Ly)
+plt.ylim(vy_min_e, vy_min_e + Lvy_e)
+
 plt.subplot(2, 2, 2)
 VY_i, Y = np.meshgrid(vy_i / vr, y)
 plt.contourf(
@@ -185,6 +174,7 @@ plt.ylim(vy_min_i, vy_min_i + Lvy_i)
 plt.xlabel("$y/L_y$")
 plt.ylabel("$v_y/v_{th,i}$")
 plt.title("$f_i$")
+plt.xlim(0, Ly)
 
 plt.subplot(2, 2, 4)
 plt.contourf(
@@ -199,9 +189,76 @@ plt.ylim(vy_min_i, vy_min_i + Lvy_i)
 plt.xlabel("$y/L_y$")
 plt.ylabel("$v_y/v_{th,i}$")
 plt.title("$f_{ia}$")
+plt.xlim(0, Ly)
 
 plt.tight_layout()
 plt.savefig(f"{file_path}/distribution.png")
 
+X, Y = np.meshgrid(x, y, indexing="ij")
+
+plt.figure()
+plt.contourf(
+    X,
+    Y,
+    ne,
+    cmap="jet",
+    levels=20,
+    vmin=0,
+)
+plt.colorbar()
+plt.contour(X, Y, ne, levels=20, colors="black", linestyles="solid")
+plt.xlim(0, Lx)
+plt.ylim(0, Ly)
+plt.xlabel("$x$")
+plt.ylabel("$y$")
+plt.title("$n_e$")
+plt.savefig(f"{file_path}/number_density_electron.png")
+
+plt.figure()
+plt.contourf(
+    X,
+    Y,
+    ni,
+    cmap="jet",
+    levels=20,
+    vmin=0,
+)
+plt.colorbar()
+plt.contour(X, Y, ni, levels=20, colors="black", linestyles="solid")
+plt.xlim(0, Lx)
+plt.ylim(0, Ly)
+plt.xlabel("$x$")
+plt.ylabel("$y$")
+plt.title("$n_i$")
+plt.savefig(f"{file_path}/number_density_ion.png")
+
+plt.figure()
+plt.contourf(
+    X,
+    Y,
+    ni - ne,
+    cmap="jet",
+    levels=20,
+    vmin=0,
+)
+plt.colorbar()
+plt.contour(X, Y, ni - ne, levels=20, colors="black", linestyles="solid")
+plt.xlabel("$x$")
+plt.ylabel("$y$")
+plt.title("$\\rho$")
+plt.xlim(0, Lx)
+plt.ylim(0, Ly)
+plt.savefig(f"{file_path}/charge_density.png")
+
+plt.figure()
+plt.contourf(X, Y, phi / (2 * Tr), levels=20, cmap="jet")
+plt.colorbar()
+plt.contour(X, Y, phi / (2 * Tr), levels=20, colors="black", linestyles="solid")
+plt.xlim(0, Lx)
+plt.ylim(0, Ly)
+plt.xlabel("$x$")
+plt.ylabel("$y$")
+plt.title("$e\\phi/2k_BT_i$")
+plt.savefig(f"{file_path}/potential.png")
 
 plt.show()

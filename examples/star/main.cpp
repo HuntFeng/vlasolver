@@ -69,7 +69,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
                 if (i < ngc) {
                     f(i, j, iv, jv) =
-                        (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
+                        (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) / 5 : 0.0; // left boundary, injection
                 } else if (i >= nx - ngc) {
                     if (vx < 0.0)
                         f(i, j, iv, jv) = 0.0; // right boundary, zero-inflow
@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
     world.diag_steps  = diag_steps;  // number of steps between diagnostics
 
     PoissonSolver2ndOrder poisson_solver(world, 1e-12);
-    Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});
+    Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex", "Ey"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 
     Kokkos::Timer timer;

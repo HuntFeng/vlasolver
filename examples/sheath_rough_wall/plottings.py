@@ -26,33 +26,22 @@ Ti = 0.1  # eV
 Te = 1.0  # eV
 Tr = Ti / Te
 
-step = 40000
+step = 3000
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
-    f"{file_path}/../../data/sheath_rough_wall/output_{step:05d}.h5",
+    f"{file_path}/../../data/sheath_rough_wall/output_{step:04d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
     ne = f["VTKHDF/CellData/ne"][:].reshape(nx + 2 * G, ny + 2 * G)
     phi = f["VTKHDF/CellData/phi"][:].reshape(nx + 2 * G, ny + 2 * G) / (2 * Tr)
 
-is_include_ghost = True
-if is_include_ghost:
-    dx, dy = Lx / nx, Ly / ny
-    x = np.arange(x_min - G * dx + dx / 2, x_min + Lx + G * dx, dx)
-    y = np.arange(y_min - G * dy + dy / 2, y_min + Ly + G * dy, dy)
-else:
-    ni = ni[G:-G, G:-G]
-    ne = ne[G:-G, G:-G]
-    phi = phi[G:-G, G:-G]
-
-    dx, dy = Lx / nx, Ly / ny
-    x = np.arange(x_min + dx / 2, x_min + Lx, dx)
-    y = np.arange(y_min + dy / 2, y_min + Ly, dy)
-
+dx, dy = Lx / nx, Ly / ny
+x = np.arange(x_min - G * dx + dx / 2, x_min + Lx + G * dx, dx)
+y = np.arange(y_min - G * dy + dy / 2, y_min + Ly + G * dy, dy)
 X, Y = np.meshgrid(x, y, indexing="ij")
 plt.figure()
-levels = np.linspace(0, 1, 14)
+levels = np.linspace(0, ne.max(), 15)
 plt.contourf(
     X,
     Y,
@@ -60,10 +49,10 @@ plt.contourf(
     cmap="jet",
     levels=levels,
     vmin=0,
-    vmax=1,
+    vmax=ne.max(),
 )
 plt.colorbar()
-plt.contour(X, Y, ne, levels=levels, vmin=0, vmax=1, colors="black", linestyles="solid")
+plt.contour(X, Y, ne, levels=levels, vmin=0, vmax=ne.max(), colors="black", linestyles="solid")
 for xc in np.arange(0.13 * Lx, Lx, 0.24 * Lx, dtype=float):
     circle = Wedge(
         center=(xc, 0),
@@ -115,7 +104,7 @@ plt.ylim(0, Ly)
 plt.savefig(f"{file_path}/charge_density.png")
 
 plt.figure()
-levels = np.linspace(np.min(phi), np.max(phi), 19)
+levels = np.linspace(np.min(phi), np.max(phi), 15)
 plt.contourf(X, Y, phi, levels=levels, cmap="jet")
 plt.colorbar()
 plt.contour(X, Y, phi, levels=levels, colors="black", linestyles="solid")

@@ -316,7 +316,7 @@ class Vlasolver {
         Kokkos::deep_copy(n, 0.0);
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 auto [x, y] = grid.center(i, j);
                 if (world.surface(x, y) < 0.0)
                     return;
@@ -325,9 +325,9 @@ class Vlasolver {
                 for (int iv = ngc; iv < nvx - ngc; ++iv)
                     for (int jv = ngc; jv < nvy - ngc; ++jv)
                         number_density += f(i, j, iv, jv) * dvx * dvy;
+                // only count ion density
+                // electron follow Boltzmann distribution
                 n(i, j) = number_density;
-                // rho(i, j) = number_density; // only count ions, electrons follow Boltzmann distribution
-                // rho(i, j) = number_density - Kokkos::exp((phi(i, j) - 0.3) / 1.5);
                 rho(i, j) = number_density - Kokkos::exp(phi(i, j));
             });
     }

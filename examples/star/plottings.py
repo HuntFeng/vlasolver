@@ -21,14 +21,13 @@ Lx, Ly = 1, 1
 G = 3
 is_include_star = True
 
-step = 400
+step = 1000
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
     f"{file_path}/../../data/star/output_{step:04d}.h5",
     "r",
 ) as f:
     ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
-    Ex = f["VTKHDF/CellData/Ex"][:].reshape(nx + 2 * G, ny + 2 * G)
     phi = f["VTKHDF/CellData/phi"][:].reshape(nx + 2 * G, ny + 2 * G)
 
 dx = Lx / nx
@@ -73,37 +72,5 @@ ax.set_ylabel("$y/L_x$")
 ax.set_aspect("equal")
 plt.tight_layout()
 plt.savefig(f"{file_path}/potential.png")
-
-fig, ax = plt.subplots()
-c = ax.contourf(X, Y, Ex, cmap="jet", levels=50)
-plt.colorbar(c)
-plt.title("$eE_x/m_ev_{th,e}\\omega_{pe}$")
-if is_include_star:
-    ax.contourf(X, Y, surface(X,Y), levels=[-100, 0], colors='white')
-    ax.contour(X, Y, surface(X,Y), levels=[0], colors='black', linewidths=2)
-ax.set_xlim(dx / 2, Lx - dx / 2)
-ax.set_ylim(dy / 2, Ly - dy / 2)
-ax.set_xlabel("$x/L_x$")
-ax.set_ylabel("$y/L_x$")
-ax.set_aspect("equal")
-plt.tight_layout()
-plt.savefig(f"{file_path}/electric_field.png")
-
-plt.figure()
-plt.plot(x, Ex[:, G], "o-", label="$y=0$")
-plt.plot(x, Ex[:, -G], "o-", label="$y=0.5$")
-plt.xlabel("$x/L_x$")
-plt.ylabel("$E_x$")
-ax.set_aspect("equal")
-plt.legend()
-plt.savefig(f"{file_path}/electric_field_profiles.svg")
-
-plt.figure()
-plt.plot(x, phi[:, G], "o-", label="$y=0$")
-plt.plot(x, phi[:, -G], "o-", label="$y=0.5$")
-plt.xlabel("$x/L_x$")
-plt.ylabel("$\\phi$")
-plt.legend()
-plt.savefig(f"{file_path}/potential_profiles.png")
 
 plt.show()

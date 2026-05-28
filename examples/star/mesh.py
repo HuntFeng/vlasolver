@@ -19,7 +19,8 @@ def surface(x, y):
     y0 = 0.5
     rr = np.sqrt(np.pow(x - x0, 2) + np.pow(y - y0, 2));
     ang = np.atan2(y - y0, x - x0);
-    return rr - (0.15 + 0.04 * np.sin(4 * ang));
+    # return rr - (0.15 + 0.04 * np.sin(4 * ang));
+    return rr - (0.075 + 0.02 * np.sin(4 * ang));
 
 # Create a base image - light gray background for the mesh
 img = np.ones((ny_cells, nx_cells)) * np.nan

@@ -41,7 +41,7 @@ x = np.arange(x_min - G * dx + dx / 2, x_min + Lx + G * dx, dx)
 y = np.arange(y_min - G * dy + dy / 2, y_min + Ly + G * dy, dy)
 X, Y = np.meshgrid(x, y, indexing="ij")
 plt.figure()
-levels = np.linspace(0, ne.max(), 14)
+levels = np.linspace(0, ne.max(), 15)
 plt.contourf(
     X,
     Y,
@@ -104,7 +104,7 @@ plt.ylim(0, Ly)
 plt.savefig(f"{file_path}/charge_density.png")
 
 plt.figure()
-levels = np.linspace(np.min(phi), np.max(phi), 19)
+levels = np.linspace(np.min(phi), np.max(phi), 15)
 plt.contourf(X, Y, phi, levels=levels, cmap="jet")
 plt.colorbar()
 plt.contour(X, Y, phi, levels=levels, colors="black", linestyles="solid")

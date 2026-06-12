@@ -5,10 +5,10 @@ A **full two-species** (electron + ion) Vlasov-Poisson simulation of a plasma sh
 ## Physics
 
 - **Domain**: $[0, 20] \times [0, 20]$ in $(x, y)$
-- **Wall**: at $y = 20$, biased to the floating potential $\phi_w = -\ln\sqrt{m_i / (2\pi m_e)}$
+- **Wall**: at $y = 0$, biased to the floating potential $\phi_w = -\ln\sqrt{m_i / (2\pi m_e)}$
 - **Normalization**: $T_e = 1$, $T_i = 0.1$, $m_i/m_e = 2 \times 1836$
 - **Boundary conditions**: Periodic in $x$, Bohm sheath inflow/outflow in $y$
-- **Initial distribution**: Maxwellian for both species, zero initial potential
+- **Initial distribution**: Maxwellian for both species
 - **1st-order immersed interface Poisson solver**
 
 ## Build
@@ -27,7 +27,6 @@ build/sheath examples/sheath/input.ini
 
 ```bash
 python examples/sheath/plottings.py        # 1D line plots
-python examples/sheath/plottings_2d.py     # 2D field plots
 python examples/sheath/sheath.py            # ODE comparison with scipy
 ```
 

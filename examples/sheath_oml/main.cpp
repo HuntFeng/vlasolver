@@ -1,8 +1,8 @@
-#include "grid.hpp"
-#include "poisson_1st_order.hpp"
 #include "full/vlasov.hpp"
 #include "full/world.hpp"
 #include "full/writer.hpp"
+#include "grid.hpp"
+#include "poisson_1st_order.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
 #include <iostream>
@@ -35,11 +35,11 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
         // Initialize potential with Debye-shielded profile for faster relaxation
         {
-            auto phi_local      = this->phi;
-            double phi_w_local  = this->phi_w;
+            auto phi_local     = this->phi;
+            double phi_w_local = this->phi_w;
             Kokkos::parallel_for(
                 Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
-                    auto [x, y] = grid.center(i, j);
+                    auto [x, y]     = grid.center(i, j);
                     phi_local(i, j) = phi_w_local * Kokkos::exp(-y / 2.5);
                 });
         }
@@ -93,18 +93,20 @@ struct ImmersedWorld : World<ImmersedWorld> {
         using Kokkos::pow;
         using Kokkos::sqrt;
         using Kokkos::numbers::pi;
-        auto& grid              = this->grid;
-        auto [nx, ny, nvx, nvy] = grid.ncells;
-        int ngc                 = grid.ngc;
-
-        auto f_local            = this->f;
-        auto phi_local          = this->phi;
-        auto n_local            = this->n;
-        auto m_local            = this->m;
-        double phi_w_local      = this->phi_w;
-        double v_th_e_local     = this->v_th_e;
-        double v_th_i_local     = this->v_th_i;
-        double u0_local         = this->u0;
+        auto& grid          = this->grid;
+        int ngc             = grid.ngc;
+        int nx              = grid.ncells[0];
+        int ny              = grid.ncells[1];
+        int nvx             = grid.ncells[2];
+        int nvy             = grid.ncells[3];
+        auto f_local        = this->f;
+        auto phi_local      = this->phi;
+        auto n_local        = this->n;
+        auto m_local        = this->m;
+        double phi_w_local  = this->phi_w;
+        double v_th_e_local = this->v_th_e;
+        double v_th_i_local = this->v_th_i;
+        double u0_local     = this->u0;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_LAMBDA(const int i, const int j, const int iv, const int jv) {
@@ -180,8 +182,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
         // bottom boundary, floating potential
         // electron flux to wall: Boltzmann approximation ne * v_th_e / sqrt(2π)
-        int nx_mid = nx / 2;
-        auto phi_mid = Kokkos::subview(phi, nx_mid, ngc);
+        int nx_mid        = nx / 2;
+        auto phi_mid      = Kokkos::subview(phi, nx_mid, ngc);
         auto phi_mid_host = Kokkos::create_mirror_view(phi_mid);
         Kokkos::deep_copy(phi_mid_host, phi_mid);
         double flux_e = exp(phi_mid_host()) * v_th_e / sqrt(2 * pi);
@@ -287,7 +289,7 @@ int main(int argc, char* argv[]) {
     world.u0          = u0;
 
     PoissonSolver1stOrder poisson_solver(world, 1e-6);
-    Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi", "fi", "fe"});
+    Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 
     Kokkos::Timer timer;

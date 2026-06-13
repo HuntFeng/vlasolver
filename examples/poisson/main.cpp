@@ -36,10 +36,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
-                    auto [x,y] = grid.center(i, j);
-                    double R2      = x * x + y * y;
-                    double R2_safe      = R2 < 1e-30 ? 1e-30 : R2;
-                    double u_plus = 0.1 * R2*R2 - 0.01 * Kokkos::log(2.0 * Kokkos::sqrt(R2_safe));
+                    auto [x, y]          = grid.center(i, j);
+                    double R2            = x * x + y * y;
+                    double R2_safe       = R2 < 1e-30 ? 1e-30 : R2;
+                    double u_plus        = 0.1 * R2 * R2 - 0.01 * Kokkos::log(2.0 * Kokkos::sqrt(R2_safe));
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, u_plus);
                 } else {
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
@@ -123,9 +123,9 @@ int main(int argc, char** argv) {
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
             auto [x, y] = grid.center(i, j);
-            double R2           = x * x + y * y;
-            double phi          = world.surface(x, y);
-            bool inside         = phi < 0.0;
+            double R2   = x * x + y * y;
+            double phi  = world.surface(x, y);
+            bool inside = phi < 0.0;
 
             if (inside) {
                 rho(i, j) = -4.0;
@@ -147,11 +147,11 @@ int main(int argc, char** argv) {
 
     for (int i = ngc; i < nx - ngc; ++i) {
         for (int j = ngc; j < ny - ngc; ++j) {
-            auto [x, y] = grid.center(i, j);
-            double R2           = x * x + y * y;
-            double R2_safe      = R2 < 1e-30 ? 1e-30 : R2;
-            double phi          = world.surface(x, y);
-            bool inside         = phi < 0.0;
+            auto [x, y]    = grid.center(i, j);
+            double R2      = x * x + y * y;
+            double R2_safe = R2 < 1e-30 ? 1e-30 : R2;
+            double phi     = world.surface(x, y);
+            bool inside    = phi < 0.0;
 
             if (inside) {
                 u_exact_h(i, j)    = R2;

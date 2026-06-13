@@ -117,9 +117,17 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
           ilut_max_iter(ilut_max_iter),
           ilut_fill_limit(ilut_fill_limit) {
 
-        construct_fields();
-        construct_matrix();
-        construct_preconditioner();
+        // prepare fields
+        u          = Kokkos::View<double*>("u", nx * ny);
+        rhs        = Kokkos::View<double*>("rhs", nx * ny);
+        rhs_h      = Kokkos::View<double*, Kokkos::HostSpace>("rhs_h", nx * ny);
+
+        n1         = Kokkos::View<double**, Kokkos::HostSpace>("n1", nx, ny);
+        n2         = Kokkos::View<double**, Kokkos::HostSpace>("n2", nx, ny);
+        a          = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
+        b          = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
+        a_tau      = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
+        D_inv_sqrt = Kokkos::View<double*>("D_inv_sqrt", nx * ny);
 
         // prepare gmres
         kh.create_gmres_handle(gmres_m, tol, max_restart);
@@ -1622,20 +1630,11 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     void construct_fields() {
-        u     = Kokkos::View<double*>("u", nx * ny);
-        rhs   = Kokkos::View<double*>("rhs", nx * ny);
-        rhs_h = Kokkos::View<double*, Kokkos::HostSpace>("rhs_h", nx * ny);
-
-        n1    = Kokkos::View<double**, Kokkos::HostSpace>("n1", nx, ny);
-        n2    = Kokkos::View<double**, Kokkos::HostSpace>("n2", nx, ny);
-        a     = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
-        b     = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
-        a_tau = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
         Kokkos::deep_copy(a_tau, 0.0);
         Kokkos::deep_copy(rhs_h, 0.0);
         Kokkos::deep_copy(n1, 0.0);
         Kokkos::deep_copy(n2, 0.0);
-        // FIXME: not working, possibly the layout is not right
+        // FIXME: result incorrect, possibly the layout is not right
         // auto normal = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.normal);
         // Kokkos::deep_copy(n1, Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0));
         // Kokkos::deep_copy(n2, Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1));
@@ -1677,6 +1676,10 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     void construct_matrix() {
+        rows_coo.clear();
+        cols_coo.clear();
+        vals_coo.clear();
+        Kokkos::deep_copy(rhs_h, 0.0);
         int ngc = world.grid.ngc;
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
@@ -1791,7 +1794,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         int nrows    = A.numRows();
 
         // Symmetric diagonal scaling (Jacobi equilibration) for better ILU quality
-        D_inv_sqrt        = Kokkos::View<double*>("D_inv_sqrt", nrows);
         auto D_inv_sqrt_h = Kokkos::create_mirror_view(D_inv_sqrt);
         auto row_map_h    = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), row_map);
         auto entries_h    = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), entries);
@@ -1865,6 +1867,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     void solve() {
+        construct_fields();
+        construct_matrix();
+        construct_preconditioner();
         construct_rhs();
 
         // Apply diagonal scaling to RHS

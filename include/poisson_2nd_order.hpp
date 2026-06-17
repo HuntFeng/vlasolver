@@ -78,9 +78,14 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     Kokkos::View<double*> D_inv_sqrt;
 
     // using coordinate format for constructing sparse matrix -nabla^2
-    std::vector<int> rows_coo;
-    std::vector<int> cols_coo;
-    std::vector<double> vals_coo;
+    std::vector<int> rows_coo_h;
+    std::vector<int> cols_coo_h;
+    std::vector<double> vals_coo_h;
+
+    int n_cut_cells = 0;
+    Kokkos::View<int*> rows_coo;
+    Kokkos::View<int*> cols_coo;
+    Kokkos::View<double*> vals_coo;
 
     // use to crs format for GMRES performance
     CRS A;
@@ -395,21 +400,21 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double eps_t = world.permittivity(x, y + dy / 2);
 
         int row_idx  = index(i, j);
-        rows_coo.insert(rows_coo.end(), {row_idx, row_idx, row_idx, row_idx, row_idx});
-        cols_coo.insert(cols_coo.end(), {
-                                            index(i - 1, j),
-                                            index(i + 1, j),
-                                            index(i, j - 1),
-                                            index(i, j + 1),
-                                            index(i, j),
-                                        });
-        vals_coo.insert(vals_coo.end(), {
-                                            eps_l / bot_x,
-                                            eps_r / bot_x,
-                                            eps_b / bot_y,
-                                            eps_t / bot_y,
-                                            (-(eps_l + eps_r) / bot_x - (eps_b + eps_t) / bot_y),
-                                        });
+        rows_coo_h.insert(rows_coo_h.end(), {row_idx, row_idx, row_idx, row_idx, row_idx});
+        cols_coo_h.insert(cols_coo_h.end(), {
+                                                index(i - 1, j),
+                                                index(i + 1, j),
+                                                index(i, j - 1),
+                                                index(i, j + 1),
+                                                index(i, j),
+                                            });
+        vals_coo_h.insert(vals_coo_h.end(), {
+                                                eps_l / bot_x,
+                                                eps_r / bot_x,
+                                                eps_b / bot_y,
+                                                eps_t / bot_y,
+                                                (-(eps_l + eps_r) / bot_x - (eps_b + eps_t) / bot_y),
+                                            });
     }
 
     // -----------------------------------------------------------------------
@@ -565,9 +570,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
                     value += r.eps_b / r.theta_b / r.bot_y;
                 }
-                rows_coo.push_back(row_idx);
-                cols_coo.push_back(index(i + ox, j + oy));
-                vals_coo.push_back(value);
+                rows_coo_h.push_back(row_idx);
+                cols_coo_h.push_back(index(i + ox, j + oy));
+                vals_coo_h.push_back(value);
             }
         }
     }
@@ -779,9 +784,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
                     value += r.eps_b / r.theta_b / r.bot_y;
                 }
-                rows_coo.push_back(row_idx);
-                cols_coo.push_back(index(i + ox, j + oy));
-                vals_coo.push_back(value);
+                rows_coo_h.push_back(row_idx);
+                cols_coo_h.push_back(index(i + ox, j + oy));
+                vals_coo_h.push_back(value);
             }
         }
     }
@@ -1232,9 +1237,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
                     value += r.eps_b / r.theta_b / r.bot_y;
                 }
-                rows_coo.push_back(row_idx);
-                cols_coo.push_back(index(i + ox, j + oy));
-                vals_coo.push_back(value);
+                rows_coo_h.push_back(row_idx);
+                cols_coo_h.push_back(index(i + ox, j + oy));
+                vals_coo_h.push_back(value);
             }
         }
     }
@@ -1471,9 +1476,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
                     value += r.eps_b / r.theta_b / r.bot_y;
                 }
-                rows_coo.push_back(row_idx);
-                cols_coo.push_back(index(i + ox, j + oy));
-                vals_coo.push_back(value);
+                rows_coo_h.push_back(row_idx);
+                cols_coo_h.push_back(index(i + ox, j + oy));
+                vals_coo_h.push_back(value);
             }
         }
     }
@@ -1607,22 +1612,22 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     void coo2crs() {
         int nrows = nx * ny;
         int ncols = nx * ny;
-        int nnz   = vals_coo.size();
+        int nnz   = vals_coo_h.size();
 
         std::vector<int> rowmap(nrows + 1, 0);
-        for (size_t k = 0; k < rows_coo.size(); ++k)
-            rowmap[rows_coo[k] + 1] += 1;
+        for (size_t k = 0; k < rows_coo_h.size(); ++k)
+            rowmap[rows_coo_h[k] + 1] += 1;
         for (int i = 0; i < nrows; ++i)
             rowmap[i + 1] += rowmap[i];
 
         std::vector<int> cur = rowmap;
         std::vector<int> cols_crs(nnz);
         std::vector<double> vals_crs(nnz);
-        for (size_t k = 0; k < rows_coo.size(); ++k) {
-            int r          = rows_coo[k];
+        for (size_t k = 0; k < rows_coo_h.size(); ++k) {
+            int r          = rows_coo_h[k];
             int dest       = cur[r]++;
-            cols_crs[dest] = cols_coo[k];
-            vals_crs[dest] = vals_coo[k];
+            cols_crs[dest] = cols_coo_h[k];
+            vals_crs[dest] = vals_coo_h[k];
         }
 
         A = CRS("A", nrows, ncols, nnz, vals_crs.data(), rowmap.data(), cols_crs.data());
@@ -1676,9 +1681,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     void construct_matrix() {
-        rows_coo.clear();
-        cols_coo.clear();
-        vals_coo.clear();
+        rows_coo_h.clear();
+        cols_coo_h.clear();
+        vals_coo_h.clear();
         Kokkos::deep_copy(rhs_h, 0.0);
         int ngc = world.grid.ngc;
         for (int i = 0; i < nx; ++i) {
@@ -1687,30 +1692,30 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 PoissonBCPair bc_map = world.poisson_bc_map(i, j);
 
                 if (bc_map.type == PoissonBCType::Dirichlet) {
-                    vals_coo.push_back(1.0);
-                    rows_coo.push_back(row_idx);
-                    cols_coo.push_back(row_idx);
+                    vals_coo_h.push_back(1.0);
+                    rows_coo_h.push_back(row_idx);
+                    cols_coo_h.push_back(row_idx);
                     rhs_h(row_idx) = bc_map.val;
                 } else if (bc_map.type == PoissonBCType::Neumann) {
                     if (i < ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i + 1, j)});
+                        vals_coo_h.insert(vals_coo_h.end(), {-1.0, 1.0});
+                        rows_coo_h.insert(rows_coo_h.end(), {row_idx, row_idx});
+                        cols_coo_h.insert(cols_coo_h.end(), {row_idx, index(i + 1, j)});
                         rhs_h(row_idx) = bc_map.val;
                     } else if (i >= nx - ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i - 1, j)});
+                        vals_coo_h.insert(vals_coo_h.end(), {-1.0, 1.0});
+                        rows_coo_h.insert(rows_coo_h.end(), {row_idx, row_idx});
+                        cols_coo_h.insert(cols_coo_h.end(), {row_idx, index(i - 1, j)});
                         rhs_h(row_idx) = -bc_map.val;
                     } else if (j < ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j + 1)});
+                        vals_coo_h.insert(vals_coo_h.end(), {-1.0, 1.0});
+                        rows_coo_h.insert(rows_coo_h.end(), {row_idx, row_idx});
+                        cols_coo_h.insert(cols_coo_h.end(), {row_idx, index(i, j + 1)});
                         rhs_h(row_idx) = bc_map.val;
                     } else if (j >= ny - ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j - 1)});
+                        vals_coo_h.insert(vals_coo_h.end(), {-1.0, 1.0});
+                        rows_coo_h.insert(rows_coo_h.end(), {row_idx, row_idx});
+                        cols_coo_h.insert(cols_coo_h.end(), {row_idx, index(i, j - 1)});
                         rhs_h(row_idx) = -bc_map.val;
                     } else {
                         Kokkos::printf("Neumann BC can only be applied at ghost cells");
@@ -1718,24 +1723,24 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                     }
                 } else if (bc_map.type == PoissonBCType::Periodic) {
                     if (i < ngc) {
-                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(nx - 2 * ngc + i, j)});
+                        vals_coo_h.insert(vals_coo_h.end(), {1.0, -1.0});
+                        rows_coo_h.insert(rows_coo_h.end(), {row_idx, row_idx});
+                        cols_coo_h.insert(cols_coo_h.end(), {row_idx, index(nx - 2 * ngc + i, j)});
                         rhs_h(row_idx) = 0.0;
                     } else if (i >= nx - ngc) {
-                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i - nx + ngc, j)});
+                        vals_coo_h.insert(vals_coo_h.end(), {1.0, -1.0});
+                        rows_coo_h.insert(rows_coo_h.end(), {row_idx, row_idx});
+                        cols_coo_h.insert(cols_coo_h.end(), {row_idx, index(i - nx + ngc, j)});
                         rhs_h(row_idx) = 0.0;
                     } else if (j < ngc) {
-                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, ny - 2 * ngc + j)});
+                        vals_coo_h.insert(vals_coo_h.end(), {1.0, -1.0});
+                        rows_coo_h.insert(rows_coo_h.end(), {row_idx, row_idx});
+                        cols_coo_h.insert(cols_coo_h.end(), {row_idx, index(i, ny - 2 * ngc + j)});
                         rhs_h(row_idx) = 0.0;
                     } else if (j >= ny - ngc) {
-                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j - nx + ngc)});
+                        vals_coo_h.insert(vals_coo_h.end(), {1.0, -1.0});
+                        rows_coo_h.insert(rows_coo_h.end(), {row_idx, row_idx});
+                        cols_coo_h.insert(cols_coo_h.end(), {row_idx, index(i, j - nx + ngc)});
                         rhs_h(row_idx) = 0.0;
                     } else {
                         Kokkos::printf("Periodic BC can only be applied at ghost cells");
@@ -1865,6 +1870,22 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         }
         Kokkos::deep_copy(rhs, rhs_h);
     }
+
+    /**
+     * Scan the mesh and record the number of cut cells.
+     */
+    // void scan_mesh() {
+    //     n_cut_cells = 0;
+    //     Kokkos::parallel_reduce(
+    //         Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
+    //         KOKKOS_LAMBDA(const int i, const int j, int& local_count) {
+    //             auto [x, y] = world.grid.center(i, j);
+    //             world.surface(x, y)
+    //             if () < 1e-12)
+    //                 local_count += 1;
+    //         },
+    //         n_cut_cells);
+    // }
 
     void solve() {
         construct_fields();

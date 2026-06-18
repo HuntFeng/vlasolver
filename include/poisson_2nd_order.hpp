@@ -1686,10 +1686,11 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         vals_coo_h.clear();
         Kokkos::deep_copy(rhs_h, 0.0);
         int ngc = world.grid.ngc;
+        auto poisson_bc_map = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.poisson_bc_map);
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
                 int row_idx          = index(i, j);
-                PoissonBCPair bc_map = world.poisson_bc_map(i, j);
+                PoissonBCPair bc_map = poisson_bc_map(i, j);
 
                 if (bc_map.type == PoissonBCType::Dirichlet) {
                     vals_coo_h.push_back(1.0);
@@ -1859,9 +1860,10 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
     void construct_rhs() {
         auto rho_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.rho);
+        auto poisson_bc_map = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.poisson_bc_map);
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < ny; ++j) {
-                PoissonBCPair bc_map = world.poisson_bc_map(i, j);
+                PoissonBCPair bc_map = poisson_bc_map(i, j);
                 if (bc_map.type == PoissonBCType::None)
                     rhs_h(index(i, j)) -= rho_h(i, j);
                 else
@@ -1888,6 +1890,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // }
 
     void solve() {
+        world.potential_boundary_conditions();
         construct_fields();
         construct_matrix();
         construct_preconditioner();

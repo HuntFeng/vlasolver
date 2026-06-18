@@ -1,11 +1,15 @@
 /*
- *
  * This Poisson solver uses the algorithm described in:
  * A Boundary Condition Capturing Method for Poisson’s Equation on Irregular Domains
  * by Xu-Dong Liu 2000, Jornal of Computational Physics, doi:10.1006/jcph.2000.6444
+ *
+ * When the interface is aligned with corrdinate axis, this solver is 2nd order accurate.
+ * When the interface is curved, this solver is 1st order accurate.
+ * The accuracy drop is due to the lack of tangential component when discretizing the Poisson jump conditions.
  **/
 #pragma once
 #include "poisson.hpp"
+#include <Cuda/Kokkos_Cuda_Team.hpp>
 #include <Kokkos_Core.hpp>
 
 /**
@@ -21,9 +25,6 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
     double tol;
     Kokkos::View<double**> phi_old;
     double omega;
-    Kokkos::View<double**> a;
-    Kokkos::View<double**> b;
-    Kokkos::View<double**> eps;
     int max_iter; // max iterations for the solver
 
   public:
@@ -42,23 +43,6 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         int nx  = world.grid.ncells[0];
         int ny  = world.grid.ncells[1];
         phi_old = Kokkos::View<double**>("phi_old", nx, ny);
-        construct_fields();
-    }
-
-    void construct_fields() {
-        auto& grid = world.grid;
-        int nx     = world.grid.ncells[0];
-        int ny     = world.grid.ncells[1];
-        a          = Kokkos::View<double**>("a", nx, ny);
-        b          = Kokkos::View<double**>("b", nx, ny);
-        eps        = Kokkos::View<double**>("eps", nx, ny);
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y] = grid.center(i, j);
-                a(i, j)     = world.poisson_jump_condition_a(x, y);
-                b(i, j)     = world.poisson_jump_condition_b(x, y);
-                eps(i, j)   = world.permittivity(x, y);
-            });
     }
 
     /**
@@ -78,19 +62,17 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                           const Kokkos::View<double**>& b,
                           int is_update_red) {
         using Kokkos::abs;
-        auto& grid    = world.grid;
-        auto& normal  = world.normal;
-        int ngc       = grid.ngc;
-        int nx        = u.extent(0);
-        int ny        = u.extent(1);
-        auto [dx, dy] = grid.spacing(0, 0);
+        auto& grid      = world.grid;
+        auto& normal    = world.normal;
+        auto& eta_field = world.eta;
+        int ngc         = grid.ngc;
+        int nx          = u.extent(0);
+        int ny          = u.extent(1);
+        auto [dx, dy]   = grid.spacing(0, 0);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 if ((i + j) % 2 != is_update_red)
                     return; // skip red grid points
-
-                double x = (i - ngc + 0.5) * dx;
-                double y = (j - ngc + 0.5) * dy;
 
                 // jump condition term at left, right, top, bottom fluxes
                 double F_l = 0.0, F_r = 0.0, F_b = 0.0, F_t = 0.0;
@@ -102,11 +84,11 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                 double eps_t = 0.5 * (eps(i, j + 1) + eps(i, j));
 
                 // interior indicator
-                double eta   = world.surface(x, y);
-                double eta_l = world.surface(x - dx, y);
-                double eta_r = world.surface(x + dx, y);
-                double eta_b = world.surface(x, y - dy);
-                double eta_t = world.surface(x, y + dy);
+                double eta   = eta_field(i, j);
+                double eta_l = eta_field(i - 1, j);
+                double eta_r = eta_field(i + 1, j);
+                double eta_b = eta_field(i, j - 1);
+                double eta_t = eta_field(i, j + 1);
 
                 // normal vector
                 double n1 = normal(i, j, 0);
@@ -153,12 +135,12 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                     double eta_m = (eta <= 0.0) ? eta : eta_b;
                     double eps_p = (eta > 0.0) ? eps(i, j) : eps(i, j - 1);
                     double eps_m = (eta <= 0.0) ? eps(i, j) : eps(i, j - 1);
-                    eps_b = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
+                    eps_b       = eps_p * eps_m * (abs(eta_m) + abs(eta_p)) / (eps_p * abs(eta_m) + eps_m * abs(eta_p));
 
-                    double n1_b  = normal(i, j - 1, 0);
-                    double n2_b  = normal(i, j - 1, 1);
-                    double theta      = abs(eta_b) / (abs(eta) + abs(eta_b));
-                    double a_gamma    = (a(i, j) * abs(eta_b) + a(i, j - 1) * abs(eta)) / (abs(eta) + abs(eta_b));
+                    double n1_b = normal(i, j - 1, 0);
+                    double n2_b = normal(i, j - 1, 1);
+                    double theta   = abs(eta_b) / (abs(eta) + abs(eta_b));
+                    double a_gamma = (a(i, j) * abs(eta_b) + a(i, j - 1) * abs(eta)) / (abs(eta) + abs(eta_b));
                     double b_gamma =
                         (b(i, j) * n2 * abs(eta_b) + b(i, j - 1) * n2_b * abs(eta)) / (abs(eta) + abs(eta_b));
                     if (eta <= 0.0)
@@ -198,15 +180,18 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
     }
 
     void compute_electric_field() const {
-        auto& E      = world.E;
-        auto& phi    = world.phi;
-        auto& normal = world.normal;
-        auto& grid   = world.grid;
-        double dx    = grid.spacing(0, 0)[0];
-        double dy    = grid.spacing(0, 0)[1];
-        int nx       = grid.ncells[0];
-        int ny       = grid.ncells[1];
-        int ngc      = grid.ngc;
+        auto& E         = world.E;
+        auto& phi       = world.phi;
+        auto& normal    = world.normal;
+        auto& grid      = world.grid;
+        auto& eta_field = world.eta;
+        auto& eps       = world.eps;
+        auto& b         = world.jump_b;
+        double dx       = grid.spacing(0, 0)[0];
+        double dy       = grid.spacing(0, 0)[1];
+        int nx          = grid.ncells[0];
+        int ny          = grid.ncells[1];
+        int ngc         = grid.ngc;
         using Kokkos::abs;
 
         Kokkos::deep_copy(E, 0.0);
@@ -217,12 +202,11 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                 E(i, j, 1) = -(phi(i, j + 1) - phi(i, j - 1)) / (2.0 * dy);
 
                 // for boundary cells, compute electric field using jump conditions
-                auto [x, y]  = grid.center(i, j);
-                double eta   = world.surface(x, y);
-                double eta_l = world.surface(x - dx, y);
-                double eta_r = world.surface(x + dx, y);
-                double eta_b = world.surface(x, y - dy);
-                double eta_t = world.surface(x, y + dy);
+                double eta   = eta_field(i, j);
+                double eta_l = eta_field(i - 1, j);
+                double eta_r = eta_field(i + 1, j);
+                double eta_b = eta_field(i, j - 1);
+                double eta_t = eta_field(i, j + 1);
 
                 double n1    = normal(i, j, 0);
                 double n2    = normal(i, j, 1);
@@ -240,11 +224,11 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                     E(i, j, 0) = -(phi(i, j) - phi_I) / ((1 - theta) * dx);
                 }
                 if (eta * eta_r <= 0.0) {
-                    double eps_c      = eps(i, j);
-                    double eps_r      = eps(i + 1, j);
+                    double eps_c = eps(i, j);
+                    double eps_r = eps(i + 1, j);
                     double n1_r  = normal(i + 1, j, 0);
                     double n2_r  = normal(i + 1, j, 1);
-                    double theta      = abs(eta_r) / (abs(eta) + abs(eta_r));
+                    double theta = abs(eta_r) / (abs(eta) + abs(eta_r));
                     double b_gamma =
                         (b(i, j) * n1 * abs(eta_r) + b(i + 1, j) * n1_r * abs(eta)) / (abs(eta) + abs(eta_r));
                     double phi_I = eps_c * theta * phi(i, j) + eps_r * (1 - theta) * phi(i + 1, j);
@@ -253,11 +237,11 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                     E(i, j, 0) = -(phi_I - phi(i, j)) / ((1 - theta) * dx);
                 }
                 if (eta * eta_b <= 0.0) {
-                    double eps_c      = eps(i, j);
-                    double eps_b      = eps(i, j - 1);
+                    double eps_c = eps(i, j);
+                    double eps_b = eps(i, j - 1);
                     double n1_b  = normal(i, j - 1, 0);
                     double n2_b  = normal(i, j - 1, 1);
-                    double theta      = abs(eta_b) / (abs(eta) + abs(eta_b));
+                    double theta = abs(eta_b) / (abs(eta) + abs(eta_b));
                     double b_gamma =
                         (b(i, j) * n2 * abs(eta_b) + b(i, j - 1) * n2_b * abs(eta)) / (abs(eta) + abs(eta_b));
                     double phi_I = eps_c * theta * phi(i, j) + eps_b * (1 - theta) * phi(i, j - 1);
@@ -266,11 +250,11 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                     E(i, j, 1) = -(phi(i, j) - phi_I) / ((1 - theta) * dy);
                 }
                 if (eta * eta_t <= 0.0) {
-                    double eps_c      = eps(i, j);
-                    double eps_t      = eps(i, j + 1);
+                    double eps_c = eps(i, j);
+                    double eps_t = eps(i, j + 1);
                     double n1_t  = normal(i, j + 1, 0);
                     double n2_t  = normal(i, j + 1, 1);
-                    double theta      = abs(eta_t) / (abs(eta) + abs(eta_t));
+                    double theta = abs(eta_t) / (abs(eta) + abs(eta_t));
                     double b_gamma =
                         (b(i, j) * n2 * abs(eta_t) + b(i, j + 1) * n2_t * abs(eta)) / (abs(eta) + abs(eta_t));
                     double phi_I = eps_c * theta * phi(i, j) + eps_t * (1 - theta) * phi(i, j + 1);
@@ -278,6 +262,57 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                     phi_I /= eps_c * theta + eps_t * (1 - theta);
                     E(i, j, 1) = -(phi_I - phi(i, j)) / ((1 - theta) * dy);
                 }
+            });
+    }
+
+    void apply_boundary_conditions() {
+        double dx           = world.grid.spacing(0, 0)[0];
+        double dy           = world.grid.spacing(0, 0)[1];
+        int nx              = world.grid.ncells[0];
+        int ny              = world.grid.ncells[1];
+        int ngc             = world.grid.ngc;
+        auto poisson_bc_map = world.poisson_bc_map;
+        auto& phi           = world.phi;
+
+        // Pass 1: Dirichlet and Neumann. These only write their own cell (Dirichlet) or read
+        // untouched interior cells (Neumann), so they are race-free within a single launch.
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                const PoissonBCPair bc_map = poisson_bc_map(i, j);
+                if (bc_map.type == PoissonBCType::Dirichlet) {
+                    phi(i, j) = bc_map.val;
+                } else if (bc_map.type == PoissonBCType::Neumann) {
+                    if (i < ngc)
+                        phi(i, j) = phi(ngc + 1, j) - (ngc + 1 - i) * dx * bc_map.val;
+                    else if (i >= nx - ngc)
+                        phi(i, j) = phi(nx - ngc - 2, j) + (i - (nx - ngc - 2)) * dx * bc_map.val;
+                    else if (j < ngc)
+                        phi(i, j) = phi(i, ngc + 1) - (ngc + 1 - j) * dy * bc_map.val;
+                    else if (j >= ny - ngc)
+                        phi(i, j) = phi(i, ny - ngc - 2) + (j - (ny - ngc - 2)) * dy * bc_map.val;
+                }
+            });
+
+        // Pass 2: Periodic. A periodic ghost copies from another (possibly boundary) cell, so it
+        // must run AFTER pass 1 has finalized those source cells. A separate launch provides that
+        // ordering; fusing it with pass 1 is a read-after-write race on the copied cells.
+        // NOTE: a single PoissonBCType per cell + this else-if means a corner ghost is wrapped in
+        // only one direction. That is correct when the other direction is non-periodic (e.g. the
+        // sheath_oml x-periodic / y-Dirichlet case), but is insufficient for a doubly-periodic
+        // domain, where corners would need both an x- and a y-wrap.
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                const PoissonBCPair bc_map = poisson_bc_map(i, j);
+                if (bc_map.type != PoissonBCType::Periodic)
+                    return;
+                if (i < ngc)
+                    phi(i, j) = phi(i + (nx - 2 * ngc), j);
+                else if (i >= nx - ngc)
+                    phi(i, j) = phi(i - (nx - 2 * ngc), j);
+                else if (j < ngc)
+                    phi(i, j) = phi(i, j + (ny - 2 * ngc));
+                else if (j >= ny - ngc)
+                    phi(i, j) = phi(i, j - (ny - 2 * ngc));
             });
     }
 
@@ -305,6 +340,13 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
      * Iteratively solve the potential field until error is less than tolerance or iteration larger than max_iter.
      */
     void solve() {
+        // Fill the jump condition fields for this solve. This is a host method on World,
+        // so it can use any (possibly time-dependent) World state. The permittivity field
+        // `world.eps` is filled once at World construction.
+        world.poisson_jump_conditions();
+        auto& eps = world.eps;
+        auto& a   = world.jump_a;
+        auto& b   = world.jump_b;
         auto& rho = world.rho;
         Kokkos::View<double**> g("g", rho.extent(0), rho.extent(1));
 
@@ -312,9 +354,11 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
             Kokkos::MDRangePolicy({0, 0}, {rho.extent(0), rho.extent(1)}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j) { g(i, j) = -rho(i, j); });
         world.potential_boundary_conditions();
+        apply_boundary_conditions();
         for (int iter = 0; iter < max_iter; ++iter) {
             Kokkos::deep_copy(phi_old, world.phi);
             gauss_seidel(world.phi, g, eps, a, b, 1);
+            apply_boundary_conditions(); // refresh Neumann/Periodic ghosts from updated interior
             double err = compute_error();
             if (iter % 1000 == 0 || iter == max_iter - 1) {
                 Kokkos::printf("(PoissonSolver) Iteration = %d, Error(L_inf) = %e\n", iter, err);
@@ -346,8 +390,6 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         for (int iter = 0; iter < iters; ++iter) {
             red_black_update(u, g, eps, a, b, 0); // red update
             red_black_update(u, g, eps, a, b, 1); // black update
-            // apply_boundary(u);                    // apply boundary conditions after each iteration
-            world.potential_boundary_conditions();
         }
     }
 };

@@ -36,6 +36,7 @@ class Vlasolver {
         auto& grid              = world.grid;
         auto& f                 = world.f;
         auto& normal            = world.normal;
+        auto& eta_field         = world.eta;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         double dx               = grid.spacing(0, 0)[0]; // species doesn't matter here
@@ -48,15 +49,15 @@ class Vlasolver {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, sp);
 
                     // always extrapolate dist function from the interior of the immersed object
-                    double eta = world.surface(x, y);
+                    double eta = eta_field(i, j);
                     if (eta >= 0.0)
                         return;
 
                     // now (x,y) is the interior of the immersed object
-                    double eta_l = world.surface(x - dx, y);
-                    double eta_r = world.surface(x + dx, y);
-                    double eta_b = world.surface(x, y - dy);
-                    double eta_t = world.surface(x, y + dy);
+                    double eta_l = eta_field(i - 1, j);
+                    double eta_r = eta_field(i + 1, j);
+                    double eta_b = eta_field(i, j - 1);
+                    double eta_t = eta_field(i, j + 1);
                     double n1    = normal(i, j, 0);
                     double n2    = normal(i, j, 1);
                     // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
@@ -107,6 +108,7 @@ class Vlasolver {
         auto& grid              = world.grid;
         auto& f                 = world.f;
         auto& normal            = world.normal;
+        auto& eta_field         = world.eta;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         double dx               = grid.spacing(0, 0)[0]; // species doesn't matter here
@@ -120,15 +122,15 @@ class Vlasolver {
                     auto [x0, y0, vx, vy] = grid.center(i, j, iv, jv, sp);
 
                     // always extrapolate dist function from the interior of the immersed object
-                    double eta = world.surface(x0, y0);
+                    double eta = eta_field(i, j);
                     if (eta >= 0.0)
                         return;
 
                     // now (x0,y0) is the interior of the immersed object
-                    double eta_l   = world.surface(x0 - dx, y0);
-                    double eta_r   = world.surface(x0 + dx, y0);
-                    double eta_b   = world.surface(x0, y0 - dy);
-                    double eta_t   = world.surface(x0, y0 + dy);
+                    double eta_l   = eta_field(i - 1, j);
+                    double eta_r   = eta_field(i + 1, j);
+                    double eta_b   = eta_field(i, j - 1);
+                    double eta_t   = eta_field(i, j + 1);
                     double n1      = normal(i, j, 0);
                     double n2      = normal(i, j, 1);
                     double v_dot_n = vx * n1 + vy * n2;
@@ -150,7 +152,7 @@ class Vlasolver {
                                 auto [x, y, vx, vy] = grid.center(I, J, iv, jv, sp);
                                 // skip ghost cells
                                 if (I < ngc || I > nx - ngc - 1 || J < ngc || J > ny - ngc - 1 ||
-                                    world.surface(x, y) < 0)
+                                    eta_field(I, J) < 0)
                                     continue;
 
                                 // only extrapolate using fluid cells
@@ -201,6 +203,7 @@ class Vlasolver {
         auto& f                 = world.f;
         auto& n                 = world.n;
         auto& grid              = world.grid;
+        auto& eta_field         = world.eta;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
         auto& q                 = world.q;
@@ -212,8 +215,7 @@ class Vlasolver {
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [dx, dy, dvx, dvy] = grid.spacing(sp);
-                    auto [x, y]             = grid.center(i, j);
-                    if (world.surface(x, y) < 0.0)
+                    if (eta_field(i, j) < 0.0)
                         return;
 
                     for (int iv = ngc; iv < nvx - ngc; ++iv)
@@ -450,7 +452,6 @@ class Vlasolver {
         world.particle_boundary_conditions();
         extrapolate_distribution_2nd_order();
         compute_charge_density();
-        // world.poisson_jump_conditions();
         poisson_solver.solve();
         poisson_solver.compute_electric_field();
         Kokkos::printf("(VlasovSolver) PFC update along velocity by dt\n");
@@ -476,7 +477,6 @@ class Vlasolver {
         world.particle_boundary_conditions();
         extrapolate_distribution_2nd_order();
         compute_charge_density();
-        // world.poisson_jump_conditions();
         poisson_solver.solve();
         poisson_solver.compute_electric_field();
         writer.write(0);

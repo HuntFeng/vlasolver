@@ -10,52 +10,22 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {
-        double phi_w = -10.0 / 0.3;
-        int ngc      = grid.ngc;
-        int nx       = grid.ncells[0];
-        int ny       = grid.ncells[1];
-        double dx    = grid.spacing(0, 0)[0];
-        double dy    = grid.spacing(0, 0)[1];
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
-                auto [x, y] = grid.center(i, j);
-                double eta          = surface(x, y);
-                double eta_l        = surface(x - dx, y);
-                double eta_r        = surface(x + dx, y);
-                double eta_b        = surface(x, y - dy);
-                double eta_t        = surface(x, y + dy);
-
-                if (i < ngc)
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
-                else if (i >= nx - ngc)
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
-                else if (j < ngc)
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
-                else if (j >= ny - ngc)
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
-                else if (eta <= 0) {
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_w);
-                } else
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
-            }
-        }
-    }
+        : World<ImmersedWorld>(grid) {}
 
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
-        using Kokkos::sqrt;
-        using Kokkos::pow;
         using Kokkos::atan2;
+        using Kokkos::pow;
         using Kokkos::sin;
-        double x0 = 0.5;
-        double y0 = 0.5;
-        double rr = sqrt(pow(x - x0, 2) + pow(y - y0, 2));
+        using Kokkos::sqrt;
+        double x0  = 0.5;
+        double y0  = 0.5;
+        double rr  = sqrt(pow(x - x0, 2) + pow(y - y0, 2));
         double ang = atan2(y - y0, x - x0);
         return rr - (0.15 + 0.04 * sin(4 * ang));
     }
 
-    void initialize_distribution() {
+    void initialize_distribution(){
         // no particles initially
     };
 
@@ -80,6 +50,37 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 }
             });
     };
+
+    void potential_boundary_conditions() {
+        double phi_w = -10.0 / 0.3;
+        int ngc      = grid.ngc;
+        int nx       = grid.ncells[0];
+        int ny       = grid.ncells[1];
+        double dx    = grid.spacing(0, 0)[0];
+        double dy    = grid.spacing(0, 0)[1];
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y]  = grid.center(i, j);
+                double eta   = surface(x, y);
+                double eta_l = surface(x - dx, y);
+                double eta_r = surface(x + dx, y);
+                double eta_b = surface(x, y - dy);
+                double eta_t = surface(x, y + dy);
+
+                if (i < ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
+                else if (i >= nx - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
+                else if (j < ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
+                else if (j >= ny - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
+                else if (eta <= 0) {
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_w);
+                } else
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
+            });
+    }
 
     KOKKOS_INLINE_FUNCTION
     double permittivity(double x, double y) const { return surface(x, y) <= 0.0 ? 1000.0 : 1.0; }

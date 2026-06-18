@@ -20,7 +20,7 @@ struct World {
     Kokkos::View<double**> phi;        // potential field (assuming Boltzmann distribution for electron)
     Kokkos::View<double***> E;         // Ex(x,y), Ey(x,y) electric field
     Kokkos::View<double***> normal;    // n1(x,y), n2(x,y) unit normal vector
-    Kokkos::View<PoissonBCPair**, Kokkos::HostSpace> poisson_bc_map;
+    Kokkos::View<PoissonBCPair**> poisson_bc_map;
 
     // simulation time control
     double dt           = 0.0; // time step size
@@ -43,7 +43,7 @@ struct World {
         phi                     = Kokkos::View<double**>("phi", nx, ny);
         E                       = Kokkos::View<double***>("E", nx, ny, 2);
         normal                  = Kokkos::View<double***>("norm_vec", nx, ny, 2);
-        poisson_bc_map          = Kokkos::View<PoissonBCPair**, Kokkos::HostSpace>("poisson_bc_map", nx, ny);
+        poisson_bc_map          = Kokkos::View<PoissonBCPair**>("poisson_bc_map", nx, ny);
         Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_1st, 0.0);
         Kokkos::deep_copy(ep_l, 0.0);

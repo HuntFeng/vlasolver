@@ -1,8 +1,8 @@
-#include "grid.hpp"
-#include "poisson_1st_order.hpp"
 #include "full/vlasov.hpp"
 #include "full/world.hpp"
 #include "full/writer.hpp"
+#include "grid.hpp"
+#include "poisson_1st_order.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
 #include <iostream>
@@ -17,10 +17,32 @@ struct ImmersedWorld : World<ImmersedWorld> {
     double u0     = Kokkos::sqrt(T[0] / m[1]);                                           // Bohm velocity
 
     ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+        : World<ImmersedWorld>(grid) {
+        construct_surface();      // fill eta
+        construct_permittivity(); // fill eps
+        construct_normal_field(); // base method, reads eta
+    }
 
-    KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const { return y + 1.0; }
+    // Fill the surface field eta(i,j) = S(x,y) over the full domain (including ghost cells).
+    void construct_surface() {
+        auto& grid              = this->grid;
+        auto eta_local          = this->eta;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
+                auto [x, y]     = grid.center(i, j);
+                eta_local(i, j) = y + 1.0;
+            });
+    }
+
+    // Uniform permittivity.
+    void construct_permittivity() {
+        auto eps_local          = this->eps;
+        auto [nx, ny, nvx, nvy] = this->grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
+            KOKKOS_LAMBDA(const int i, const int j) { eps_local(i, j) = 1.0; });
+    }
 
     void initialize_distribution() {
         using Kokkos::abs;
@@ -35,11 +57,11 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
         // Initialize potential with Debye-shielded profile for faster relaxation
         {
-            auto phi_local      = this->phi;
-            double phi_w_local  = this->phi_w;
+            auto phi_local     = this->phi;
+            double phi_w_local = this->phi_w;
             Kokkos::parallel_for(
                 Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
-                    auto [x, y] = grid.center(i, j);
+                    auto [x, y]     = grid.center(i, j);
                     phi_local(i, j) = phi_w_local * Kokkos::exp(-y / 2.5);
                 });
         }
@@ -152,14 +174,17 @@ struct ImmersedWorld : World<ImmersedWorld> {
             Kokkos::subview(f, Kokkos::make_pair(ngc, 2 * ngc), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
     };
 
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_a(double x, double y) { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_b(double x, double y) { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) { return 1.0; }
+    // No jump in the potential or its normal derivative across the interface.
+    void poisson_jump_conditions() {
+        auto jump_a_local       = this->jump_a;
+        auto jump_b_local       = this->jump_b;
+        auto [nx, ny, nvx, nvy] = this->grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
+                jump_a_local(i, j) = 0.0;
+                jump_b_local(i, j) = 0.0;
+            });
+    }
 
     void potential_boundary_conditions() {
         using Kokkos::abs;
@@ -174,12 +199,12 @@ struct ImmersedWorld : World<ImmersedWorld> {
         double dy               = grid.spacing(0, 0)[1];
 
         // top boundary, dirichlet
-        Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
+        // Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
 
         // bottom boundary, floating potential
         // electron flux to wall: Boltzmann approximation ne * v_th_e / sqrt(2π)
-        int nx_mid = nx / 2;
-        auto phi_mid = Kokkos::subview(phi, nx_mid, ngc);
+        int nx_mid        = nx / 2;
+        auto phi_mid      = Kokkos::subview(phi, nx_mid, ngc);
         auto phi_mid_host = Kokkos::create_mirror_view(phi_mid);
         Kokkos::deep_copy(phi_mid_host, phi_mid);
         double flux_e = exp(phi_mid_host()) * v_th_e / sqrt(2 * pi);
@@ -188,21 +213,28 @@ struct ImmersedWorld : World<ImmersedWorld> {
         double flux_i = u0;
         E_w += (flux_i - flux_e) * dt;
 
-        auto phi_local   = this->phi;
-        double E_w_local = this->E_w;
-        Kokkos::parallel_for(
-            Kokkos::RangePolicy(0, nx), KOKKOS_LAMBDA(const int i) {
-                // Ey = (flux_i - flux_e) = -dphi/dy
-                for (int j = 0; j < ngc; ++j) {
-                    phi_local(i, j) = phi_local(i, ngc + 1) + E_w_local * (ngc + 1 - j) * dy;
-                }
-            });
+        // auto phi_local   = this->phi;
+        // double E_w_local = this->E_w;
+        // Kokkos::parallel_for(
+        //     Kokkos::RangePolicy(0, nx), KOKKOS_LAMBDA(const int i) {
+        //         // Ey = (flux_i - flux_e) = -dphi/dy
+        //         for (int j = 0; j < ngc; ++j) {
+        //             phi_local(i, j) = phi_local(i, ngc + 1) + E_w_local * (ngc + 1 - j) * dy;
+        //         }
+        //     });
 
-        // left and right boundary, periodic
-        Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::make_pair(0, ngc), Kokkos::ALL),
-                          Kokkos::subview(phi, Kokkos::make_pair(nx - 2 * ngc, nx - ngc), Kokkos::ALL));
-        Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::make_pair(nx - ngc, nx), Kokkos::ALL),
-                          Kokkos::subview(phi, Kokkos::make_pair(ngc, 2 * ngc), Kokkos::ALL));
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                if (i < ngc || i >= nx - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Periodic);
+                else if (j >= ny - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
+                else if (j < ngc)
+                    poisson_bc_map(i, j) =
+                        PoissonBCPair(PoissonBCType::Neumann, -E_w); 
+                else
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None);
+            });
     }
 };
 

@@ -9,23 +9,49 @@
 #include <string>
 
 struct ImmersedWorld : World<ImmersedWorld> {
+    static constexpr double Y_WALL = 2.0;
+
     // all quantities are normalized by electron parameters
-    double E_w    = 0.0;                                                                 // wall electric field
-    double phi_w  = -Kokkos::log(Kokkos::sqrt(m[1] / (2 * Kokkos::numbers::pi * m[0]))); // wall potential
+    double phi_w  = -Kokkos::log(Kokkos::sqrt(m[1] / (2 * Kokkos::numbers::pi * m[0]))); // wall potential (estimate)
     double v_th_e = Kokkos::sqrt(T[0] / m[0]);                                           // electron thermal velocity
     double v_th_i = Kokkos::sqrt(T[1] / m[1]);                                           // ion thermal velocity
     double u0     = Kokkos::sqrt(T[0] / m[1]);                                           // Bohm velocity
 
-    ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+    // accumulated surface charge on the immersed interface (the OML state variable)
+    double sigma_w_host = 0.0;
 
-    KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const { return y + 1.0; }
+    ImmersedWorld(Grid& grid)
+        : World<ImmersedWorld>(grid) {
+        construct_surface();      // fill eta
+        construct_permittivity(); // fill eps
+        construct_normal_field(); // base method, reads eta
+    }
+
+    // Fill the surface field eta(i,j) = S(x,y) over the full domain (including ghost cells).
+    void construct_surface() {
+        auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y] = grid.center(i, j);
+                eta(i, j)   = y - Y_WALL;
+            });
+    }
+
+    // Conductor-like interior so the immersed body is (nearly) equipotential.
+    void construct_permittivity() {
+        auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto& eps               = this->eps;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j) { eps(i, j) = (eta(i, j) <= 0.0) ? 4.0 : 1.0; });
+    }
 
     void initialize_distribution() {
-        using Kokkos::abs;
         using Kokkos::exp;
-        using Kokkos::log;
         using Kokkos::pow;
         using Kokkos::sqrt;
         using Kokkos::numbers::pi;
@@ -33,46 +59,38 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
-        // Initialize potential with Debye-shielded profile for faster relaxation
-        {
-            auto phi_local     = this->phi;
-            double phi_w_local = this->phi_w;
-            Kokkos::parallel_for(
-                Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
-                    auto [x, y]     = grid.center(i, j);
-                    phi_local(i, j) = phi_w_local * Kokkos::exp(-y / 2.5);
-                });
-        }
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y] = grid.center(i, j);
+                phi(i, j)   = (eta(i, j) >= 0.0) ? phi_w * exp(-(y - Y_WALL) / 2.5) : phi_w;
+            });
 
-        auto f_local        = this->f;
-        auto phi_local      = this->phi;
-        auto m_local        = this->m;
-        double phi_w_local  = this->phi_w;
-        double v_th_e_local = this->v_th_e;
-        double v_th_i_local = this->v_th_i;
-        double u0_local     = this->u0;
+        Kokkos::deep_copy(f, 0.0);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
-            KOKKOS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
-                    double v_ce         = sqrt(2 * (phi_local(i, j) - phi_w_local) / m_local[0]);
-                    f_local(i, j, iv, jv, 0) =
-                        (vy <= v_ce)
-                            ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e_local, 2)) + phi_local(i, j)) /
-                                  (2.0 * pi * pow(v_th_e_local, 2))
-                            : 0.0;
+                    if (eta(i, j) >= 0.0) {
+                        double v_ce = sqrt(2 * (phi(i, j) - phi_w) / m[0]);
+                        f(i, j, iv, jv, 0) =
+                            (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
+                                               (2.0 * pi * pow(v_th_e, 2))
+                                         : 0.0;
+                    }
                 };
                 // ion
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
-                    double v_ci         = -sqrt(2 * abs(phi_local(i, j)) / m_local[1]); // ion cutoff velocity
-                    f_local(i, j, iv, jv, 1) =
-                        (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0_local, 2)) /
-                                           (2.0 * pow(v_th_i_local, 2))) /
-                                           (2.0 * pi * pow(v_th_i_local, 2))
-                                     : 0.0;
+                    if (eta(i, j) >= 0.0) {
+                        double v_ci        = -sqrt(2 * Kokkos::abs(phi(i, j)) / m[1]); // ion cutoff velocity
+                        f(i, j, iv, jv, 1) = (vy <= v_ci)
+                                                 ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
+                                                       (2.0 * pow(v_th_i, 2))) /
+                                                       (2.0 * pi * pow(v_th_i, 2))
+                                                 : 0.0;
+                    }
                 };
             });
 
@@ -87,59 +105,52 @@ struct ImmersedWorld : World<ImmersedWorld> {
     };
 
     void particle_boundary_conditions() {
-        using Kokkos::abs;
         using Kokkos::exp;
-        using Kokkos::log;
         using Kokkos::pow;
         using Kokkos::sqrt;
         using Kokkos::numbers::pi;
-        auto& grid          = this->grid;
-        int ngc             = grid.ngc;
-        int nx              = grid.ncells[0];
-        int ny              = grid.ncells[1];
-        int nvx             = grid.ncells[2];
-        int nvy             = grid.ncells[3];
-        auto f_local        = this->f;
-        auto phi_local      = this->phi;
-        auto n_local        = this->n;
-        auto m_local        = this->m;
-        double phi_w_local  = this->phi_w;
-        double v_th_e_local = this->v_th_e;
-        double v_th_i_local = this->v_th_i;
-        double u0_local     = this->u0;
+        auto& grid              = this->grid;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        int ngc                 = grid.ngc;
+
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
-            KOKKOS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
-                    double v_ce         = sqrt(2 * (0.0 - phi_w_local) / m_local[0]); // electron cutoff velocity
+                    double n1           = normal(i, j, 0);
+                    double n2           = normal(i, j, 1);
+                    double v_ce         = sqrt(2 * (0.0 - phi_w) / m[0]); // electron cutoff velocity
                     if (j < ngc && vy > 0.0) {
-                        f_local(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
+                        f(i, j, iv, jv, 0) = 0.0; // bottom domain boundary, zero-inflow
+                    } else if (eta(i, j) < 0.0 && vx * n1 + vy * n2 > 0.0) {
+                        f(i, j, iv, jv, 0) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
                     } else if (j >= ny - ngc) {
-                        // dynamic electron density adjustment
-                        double ne = (n_local(i, ny - ngc - 1, 0) > 0.0)
-                                        ? n_local(i, ny - ngc - 1, 1) / n_local(i, ny - ngc - 1, 0)
-                                        : 1.0;
-                        f_local(i, j, iv, jv, 0) =
-                            (vy <= v_ce)
-                                ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e_local, 2)) + phi_local(i, j)) /
-                                      (2.0 * pi * pow(v_th_e_local, 2)) * ne
-                                : 0.0;
+                        // top reservoir, with dynamic electron density adjustment
+                        double ne = (n(i, ny - ngc - 1, 0) > 0.0) ? n(i, ny - ngc - 1, 1) / n(i, ny - ngc - 1, 0) : 1.0;
+                        f(i, j, iv, jv, 0) =
+                            (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
+                                               (2.0 * pi * pow(v_th_e, 2)) * ne
+                                         : 0.0;
                     }
                 };
                 // ion
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
-                    double v_ci         = 0.0; // ion cutoff velocity, since phi(y=Lx) = 0
+                    double n1           = normal(i, j, 0);
+                    double n2           = normal(i, j, 1);
+                    double v_ci         = 0.0; // ion cutoff velocity, since phi(top) = 0
                     if (j < ngc && vy > 0.0) {
-                        f_local(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
+                        f(i, j, iv, jv, 1) = 0.0; // bottom domain boundary, zero-inflow
+                    } else if (eta(i, j) < 0.0 && vx * n1 + vy * n2 > 0.0) {
+                        f(i, j, iv, jv, 1) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
                     } else if (j >= ny - ngc) {
-                        f_local(i, j, iv, jv, 1) =
-                            (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0_local, 2)) /
-                                               (2.0 * pow(v_th_i_local, 2))) /
-                                               (2.0 * pi * pow(v_th_i_local, 2))
-                                         : 0.0;
+                        f(i, j, iv, jv, 1) = (vy <= v_ci)
+                                                 ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
+                                                       (2.0 * pow(v_th_i, 2))) /
+                                                       (2.0 * pi * pow(v_th_i, 2))
+                                                 : 0.0;
                     }
                 };
             });
@@ -154,59 +165,61 @@ struct ImmersedWorld : World<ImmersedWorld> {
             Kokkos::subview(f, Kokkos::make_pair(ngc, 2 * ngc), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
     };
 
-    // TODO: implement jump conditions to mimic charge accumulation
-    // READ Han PHD thesis
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_a(double x, double y) { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_b(double x, double y) { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) { return 1.0; }
-
     void potential_boundary_conditions() {
-        using Kokkos::abs;
-        using Kokkos::exp;
-        using Kokkos::log;
-        using Kokkos::pow;
-        using Kokkos::sqrt;
-        using Kokkos::numbers::pi;
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dy               = grid.spacing(0, 0)[1];
-
-        // top boundary, dirichlet
-        Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
-
-        // bottom boundary, floating potential
-        // electron flux to wall: Boltzmann approximation ne * v_th_e / sqrt(2π)
-        int nx_mid        = nx / 2;
-        auto phi_mid      = Kokkos::subview(phi, nx_mid, ngc);
-        auto phi_mid_host = Kokkos::create_mirror_view(phi_mid);
-        Kokkos::deep_copy(phi_mid_host, phi_mid);
-        double flux_e = exp(phi_mid_host()) * v_th_e / sqrt(2 * pi);
-
-        // ion flux: conserved from source (Bohm flux, n_0 * u0 ≈ u0)
-        double flux_i = u0;
-        E_w += (flux_i - flux_e) * dt;
-
-        auto phi_local   = this->phi;
-        double E_w_local = this->E_w;
         Kokkos::parallel_for(
-            Kokkos::RangePolicy(0, nx), KOKKOS_LAMBDA(const int i) {
-                // Ey = (flux_i - flux_e) = -dphi/dy
-                for (int j = 0; j < ngc; ++j) {
-                    phi_local(i, j) = phi_local(i, ngc + 1) + E_w_local * (ngc + 1 - j) * dy;
-                }
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                if (i < ngc || i >= nx - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Periodic);
+                else if (j >= ny - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
+                else if (j < ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // floating wall: field set by sigma_w
+                else
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None);
             });
 
-        // left and right boundary, periodic
-        Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::make_pair(0, ngc), Kokkos::ALL),
-                          Kokkos::subview(phi, Kokkos::make_pair(nx - 2 * ngc, nx - ngc), Kokkos::ALL));
-        Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::make_pair(nx - ngc, nx), Kokkos::ALL),
-                          Kokkos::subview(phi, Kokkos::make_pair(ngc, 2 * ngc), Kokkos::ALL));
+        auto [_dx, _dy, dvx_e, dvy_e]   = grid.spacing(0);
+        auto [_dx, _dy, dvx_i, dvy_i] = grid.spacing(1);
+        double flux                   = 0.0;
+        Kokkos::parallel_reduce(
+            Kokkos::MDRangePolicy<Kokkos::Rank<4>>({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv, double& acc) {
+                // keep only the first fluid row above the interface
+                if (!(eta(i, j) > 0.0 && eta(i, j - 1) <= 0.0))
+                    return;
+                {
+                    auto [_xc, _yc, _vx, vy_e] = grid.center(i, j, iv, jv, 0);
+                    if (vy_e < 0.0)
+                        acc += q[0] * (-vy_e) * f(i, j, iv, jv, 0) * dvx_e * dvy_e;
+                }
+                {
+                    auto [_xc, _yc, _vx, vy_i] = grid.center(i, j, iv, jv, 1);
+                    if (vy_i < 0.0)
+                        acc += q[1] * (-vy_i) * f(i, j, iv, jv, 1) * dvx_i * dvy_i;
+                }
+            },
+            flux);
+        double flux_net = flux / grid.ncells_interior[0];
+        sigma_w_host += flux_net * dt;
+    }
+
+    // Fill the Poisson jump condition fields. Being a host method filling fields, it can
+    // freely read the accumulated surface charge (a host scalar) updated each step, so the
+    // time-dependent normal-derivative jump is trivial to express.
+    void poisson_jump_conditions() {
+        auto& grid              = this->grid;
+        auto& jump_a            = this->jump_a;
+        auto& jump_b            = this->jump_b;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        double sigma            = sigma_w_host;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                jump_a(i, j) = 0.0;    // no jump in the potential across the interface
+                jump_b(i, j) = -sigma; // jump in the normal derivative from accumulated surface charge
+            });
     }
 };
 
@@ -288,7 +301,7 @@ int main(int argc, char* argv[]) {
     world.v_th_i      = v_th_i;
     world.u0          = u0;
 
-    PoissonSolver1stOrder poisson_solver(world, 1e-6);
+    PoissonSolver1stOrder poisson_solver(world, 1e-6, 1e5, 1.0); // set lower relaxation for convergence
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

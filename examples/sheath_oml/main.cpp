@@ -9,7 +9,7 @@
 #include <string>
 
 struct ImmersedWorld : World<ImmersedWorld> {
-    static constexpr double Y_WALL = 2.0;
+    static constexpr double Y_WALL = 2.5;
 
     // all quantities are normalized by electron parameters
     double phi_w  = -Kokkos::log(Kokkos::sqrt(m[1] / (2 * Kokkos::numbers::pi * m[0]))); // wall potential (estimate)
@@ -18,7 +18,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
     double u0     = Kokkos::sqrt(T[0] / m[1]);                                           // Bohm velocity
 
     // accumulated surface charge on the immersed interface (the OML state variable)
-    double sigma_w_host = 0.0;
+    double sigma_w   = 0.0;
+    double last_step = -1;
 
     ImmersedWorld(Grid& grid)
         : World<ImmersedWorld>(grid) {
@@ -30,7 +31,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
     // Fill the surface field eta(i,j) = S(x,y) over the full domain (including ghost cells).
     void construct_surface() {
         auto& grid              = this->grid;
-        auto& eta               = this->eta;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
@@ -39,11 +39,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
             });
     }
 
-    // Conductor-like interior so the immersed body is (nearly) equipotential.
     void construct_permittivity() {
-        auto& grid              = this->grid;
-        auto& eta               = this->eta;
-        auto& eps               = this->eps;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
@@ -90,8 +86,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                                                        (2.0 * pow(v_th_i, 2))) /
                                                        (2.0 * pi * pow(v_th_i, 2))
                                                  : 0.0;
-                    }
-                };
+                    } };
             });
 
         // periodic boundary conditions for left and right boundaries
@@ -166,6 +161,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
     };
 
     void potential_boundary_conditions() {
+        // only update when time advances, since the BCs are time-dependent through sigma_w
+        if (current_step == last_step)
+            return;
+        last_step                         = current_step;
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
@@ -176,16 +175,16 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 else if (j >= ny - ngc)
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
                 else if (j < ngc)
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // floating wall: field set by sigma_w
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
                 else
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None);
             });
 
-        auto [_dx, _dy, dvx_e, dvy_e]   = grid.spacing(0);
-        auto [_dx, _dy, dvx_i, dvy_i] = grid.spacing(1);
-        double flux                   = 0.0;
+        auto [_dx_e, _dy_e, dvx_e, dvy_e] = grid.spacing(0);
+        auto [_dx_i, _dy_i, dvx_i, dvy_i] = grid.spacing(1);
+        double flux                       = 0.0;
         Kokkos::parallel_reduce(
-            Kokkos::MDRangePolicy<Kokkos::Rank<4>>({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+            Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv, double& acc) {
                 // keep only the first fluid row above the interface
                 if (!(eta(i, j) > 0.0 && eta(i, j - 1) <= 0.0))
@@ -203,22 +202,20 @@ struct ImmersedWorld : World<ImmersedWorld> {
             },
             flux);
         double flux_net = flux / grid.ncells_interior[0];
-        sigma_w_host += flux_net * dt;
+        sigma_w += flux_net * dt;
+        Kokkos::printf("Step %d: flux_net: %e, sigma_w: %e\n", current_step, flux_net, sigma_w);
     }
 
-    // Fill the Poisson jump condition fields. Being a host method filling fields, it can
-    // freely read the accumulated surface charge (a host scalar) updated each step, so the
-    // time-dependent normal-derivative jump is trivial to express.
     void poisson_jump_conditions() {
         auto& grid              = this->grid;
         auto& jump_a            = this->jump_a;
         auto& jump_b            = this->jump_b;
         auto [nx, ny, nvx, nvy] = grid.ncells;
-        double sigma            = sigma_w_host;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                jump_a(i, j) = 0.0;    // no jump in the potential across the interface
-                jump_b(i, j) = -sigma; // jump in the normal derivative from accumulated surface charge
+                jump_a(i, j) = 0.0;      // no jump in the potential across the interface
+                // jump_b(i, j) = -sigma_w; // jump in the normal derivative from accumulated surface charge
+                jump_b(i, j) = 0.0; // jump in the normal derivative from accumulated surface charge
             });
     }
 };
@@ -301,7 +298,7 @@ int main(int argc, char* argv[]) {
     world.v_th_i      = v_th_i;
     world.u0          = u0;
 
-    PoissonSolver1stOrder poisson_solver(world, 1e-6, 1e5, 1.0); // set lower relaxation for convergence
+    PoissonSolver1stOrder poisson_solver(world, 1e-6, 1e5, 0.5); // set lower relaxation for convergence
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi"});
     Vlasolver vlasolver(world, poisson_solver, writer);
 

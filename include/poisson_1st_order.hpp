@@ -69,6 +69,7 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         int nx          = u.extent(0);
         int ny          = u.extent(1);
         auto [dx, dy]   = grid.spacing(0, 0);
+
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 if ((i + j) % 2 != is_update_red)
@@ -171,8 +172,8 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                 double denom   = (eps_l + eps_r) / (dx * dx) + (eps_b + eps_t) / (dy * dy);
                 double average = (eps_l * u(i - 1, j) + eps_r * u(i + 1, j)) / (dx * dx) +
                                  (eps_b * u(i, j - 1) + eps_t * u(i, j + 1)) / (dy * dy);
-                double Fx = F_l + F_r;
-                double Fy = F_b + F_t;
+                double Fx      = F_l + F_r;
+                double Fy      = F_b + F_t;
 
                 // relaxation update
                 u(i, j) = (1 - omega) * u(i, j) + omega * (average - g(i, j) - Fx - Fy) / denom;

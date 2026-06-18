@@ -198,9 +198,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
         int ngc                 = grid.ngc;
         double dy               = grid.spacing(0, 0)[1];
 
-        // top boundary, dirichlet
-        // Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
-
         // bottom boundary, floating potential
         // electron flux to wall: Boltzmann approximation ne * v_th_e / sqrt(2π)
         int nx_mid        = nx / 2;
@@ -213,25 +210,16 @@ struct ImmersedWorld : World<ImmersedWorld> {
         double flux_i = u0;
         E_w += (flux_i - flux_e) * dt;
 
-        // auto phi_local   = this->phi;
-        // double E_w_local = this->E_w;
-        // Kokkos::parallel_for(
-        //     Kokkos::RangePolicy(0, nx), KOKKOS_LAMBDA(const int i) {
-        //         // Ey = (flux_i - flux_e) = -dphi/dy
-        //         for (int j = 0; j < ngc; ++j) {
-        //             phi_local(i, j) = phi_local(i, ngc + 1) + E_w_local * (ngc + 1 - j) * dy;
-        //         }
-        //     });
-
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                // need to make sure the left and right boundaries are periodic
+                // must check this before checking top and bottom boundaries
                 if (i < ngc || i >= nx - ngc)
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Periodic);
                 else if (j >= ny - ngc)
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
                 else if (j < ngc)
-                    poisson_bc_map(i, j) =
-                        PoissonBCPair(PoissonBCType::Neumann, -E_w); 
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, -E_w);
                 else
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None);
             });

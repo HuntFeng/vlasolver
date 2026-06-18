@@ -358,6 +358,7 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         for (int iter = 0; iter < max_iter; ++iter) {
             Kokkos::deep_copy(phi_old, world.phi);
             gauss_seidel(world.phi, g, eps, a, b, 1);
+            world.potential_boundary_conditions();
             apply_boundary_conditions(); // refresh Neumann/Periodic ghosts from updated interior
             double err = compute_error();
             if (iter % 1000 == 0 || iter == max_iter - 1) {

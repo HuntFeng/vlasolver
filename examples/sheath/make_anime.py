@@ -18,8 +18,8 @@ plt.rcParams.update(
 )
 
 # Animation parameters
-total_steps = 40000  # User can modify this
-frame_interval = 400  # User can modify this (step interval between frames)
+total_steps = 3000  # User can modify this
+frame_interval = 30  # User can modify this (step interval between frames)
 start_step = 0  # Starting step
 
 # Grid parameters
@@ -50,7 +50,7 @@ def load_data(step):
     """Load data for a given step"""
     try:
         with h5py.File(
-            f"{file_path}/../../data/sheath/output_{step:05d}.h5",
+            f"{file_path}/../../data/sheath/output_{step:04d}.h5",
             "r",
         ) as f:
             ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)

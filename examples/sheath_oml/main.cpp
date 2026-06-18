@@ -203,7 +203,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
             flux);
         double flux_net = flux / grid.ncells_interior[0];
         sigma_w += flux_net * dt;
-        Kokkos::printf("Step %d: flux_net: %e, sigma_w: %e\n", current_step, flux_net, sigma_w);
     }
 
     void poisson_jump_conditions() {
@@ -214,8 +213,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 jump_a(i, j) = 0.0;      // no jump in the potential across the interface
-                // jump_b(i, j) = -sigma_w; // jump in the normal derivative from accumulated surface charge
-                jump_b(i, j) = 0.0; // jump in the normal derivative from accumulated surface charge
+                jump_b(i, j) = -sigma_w; // jump in the normal derivative from accumulated surface charge
             });
     }
 };

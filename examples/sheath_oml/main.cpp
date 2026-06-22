@@ -86,7 +86,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
                                                        (2.0 * pow(v_th_i, 2))) /
                                                        (2.0 * pi * pow(v_th_i, 2))
                                                  : 0.0;
-                    } };
+                    }
+                };
             });
 
         // periodic boundary conditions for left and right boundaries
@@ -122,9 +123,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     } else if (eta(i, j) < 0.0 && vx * n1 + vy * n2 > 0.0) {
                         f(i, j, iv, jv, 0) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
                     } else if (j >= ny - ngc) {
+                        double ne = (n(i, ny - ngc - 1, 0) > 0.0) ? n(i, ny - ngc - 1, 1) / n(i, ny - ngc - 1, 0) : 1.0;
                         f(i, j, iv, jv, 0) =
                             (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
-                                               (2.0 * pi * pow(v_th_e, 2))
+                                               (2.0 * pi * pow(v_th_e, 2)) * ne
                                          : 0.0;
                     }
                 };
@@ -160,9 +162,9 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     void potential_boundary_conditions() {
         // only update when time advances, since the BCs are time-dependent through sigma_w
-        if (current_step == last_step)
-            return;
-        last_step                         = current_step;
+        // if (current_step == last_step)
+        //     return;
+        // last_step                         = current_step;
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;

@@ -3,6 +3,7 @@ import os
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.integrate import solve_bvp
 
 plt.rcParams.update(
     {
@@ -105,10 +106,54 @@ print(
     f"theoretical wall potential {theoretical_potential}"
 )
 print(f"simulation wall potential {wall_potential}")
+
+# === Analytical sheath potential ===
+# Collisionless Bohm sheath solved as a boundary-value problem in normalized
+# units: phi in Te/e, lengths in Debye lengths, n0 = 1. Boltzmann electrons
+# (n_e = exp(phi)) and cold Bohm ions (n_i = 1 / sqrt(1 - 2*phi)) give Poisson's
+# equation
+#     d^2 phi / dy^2 = n_e - n_i = exp(phi) - 1/sqrt(1 - 2*phi),
+# with phi = phi_w at the wall and phi = 0 in the bulk.
+Ly_debye = 20.0  # domain length in Debye lengths (input.ini: Ly = 20)
+y_wall = 0.0  # wall surface where the sheath begins (normalized to Ly)
+phi_w = -np.log(np.sqrt(mi / (2 * np.pi * me)))  # wall potential in Te/e
+L_sheath = (1 - y_wall) * Ly_debye  # wall-to-bulk distance in Debye lengths
+
+
+def sheath_ode(s, y):
+    phi = y[0]
+    ne = np.exp(phi)  # Boltzmann electrons
+    arg = np.maximum(1.0 - 2.0 * phi, 1e-12)
+    ni = 1.0 / np.sqrt(arg)  # cold Bohm ions
+    d2phi = ne - ni  # normalized Poisson (Debye lengths, Te/e)
+    return np.vstack((y[1], d2phi))
+
+
+def bc(ya, yb):
+    return np.array([
+        ya[0] - phi_w,  # wall potential
+        yb[0],  # bulk (plasma) potential = 0
+    ])
+
+
+s_mesh = np.linspace(0.0, L_sheath, 400)
+phi_guess = phi_w * np.exp(-s_mesh / (L_sheath / 10))
+y_guess = np.vstack((phi_guess, np.gradient(phi_guess, s_mesh)))
+
+sol = solve_bvp(sheath_ode, bc, s_mesh, y_guess, max_nodes=10000)
+if not sol.success:
+    print(sol.message)
+
+s_plot = np.linspace(0.0, L_sheath, 1000)
+y_analytic = y_wall + s_plot / Ly_debye
+phi_bvp = sol.sol(s_plot)[0]  # analytical potential in Te/e
+phi_analytic = phi_bvp / (2 * Tr)
+
 plt.figure(figsize=(12, 5))
 plt.subplot(1, 2, 1)
 phi_norm = phi.mean(axis=0) / (2 * Tr)
 plt.plot(y, phi_norm, label="$\\phi$")
+plt.plot(y_analytic, phi_analytic, "-", color="red", label="$\\phi$ (analytic)")
 plt.ylim(wall_potential*1.1, 1)
 plt.xlim(0, 1)
 plt.legend()

@@ -16,6 +16,7 @@
 #include <KokkosSparse_par_ilut.hpp>
 #include <KokkosSparse_spiluk.hpp>
 #include <Kokkos_Core.hpp>
+#include <Kokkos_Core_fwd.hpp>
 #include <bit>
 #include <vector>
 
@@ -96,13 +97,18 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     Kokkos::View<double*, Kokkos::HostSpace> rhs_h;
 
     // jump conditions
-    Kokkos::View<double**, Kokkos::HostSpace> a;
-    Kokkos::View<double**, Kokkos::HostSpace> b;
+    Kokkos::View<double**>::HostMirror a = Kokkos::create_mirror_view(world.jump_a);
+    Kokkos::View<double**>::HostMirror b = Kokkos::create_mirror_view(world.jump_b);
     Kokkos::View<double**, Kokkos::HostSpace> a_tau;
 
     // normal
     Kokkos::View<double**, Kokkos::HostSpace> n1;
     Kokkos::View<double**, Kokkos::HostSpace> n2;
+
+    // host mirror of some fields
+    Kokkos::View<double**>::HostMirror eta_h = Kokkos::create_mirror_view(world.eta);
+    Kokkos::View<double**>::HostMirror eps_p_h = Kokkos::create_mirror_view(world.eps_p);
+    Kokkos::View<double**>::HostMirror eps_m_h = Kokkos::create_mirror_view(world.eps_m);
 
   public:
     PoissonSolver2ndOrder(World& world,
@@ -129,9 +135,12 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
         n1         = Kokkos::View<double**, Kokkos::HostSpace>("n1", nx, ny);
         n2         = Kokkos::View<double**, Kokkos::HostSpace>("n2", nx, ny);
-        a          = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
-        b          = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
+        // a          = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
+        // b          = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
         a_tau      = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
+        // eta_h      = Kokkos::View<double**, Kokkos::HostSpace>("eta_h", nx, ny);
+        // eps_p_h    = Kokkos::View<double**, Kokkos::HostSpace>("eps_p_h", nx, ny);
+        // eps_m_h    = Kokkos::View<double**, Kokkos::HostSpace>("eps_m_h", nx, ny);
         D_inv_sqrt = Kokkos::View<double*>("D_inv_sqrt", nx * ny);
 
         // prepare gmres
@@ -154,12 +163,11 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         using Kokkos::pow;
         using Kokkos::sqrt;
 
-        auto [x, y]    = world.grid.center(i, j);
-        double eta     = world.surface(x, y);
-        double eta_r   = world.surface(x + dx, y);
-        double eta_l   = world.surface(x - dx, y);
-        double eta_t   = world.surface(x, y + dy);
-        double eta_b   = world.surface(x, y - dy);
+        double eta     = eta_h(i, j);
+        double eta_r   = eta_h(i + 1, j);
+        double eta_l   = eta_h(i - 1, j);
+        double eta_t   = eta_h(i, j + 1);
+        double eta_b   = eta_h(i, j - 1);
 
         double dx_eta  = (eta_r - eta_l) / 2;
         double dy_eta  = (eta_t - eta_b) / 2;
@@ -188,7 +196,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         return theta;
     }
 
-    double interp(size_t direction, double theta, int i, int j, Kokkos::View<double**, Kokkos::HostSpace>& field) {
+    double interp(size_t direction, double theta, int i, int j, auto& field) {
         using Kokkos::pow;
         Kokkos::Array<double, 4> t_matrix{1, theta, pow(theta, 2), pow(theta, 3)};
         Kokkos::Array<Kokkos::Array<double, 4>, 4> c_matrix{{
@@ -215,6 +223,26 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             }
         }
         return val_I;
+    }
+
+    /**
+     * Map the region permittivities at an interface to the far/near convention
+     * used by the stencil formulas.
+     *
+     * eps_p_I is the permittivity in the eta>0 region and eps_m_I the permittivity
+     * in the eta<0 region (both interpolated to the interface). The formulas expect
+     * eps_p = permittivity on the side opposite the cell center and eps_m =
+     * permittivity on the cell-center side, so the assignment depends on the sign
+     * of eta at the cell center.
+     */
+    void interface_eps(double eta, double eps_p_I, double eps_m_I, double& eps_p, double& eps_m) {
+        if (eta > 0.0) {
+            eps_p = eps_m_I; // opposite (far) side is in the eta<0 region
+            eps_m = eps_p_I; // cell-center (near) side is in the eta>0 region
+        } else {
+            eps_p = eps_p_I; // opposite (far) side is in the eta>0 region
+            eps_m = eps_m_I; // cell-center (near) side is in the eta<0 region
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -390,14 +418,17 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 0 -- no cut
     // -----------------------------------------------------------------------
     void coeff_case0(int i, int j) {
-        auto [x, y]  = world.grid.center(i, j);
         double bot_x = dx * dx;
         double bot_y = dy * dy;
 
-        double eps_l = world.permittivity(x - dx / 2, y);
-        double eps_r = world.permittivity(x + dx / 2, y);
-        double eps_b = world.permittivity(x, y - dy / 2);
-        double eps_t = world.permittivity(x, y + dy / 2);
+        // no interface cuts this cell, so every face lies in the cell's region;
+        // interpolate that region's permittivity to the half-cell faces
+        double eta        = eta_h(i, j);
+        auto& eps_field   = (eta > 0.0) ? eps_p_h : eps_m_h;
+        double eps_l      = interp(Direction::L, 0.5, i, j, eps_field);
+        double eps_r      = interp(Direction::R, 0.5, i, j, eps_field);
+        double eps_b      = interp(Direction::B, 0.5, i, j, eps_field);
+        double eps_t      = interp(Direction::T, 0.5, i, j, eps_field);
 
         int row_idx  = index(i, j);
         rows_coo_h.insert(rows_coo_h.end(), {row_idx, row_idx, row_idx, row_idx, row_idx});
@@ -422,7 +453,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // -----------------------------------------------------------------------
     InterCaseResult case1(size_t direction, int i, int j) {
         auto [x, y]    = world.grid.center(i, j);
-        double eta     = world.surface(x, y);
+        double eta     = eta_h(i, j);
         double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
         double theta   = compute_theta(direction, i, j);
         double a_tau_I = interp(direction, theta, i, j, a_tau);
@@ -438,14 +469,10 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double theta_t = (direction == Direction::T) ? theta : 1.0;
         double theta_b = (direction == Direction::B) ? theta : 1.0;
 
+        double eps_p_I = interp(direction, theta, i, j, eps_p_h);
+        double eps_m_I = interp(direction, theta, i, j, eps_m_h);
         double eps_p, eps_m;
-        if (is_x_dir) {
-            eps_p = world.permittivity(x + s * (theta + 0.01) * dx, y);
-            eps_m = world.permittivity(x + s * (theta - 0.01) * dx, y);
-        } else {
-            eps_p = world.permittivity(x, y + s * (theta + 0.01) * dy);
-            eps_m = world.permittivity(x, y + s * (theta - 0.01) * dy);
-        }
+        interface_eps(eta, eps_p_I, eps_m_I, eps_p, eps_m);
         double eps_jump = (eta > 0.0) ? (eps_m - eps_p) : (eps_p - eps_m);
 
         // extension point
@@ -474,10 +501,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double y_b   = y - theta_b * dy;
         double bot_x = (theta_r + theta_l) / 2.0 * dx * dx;
         double bot_y = (theta_t + theta_b) / 2.0 * dy * dy;
-        double eps_r = world.permittivity(x + theta_r * dx / 2.0, y);
-        double eps_l = world.permittivity(x - theta_l * dx / 2.0, y);
-        double eps_t = world.permittivity(x, y + theta_t * dy / 2.0);
-        double eps_b = world.permittivity(x, y - theta_b * dy / 2.0);
+        // half-cell faces lie in the cell's region; interpolate that region's
+        // permittivity to the half-cell faces (theta/2 along each direction)
+        auto& eps_field = (eta > 0.0) ? eps_p_h : eps_m_h;
+        double eps_r    = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l    = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t    = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b    = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         // algebraic part
         double B_val;
@@ -582,7 +612,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // -----------------------------------------------------------------------
     InterCaseResult case2(size_t direction, int i, int j) {
         auto [x, y]    = world.grid.center(i, j);
-        double eta     = world.surface(x, y);
+        double eta     = eta_h(i, j);
         double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
 
         double theta_r = compute_theta(Direction::R, i, j);
@@ -596,10 +626,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double y_b     = y - theta_b * dy;
         double bot_x   = (theta_r + theta_l) / 2.0 * dx * dx;
         double bot_y   = (theta_t + theta_b) / 2.0 * dy * dy;
-        double eps_r   = world.permittivity(x + theta_r * dx / 2.0, y);
-        double eps_l   = world.permittivity(x - theta_l * dx / 2.0, y);
-        double eps_t   = world.permittivity(x, y + theta_t * dy / 2.0);
-        double eps_b   = world.permittivity(x, y - theta_b * dy / 2.0);
+        // half-cell faces lie in the cell's region; interpolate that region's
+        // permittivity to the half-cell faces (theta/2 along each direction)
+        auto& eps_field = (eta > 0.0) ? eps_p_h : eps_m_h;
+        double eps_r    = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l    = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t    = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b    = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         size_t dir[2];
         double theta_arr[2], eps_arr[2];
@@ -676,13 +709,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
         double eps_p[2], eps_m[2];
         for (int d = 0; d < 2; ++d) {
-            if (is_x[d]) {
-                eps_p[d] = world.permittivity(x + s[d] * (theta_arr[d] + 0.01) * dx, y);
-                eps_m[d] = world.permittivity(x + s[d] * (theta_arr[d] - 0.01) * dx, y);
-            } else {
-                eps_p[d] = world.permittivity(x, y + s[d] * (theta_arr[d] + 0.01) * dy);
-                eps_m[d] = world.permittivity(x, y + s[d] * (theta_arr[d] - 0.01) * dy);
-            }
+            double eps_p_I = interp(dir[d], theta_arr[d], i, j, eps_p_h);
+            double eps_m_I = interp(dir[d], theta_arr[d], i, j, eps_m_h);
+            interface_eps(eta, eps_p_I, eps_m_I, eps_p[d], eps_m[d]);
         }
         double eps_jump[2];
         for (int d = 0; d < 2; ++d)
@@ -795,22 +824,21 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // Case 3 -- two cuts + one extra on outer ray
     // -----------------------------------------------------------------------
     size_t case3_extra_dir(size_t direction, int i, int j) {
-        auto [x, y]  = world.grid.center(i, j);
         size_t extra = 0;
-        if ((direction & Direction::R) && (world.surface(x + dx, y) * world.surface(x + 2 * dx, y) < 0))
+        if ((direction & Direction::R) && (eta_h(i + 1, j) * eta_h(i + 2, j) < 0))
             extra |= Direction::R;
-        if ((direction & Direction::T) && (world.surface(x, y + dy) * world.surface(x, y + 2 * dy) < 0))
+        if ((direction & Direction::T) && (eta_h(i, j + 1) * eta_h(i, j + 2) < 0))
             extra |= Direction::T;
-        if ((direction & Direction::L) && (world.surface(x - dx, y) * world.surface(x - 2 * dx, y) < 0))
+        if ((direction & Direction::L) && (eta_h(i - 1, j) * eta_h(i - 2, j) < 0))
             extra |= Direction::L;
-        if ((direction & Direction::B) && (world.surface(x, y - dy) * world.surface(x, y - 2 * dy) < 0))
+        if ((direction & Direction::B) && (eta_h(i, j - 1) * eta_h(i, j - 2) < 0))
             extra |= Direction::B;
         return extra;
     }
 
     InterCaseResult case3(size_t direction, size_t extra, int i, int j) {
         auto [x, y]     = world.grid.center(i, j);
-        double eta      = world.surface(x, y);
+        double eta      = eta_h(i, j);
         double s_eta    = (eta > 0.0) ? 1.0 : -1.0;
 
         double theta_r  = compute_theta(Direction::R, i, j);
@@ -834,10 +862,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double x_l   = x - theta_l * dx;
         double y_t   = y + theta_t * dy;
         double y_b   = y - theta_b * dy;
-        double eps_r = world.permittivity(x + theta_r * dx / 2.0, y);
-        double eps_l = world.permittivity(x - theta_l * dx / 2.0, y);
-        double eps_t = world.permittivity(x, y + theta_t * dy / 2.0);
-        double eps_b = world.permittivity(x, y - theta_b * dy / 2.0);
+        // half-cell faces lie in the cell's region; interpolate that region's
+        // permittivity to the half-cell faces (theta/2 along each direction)
+        auto& eps_field = (eta > 0.0) ? eps_p_h : eps_m_h;
+        double eps_r    = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l    = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t    = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b    = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         size_t dir[3];
         double theta_arr[2], theta_extra[2];
@@ -1005,30 +1036,31 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             dr[d]   = is_x[d] ? dx : dy;
         }
 
-        // eps_p/m for 3 interfaces
+        // eps_p/m for 3 interfaces: interpolate the region permittivity fields to
+        // each interface, then map to the far/near convention via interface_eps
         double eps_p[3], eps_m[3];
         for (int d = 0; d < 2; ++d) {
-            if (is_x[d]) {
-                eps_p[d] = world.permittivity(x + s[d] * (theta_arr[d] + 0.01) * dx, y);
-                eps_m[d] = world.permittivity(x + s[d] * (theta_arr[d] - 0.01) * dx, y);
-            } else {
-                eps_p[d] = world.permittivity(x, y + s[d] * (theta_arr[d] + 0.01) * dy);
-                eps_m[d] = world.permittivity(x, y + s[d] * (theta_arr[d] - 0.01) * dy);
-            }
+            double eps_p_I = interp(dir[d], theta_arr[d], i, j, eps_p_h);
+            double eps_m_I = interp(dir[d], theta_arr[d], i, j, eps_m_h);
+            interface_eps(eta, eps_p_I, eps_m_I, eps_p[d], eps_m[d]);
         }
-        // Extra interface: at the shifted cell center
-        if (extra == Direction::R) {
-            eps_p[2] = world.permittivity(x + 2 * dx + s[2] * (theta_extra[1] + 0.01) * dx, y);
-            eps_m[2] = world.permittivity(x + 2 * dx + s[2] * (theta_extra[1] - 0.01) * dx, y);
-        } else if (extra == Direction::T) {
-            eps_p[2] = world.permittivity(x, y + 2 * dy + s[2] * (theta_extra[1] + 0.01) * dy);
-            eps_m[2] = world.permittivity(x, y + 2 * dy + s[2] * (theta_extra[1] - 0.01) * dy);
-        } else if (extra == Direction::L) {
-            eps_p[2] = world.permittivity(x - 2 * dx + s[2] * (theta_extra[1] + 0.01) * dx, y);
-            eps_m[2] = world.permittivity(x - 2 * dx + s[2] * (theta_extra[1] - 0.01) * dx, y);
-        } else { // B
-            eps_p[2] = world.permittivity(x, y - 2 * dy + s[2] * (theta_extra[1] + 0.01) * dy);
-            eps_m[2] = world.permittivity(x, y - 2 * dy + s[2] * (theta_extra[1] - 0.01) * dy);
+        // Extra interface: interpolated at the shifted cell (same stencil as n1_I[2])
+        {
+            double eps_p_I, eps_m_I;
+            if (extra == Direction::R) {
+                eps_p_I = interp(Direction::L, theta_extra[1], i + 2, j, eps_p_h);
+                eps_m_I = interp(Direction::L, theta_extra[1], i + 2, j, eps_m_h);
+            } else if (extra == Direction::T) {
+                eps_p_I = interp(Direction::B, theta_extra[1], i, j + 2, eps_p_h);
+                eps_m_I = interp(Direction::B, theta_extra[1], i, j + 2, eps_m_h);
+            } else if (extra == Direction::L) {
+                eps_p_I = interp(Direction::R, theta_extra[1], i - 2, j, eps_p_h);
+                eps_m_I = interp(Direction::R, theta_extra[1], i - 2, j, eps_m_h);
+            } else { // B
+                eps_p_I = interp(Direction::T, theta_extra[1], i, j - 2, eps_p_h);
+                eps_m_I = interp(Direction::T, theta_extra[1], i, j - 2, eps_m_h);
+            }
+            interface_eps(eta, eps_p_I, eps_m_I, eps_p[2], eps_m[2]);
         }
         double eps_jump[3];
         for (int d = 0; d < 3; ++d)
@@ -1249,7 +1281,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // -----------------------------------------------------------------------
     InterCaseResult case4(size_t direction, int i, int j) {
         auto [x, y]    = world.grid.center(i, j);
-        double eta     = world.surface(x, y);
+        double eta     = eta_h(i, j);
         double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
 
         double theta_r = compute_theta(Direction::R, i, j);
@@ -1263,10 +1295,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double y_b     = y - theta_b * dy;
         double bot_x   = (theta_r + theta_l) / 2.0 * dx * dx;
         double bot_y   = (theta_t + theta_b) / 2.0 * dy * dy;
-        double eps_r   = world.permittivity(x + theta_r * dx / 2.0, y);
-        double eps_l   = world.permittivity(x - theta_l * dx / 2.0, y);
-        double eps_t   = world.permittivity(x, y + theta_t * dy / 2.0);
-        double eps_b   = world.permittivity(x, y - theta_b * dy / 2.0);
+        // half-cell faces lie in the cell's region; interpolate that region's
+        // permittivity to the half-cell faces (theta/2 along each direction)
+        auto& eps_field = (eta > 0.0) ? eps_p_h : eps_m_h;
+        double eps_r    = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l    = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t    = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b    = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         size_t dir[3];
         double theta_arr[3], eps_arr[3];
@@ -1368,13 +1403,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
         double eps_p[3], eps_m[3];
         for (int d = 0; d < 3; ++d) {
-            if (is_x[d]) {
-                eps_p[d] = world.permittivity(x + s[d] * (theta_arr[d] + 0.01) * dx, y);
-                eps_m[d] = world.permittivity(x + s[d] * (theta_arr[d] - 0.01) * dx, y);
-            } else {
-                eps_p[d] = world.permittivity(x, y + s[d] * (theta_arr[d] + 0.01) * dy);
-                eps_m[d] = world.permittivity(x, y + s[d] * (theta_arr[d] - 0.01) * dy);
-            }
+            double eps_p_I = interp(dir[d], theta_arr[d], i, j, eps_p_h);
+            double eps_m_I = interp(dir[d], theta_arr[d], i, j, eps_m_h);
+            interface_eps(eta, eps_p_I, eps_m_I, eps_p[d], eps_m[d]);
         }
         double eps_jump[3];
         for (int d = 0; d < 3; ++d)
@@ -1639,29 +1670,25 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         Kokkos::deep_copy(rhs_h, 0.0);
         Kokkos::deep_copy(n1, 0.0);
         Kokkos::deep_copy(n2, 0.0);
-        // FIXME: result incorrect, possibly the layout is not right
-        // auto normal = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.normal);
-        // Kokkos::deep_copy(n1, Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0));
-        // Kokkos::deep_copy(n2, Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1));
+        Kokkos::deep_copy(eta_h, world.eta);
+        Kokkos::deep_copy(eps_p_h, world.eps_p);
+        Kokkos::deep_copy(eps_m_h, world.eps_m);
+        world.poisson_jump_conditions();
+        Kokkos::deep_copy(a, world.jump_a);
+        Kokkos::deep_copy(b, world.jump_b);
 
         using Kokkos::pow;
         using Kokkos::sqrt;
         int ngc = world.grid.ngc;
 
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
-                auto [x, y] = world.grid.center(i, j);
-                a(i, j)     = world.poisson_jump_condition_a(x, y);
-                b(i, j)     = world.poisson_jump_condition_b(x, y);
-                if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc)
-                    continue;
-                double dx_eta = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
-                                 8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
-                                (12 * dx);
-                double dy_eta = (-world.surface(x, y + 2 * dy) + 8 * world.surface(x, y + dy) -
-                                 8 * world.surface(x, y - dy) + world.surface(x, y - 2 * dy)) /
-                                (12 * dy);
-                double norm   = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
+        // normal field from the level set field `eta`
+        for (int i = ngc; i < nx - ngc; ++i) {
+            for (int j = ngc; j < ny - ngc; ++j) {
+                double dx_eta =
+                    (-eta_h(i + 2, j) + 8 * eta_h(i + 1, j) - 8 * eta_h(i - 1, j) + eta_h(i - 2, j)) / (12 * dx);
+                double dy_eta =
+                    (-eta_h(i, j + 2) + 8 * eta_h(i, j + 1) - 8 * eta_h(i, j - 1) + eta_h(i, j - 2)) / (12 * dy);
+                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
                 if (isclose(norm, 0.0)) {
                     n1(i, j) = 0.0;
                     n2(i, j) = 0.0;
@@ -1748,12 +1775,11 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                         Kokkos::abort("Terminated");
                     }
                 } else {
-                    auto [x, y]      = world.grid.center(i, j);
-                    double eta       = world.surface(x, y);
-                    double eta_l     = world.surface(x - dx, y);
-                    double eta_r     = world.surface(x + dx, y);
-                    double eta_b     = world.surface(x, y - dy);
-                    double eta_t     = world.surface(x, y + dy);
+                    double eta       = eta_h(i, j);
+                    double eta_l     = eta_h(i - 1, j);
+                    double eta_r     = eta_h(i + 1, j);
+                    double eta_b     = eta_h(i, j - 1);
+                    double eta_t     = eta_h(i, j + 1);
 
                     size_t direction = 0;
                     if (eta * eta_l < 0)
@@ -1873,21 +1899,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         Kokkos::deep_copy(rhs, rhs_h);
     }
 
-    /**
-     * Scan the mesh and record the number of cut cells.
-     */
-    // void scan_mesh() {
-    //     n_cut_cells = 0;
-    //     Kokkos::parallel_reduce(
-    //         Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
-    //         KOKKOS_LAMBDA(const int i, const int j, int& local_count) {
-    //             auto [x, y] = world.grid.center(i, j);
-    //             world.surface(x, y)
-    //             if () < 1e-12)
-    //                 local_count += 1;
-    //         },
-    //         n_cut_cells);
-    // }
 
     void solve() {
         world.potential_boundary_conditions();
@@ -1942,12 +1953,11 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
         for (int i = ngc; i < nx - ngc; ++i) {
             for (int j = ngc; j < ny - ngc; ++j) {
-                auto [x, y]      = world.grid.center(i, j);
-                double eta       = world.surface(x, y);
-                double eta_l     = world.surface(x - dx, y);
-                double eta_r     = world.surface(x + dx, y);
-                double eta_b     = world.surface(x, y - dy);
-                double eta_t     = world.surface(x, y + dy);
+                double eta       = eta_h(i, j);
+                double eta_l     = eta_h(i - 1, j);
+                double eta_r     = eta_h(i + 1, j);
+                double eta_b     = eta_h(i, j - 1);
+                double eta_t     = eta_h(i, j + 1);
 
                 size_t direction = 0;
                 if (eta * eta_l < 0)

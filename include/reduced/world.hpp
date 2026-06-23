@@ -20,6 +20,11 @@ struct World {
     Kokkos::View<double**> phi;        // potential field (assuming Boltzmann distribution for electron)
     Kokkos::View<double***> E;         // Ex(x,y), Ey(x,y) electric field
     Kokkos::View<double***> normal;    // n1(x,y), n2(x,y) unit normal vector
+    Kokkos::View<double**> eta;        // level set field
+    Kokkos::View<double**> eps_p;      // permittivity (eta > 0), need to fill the entire region for interpolation
+    Kokkos::View<double**> eps_m;      // permittivity (eta < 0), need to fill the entire region for interpolation
+    Kokkos::View<double**> jump_a;      // poisson jump condition a
+    Kokkos::View<double**> jump_b;      // poisson jump condition b
     Kokkos::View<PoissonBCPair**> poisson_bc_map;
 
     // simulation time control
@@ -43,6 +48,11 @@ struct World {
         phi                     = Kokkos::View<double**>("phi", nx, ny);
         E                       = Kokkos::View<double***>("E", nx, ny, 2);
         normal                  = Kokkos::View<double***>("norm_vec", nx, ny, 2);
+        eta                     = Kokkos::View<double**>("eta", nx, ny);
+        eps_p                   = Kokkos::View<double**>("eps_p", nx, ny);
+        eps_m                   = Kokkos::View<double**>("eps_m", nx, ny);
+        jump_a                  = Kokkos::View<double**>("jump_a", nx, ny);
+        jump_b                  = Kokkos::View<double**>("jump_b", nx, ny);
         poisson_bc_map          = Kokkos::View<PoissonBCPair**>("poisson_bc_map", nx, ny);
         Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_1st, 0.0);
@@ -51,6 +61,11 @@ struct World {
         Kokkos::deep_copy(phi, 0.0);
         Kokkos::deep_copy(E, 0.0);
         Kokkos::deep_copy(normal, 0.0);
+        Kokkos::deep_copy(eta, 0.0);
+        Kokkos::deep_copy(eps_p, 0.0);
+        Kokkos::deep_copy(eps_m, 0.0);
+        Kokkos::deep_copy(jump_a, 0.0);
+        Kokkos::deep_copy(jump_b, 0.0);
 
         construct_normal_field();
     }
@@ -61,27 +76,22 @@ struct World {
     }
 
     void construct_normal_field() {
-        auto& grid = this->grid;
-        auto& normal = this->normal;
+        auto& grid              = this->grid;
+        auto& normal            = this->normal;
+        auto& eta               = this->eta;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         auto [dx, dy, dvx, dvy] = grid.spacing(0);
         int ngc                 = grid.ngc;
-        // pre-compute normal field
+        // pre-compute normal field from the surface field `eta`
         using Kokkos::abs;
         using Kokkos::pow;
         using Kokkos::sqrt;
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y]   = grid.center(i, j);
-
-                double dx_eta = (-surface(x + 2 * dx, y) + 8 * surface(x + dx, y) - 8 * surface(x - dx, y) +
-                                 surface(x - 2 * dx, y)) /
-                                (12 * dx);
-                double dy_eta = (-surface(x, y + 2 * dy) + 8 * surface(x, y + dy) - 8 * surface(x, y - dy) +
-                                 surface(x, y - 2 * dy)) /
-                                (12 * dy);
-                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
+                double dx_eta = (-eta(i + 2, j) + 8 * eta(i + 1, j) - 8 * eta(i - 1, j) + eta(i - 2, j)) / (12 * dx);
+                double dy_eta = (-eta(i, j + 2) + 8 * eta(i, j + 1) - 8 * eta(i, j - 1) + eta(i, j - 2)) / (12 * dy);
+                double norm   = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
 
                 // normal field
                 if (isclose(norm, 0.0)) {
@@ -95,37 +105,31 @@ struct World {
     }
 
     /**
-     * Expression of the immersed boundary.
-     * S(x) = 0 is the surface of the immersed boundary.
-     * S(x) < 0 is the exterior of the computational domain (interior of the immersed object).
-     * S(x) > 0 is the interior of the computational domain (exterior of the immersed object).
-     *
-     * @param x The x coordinate at which to evaluate the surface function.
-     * @param y The y coordinate at which to evaluate the surface function.
-     * @return The value of the surface function at (x,y).
+     * Fill the surface field `eta`.
+     * eta(i,j) = S(x,y), the signed value of the immersed boundary expression.
+     * S = 0 is the surface of the immersed boundary.
+     * S < 0 is the exterior of the computational domain (interior of the immersed object).
+     * S > 0 is the interior of the computational domain (exterior of the immersed object).
+     * Must be filled over the full domain (including ghost cells).
+     * This function will be called by the derived World constructor.
      */
-    KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const { return static_cast<const WorldType*>(this)->surface(x, y); }
+    void construct_surface() { static_cast<WorldType*>(this)->construct_surface(); }
 
     /**
-     * Permittivity as function of spatial coordinate
-     *
-     * @param x The x coordinate at which to evaluate the permittivity.
-     * @param y The y coordinate at which to evaluate the permittivity.
-     * @return The permittivity at (x,y).
+     * Fill the permittivity field `eps` as a function of spatial coordinate.
+     * Must be filled over the full domain (including ghost cells).
+     * This function will be called by the derived World constructor.
      */
-    KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) const { return static_cast<const WorldType*>(this)->permittivity(x, y); }
+    void construct_permittivity() { static_cast<WorldType*>(this)->construct_permittivity(); }
 
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_a(double x, double y) const {
-        return static_cast<const WorldType*>(this)->poisson_jump_condition_a(x, y);
-    };
-
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_b(double x, double y) const {
-        return static_cast<const WorldType*>(this)->poisson_jump_condition_b(x, y);
-    };
+    /**
+     * Fill the Poisson jump condition fields `jump_a` ([phi]_Gamma) and
+     * `jump_b` ([d(phi)/dn]_Gamma) over the full domain.
+     * Because this is a host method filling fields, it has full access to all
+     * World/derived state, so time-dependent jump conditions are straightforward.
+     * This function will be called by the Poisson solver before each solve.
+     */
+    void poisson_jump_conditions() { static_cast<WorldType*>(this)->poisson_jump_conditions(); }
 
     /**
      * Boundary conditions for the particle distribution function.
@@ -140,24 +144,8 @@ struct World {
     void particle_boundary_conditions() { static_cast<WorldType*>(this)->particle_boundary_conditions(); };
 
     /**
-     * Compute the Poisson jump conditions.
-     * This function will be called before Poisson solver
-     */
-    void poisson_jump_conditions() { static_cast<WorldType*>(this)->poisson_jump_conditions(); };
-
-    /**
      * Apply boundary conditions to the potential field.
      * This function will be called by Poisson solver
      */
     void potential_boundary_conditions() { static_cast<WorldType*>(this)->potential_boundary_conditions(); };
-
-    /**
-     * Apply boundary conditions to the potential field.
-     * This function will be called by Poisson solver, used in multigrid method
-     *
-     * @param u: Potential field.
-     */
-    void potential_boundary_conditions(Kokkos::View<double**>& u) {
-        static_cast<WorldType*>(this)->potential_boundary_conditions(u);
-    };
 };

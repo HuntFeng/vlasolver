@@ -10,8 +10,13 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+        : World<ImmersedWorld>(grid) {
+        construct_surface();
+        construct_permittivity();
+        construct_normal_field();
+    }
 
+    // analytic level set, used to fill the `eta` field and by the Vlasov solver
     KOKKOS_INLINE_FUNCTION
     double surface(double x, double y) const {
         using Kokkos::atan2;
@@ -23,6 +28,37 @@ struct ImmersedWorld : World<ImmersedWorld> {
         double rr  = sqrt(pow(x - x0, 2) + pow(y - y0, 2));
         double ang = atan2(y - y0, x - x0);
         return rr - (0.15 + 0.04 * sin(4 * ang));
+    }
+
+    // fill the level set field `eta` over the full domain
+    void construct_surface() {
+        auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y] = grid.center(i, j);
+                eta(i, j)   = surface(x, y);
+            });
+    }
+
+    // fill the region permittivity fields over the full domain
+    void construct_permittivity() {
+        auto& grid              = this->grid;
+        auto& eps_p             = this->eps_p;
+        auto& eps_m             = this->eps_m;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                eps_p(i, j) = 1.0;    // permittivity in the eta>0 region
+                eps_m(i, j) = 1000.0; // permittivity in the eta<0 region
+            });
+    }
+
+    // fill the Poisson jump condition fields (no jumps for this case)
+    void poisson_jump_conditions() {
+        Kokkos::deep_copy(jump_a, 0.0);
+        Kokkos::deep_copy(jump_b, 0.0);
     }
 
     void initialize_distribution(){
@@ -52,21 +88,14 @@ struct ImmersedWorld : World<ImmersedWorld> {
     };
 
     void potential_boundary_conditions() {
-        double phi_w = -10.0 / 0.3;
-        int ngc      = grid.ngc;
-        int nx       = grid.ncells[0];
-        int ny       = grid.ncells[1];
-        double dx    = grid.spacing(0, 0)[0];
-        double dy    = grid.spacing(0, 0)[1];
+        double phi_w            = -10.0 / 0.3;
+        int ngc                 = grid.ngc;
+        int nx                  = grid.ncells[0];
+        int ny                  = grid.ncells[1];
+        auto& eta               = this->eta;
+        auto& poisson_bc_map    = this->poisson_bc_map;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y]  = grid.center(i, j);
-                double eta   = surface(x, y);
-                double eta_l = surface(x - dx, y);
-                double eta_r = surface(x + dx, y);
-                double eta_b = surface(x, y - dy);
-                double eta_t = surface(x, y + dy);
-
                 if (i < ngc)
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
                 else if (i >= nx - ngc)
@@ -75,20 +104,12 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
                 else if (j >= ny - ngc)
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0);
-                else if (eta <= 0) {
+                else if (eta(i, j) <= 0) {
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_w);
                 } else
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
             });
     }
-
-    KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) const { return surface(x, y) <= 0.0 ? 1000.0 : 1.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_a(double x, double y) const { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION double poisson_jump_condition_b(double x, double y) const { return 0.0; }
 };
 
 int main(int argc, char* argv[]) {

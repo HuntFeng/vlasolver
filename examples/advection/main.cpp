@@ -8,12 +8,21 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+        : World<ImmersedWorld>(grid) {
+        construct_surface();      // fill eta
+        construct_normal_field(); // base method, reads eta
+    }
 
-    KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const {
-        // return 1.0;
-        return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+    // fill the level set field `eta` over the full domain (including ghost cells)
+    void construct_surface() {
+        auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y] = grid.center(i, j);
+                eta(i, j)   = Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+            });
     }
 
     void initialize_distribution() {
@@ -34,7 +43,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
-                if (surface(x, y) <= 0.0)
+                if (eta(i, j) <= 0.0)
                     return;
                 double f0 = Kokkos::exp(-Kokkos::pow((x - x0) / sigma_x, 2)) / (dvx * dvy);
                 if (iv == ivx_peak && jv == ivy_peak) {

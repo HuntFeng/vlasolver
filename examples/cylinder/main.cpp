@@ -10,11 +10,41 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+        : World<ImmersedWorld>(grid) {
+        construct_surface();      // fill eta
+        construct_permittivity(); // fill eps_p / eps_m
+        construct_normal_field(); // base method, reads eta
+    }
 
-    KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const {
-        return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+    // fill the level set field `eta` over the full domain (including ghost cells)
+    void construct_surface() {
+        auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y] = grid.center(i, j);
+                eta(i, j)   = Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+            });
+    }
+
+    // fill the region permittivity fields over the full domain
+    void construct_permittivity() {
+        auto& grid              = this->grid;
+        auto& eps_p             = this->eps_p;
+        auto& eps_m             = this->eps_m;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                eps_p(i, j) = 1.0;    // permittivity in the eta>0 region
+                eps_m(i, j) = 1000.0; // permittivity in the eta<0 region
+            });
+    }
+
+    // fill the Poisson jump condition fields (no jumps for this case)
+    void poisson_jump_conditions() {
+        Kokkos::deep_copy(jump_a, 0.0);
+        Kokkos::deep_copy(jump_b, 0.0);
     }
 
     void initialize_distribution() {
@@ -43,45 +73,28 @@ struct ImmersedWorld : World<ImmersedWorld> {
             });
     };
 
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_a(double x, double y) const { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_b(double x, double y) const { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) const { return surface(x, y) < 0.0 ? 1000.0 : 1.0; }
-
     void potential_boundary_conditions() {
-        using Kokkos::abs;
-        auto& grid    = this->grid;
-        int ngc       = grid.ngc;
-        int nx        = phi.extent(0);
-        int ny        = phi.extent(1);
-        auto [dx, dy] = grid.spacing(0, 0);
-        double phi_w  = -20.0 / (2 * 0.15); // cylinder potential normalized to ion quantities
+        double phi_w            = -20.0 / (2 * 0.15); // cylinder potential normalized to ion quantities
+        int ngc                 = grid.ngc;
+        int nx                  = grid.ncells[0];
+        int ny                  = grid.ncells[1];
+        auto& eta               = this->eta;
+        auto& poisson_bc_map    = this->poisson_bc_map;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                double x   = (i - ngc + 0.5) * dx;
-                double y   = (j - ngc + 0.5) * dy;
-                double eta = surface(x, y);
-                if (eta < 0.0) {
-                    phi(i, j) = phi_w; // inside the immersed object, set potential to a constant value
-                }
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                if (i < ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0); // left
+                else if (i >= nx - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // right
+                else if (j < ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // bottom
+                else if (j >= ny - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // top
+                else if (eta(i, j) <= 0.0)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_w); // immersed object
+                else
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
             });
-
-        for (int k = 0; k < ngc; ++k) {
-            // left boundary, dirichlet
-            Kokkos::deep_copy(Kokkos::subview(phi, k, Kokkos::ALL), 0.0);
-            // right boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(phi, nx - k - 1, Kokkos::ALL),
-                              Kokkos::subview(phi, nx - 2 * ngc + k, Kokkos::ALL));
-            // bottom boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, k), Kokkos::subview(phi, Kokkos::ALL, 2 * ngc - k - 1));
-            // top boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, ny - k - 1),
-                              Kokkos::subview(phi, Kokkos::ALL, ny - 2 * ngc + k));
-        }
     }
 };
 

@@ -18,24 +18,51 @@ struct ImmersedWorld : World<ImmersedWorld> {
     // Kokkos::View<double*> E_w = Kokkos::View<double*>("E_w", grid.ncells[0]); // wall electric field
 
     ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+        : World<ImmersedWorld>(grid) {
+        construct_surface();      // fill eta
+        construct_permittivity(); // fill eps
+        construct_normal_field(); // base method, reads eta
+    }
 
-    KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const {
+    // Fill the surface field eta(i,j) = S(x,y) over the full domain (including ghost cells).
+    void construct_surface() {
         using Kokkos::abs;
         using Kokkos::pow;
-        using Kokkos::sqrt;
-        double Lx = 20.0;      // manually set domain width since KOKKOS_INLINE_FUNCTION can't access class member
-        double x0 = 0.13 * Lx; // x center of the first wedget
-        double xs = 0.24 * Lx; // spacing between wedget
-        double R  = 0.06 * Lx; // radius of the wedget
-        double xc = x0;        // x center of the closest wedget
-        for (int n = 0; n < 4; ++n) {
-            xc = x0 + n * xs;
-            if (abs(x - xc) <= xs / 2)
-                break;
-        }
-        return pow(x - xc, 2) + y * y - R * R;
+        auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y] = grid.center(i, j);
+                double Lx   = 20.0;      // domain width
+                double x0   = 0.13 * Lx; // x center of the first wedget
+                double xs   = 0.24 * Lx; // spacing between wedget
+                double R    = 0.06 * Lx; // radius of the wedget
+                double xc   = x0;        // x center of the closest wedget
+                for (int n = 0; n < 4; ++n) {
+                    xc = x0 + n * xs;
+                    if (abs(x - xc) <= xs / 2)
+                        break;
+                }
+                eta(i, j) = pow(x - xc, 2) + y * y - R * R;
+            });
+    }
+
+    // Permittivity: large inside the immersed wall (eta <= 0), unity in the plasma.
+    void construct_permittivity() {
+        auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto& eps               = this->eps;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j) { eps(i, j) = (eta(i, j) <= 0.0) ? 1000.0 : 1.0; });
+    }
+
+    // No jump in the potential or its normal derivative across the interface.
+    void poisson_jump_conditions() {
+        Kokkos::deep_copy(jump_a, 0.0);
+        Kokkos::deep_copy(jump_b, 0.0);
     }
 
     void initialize_distribution() {
@@ -53,7 +80,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 auto [x, y] = grid.center(i, j);
-                if (surface(x, y) > 0.0) {
+                if (eta(i, j) > 0.0) {
                     phi(i, j) = phi_w * Kokkos::exp(-y / 2.5);
                 }
             });
@@ -66,7 +93,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
-                    if (surface(x, y) >= 0.0) {
+                    if (eta(i, j) >= 0.0) {
                         // double v_ce = sqrt(2 * (phi(i, j) - phi_w) / m[0]);
                         double v_ce = sqrt(2 * (phi(i, j) - phi(i, ngc)) / m[0]);
                         f(i, j, iv, jv, 0) =
@@ -78,7 +105,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 // ion
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
-                    if (surface(x, y) >= 0.0) {
+                    if (eta(i, j) >= 0.0) {
                         double v_ci        = -sqrt(2 * abs(phi(i, j)) / m[1]); // ion cutoff velocity
                         f(i, j, iv, jv, 1) = (vy <= v_ci)
                                                  ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
@@ -122,7 +149,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     double v_ce = sqrt(2 * (phi(i, j) - phi(i, ngc)) / m[0]);
                     if (j < ngc && vy > 0.0) {
                         f(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
-                    } else if (surface(x, y) < 0.0 && vy * n2 + vx * n1 > 0.0) {
+                    } else if (eta(i, j) < 0.0 && vy * n2 + vx * n1 > 0.0) {
                         f(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
                         double ne = (n(i, ny - ngc - 1, 0) > 0.0) ? n(i, ny - ngc - 1, 1) / n(i, ny - ngc - 1, 0) : 1.0;
@@ -140,7 +167,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     double v_ci         = -sqrt(2 * abs(phi(i, j)) / m[1]); // ion cutoff velocity
                     if (j < ngc && vy > 0.0) {
                         f(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
-                    } else if (surface(x, y) < 0.0 && vy * n2 + vx * n1 > 0.0) {
+                    } else if (eta(i, j) < 0.0 && vy * n2 + vx * n1 > 0.0) {
                         f(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
                         f(i, j, iv, jv, 1) = (vy <= v_ci)
@@ -162,55 +189,28 @@ struct ImmersedWorld : World<ImmersedWorld> {
             Kokkos::subview(f, Kokkos::make_pair(ngc, 2 * ngc), Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
     };
 
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_a(double x, double y) { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_b(double x, double y) { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) { return surface(x, y) <= 0 ? 1000.0 : 1.0; }
-
     void potential_boundary_conditions() {
-        using Kokkos::abs;
-        using Kokkos::exp;
-        using Kokkos::log;
-        using Kokkos::sqrt;
-        using Kokkos::numbers::pi;
         auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto& poisson_bc_map    = this->poisson_bc_map;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double dy               = grid.spacing(0, 0)[1]; // species does not matter here
+        double phi_w_local       = phi_w;
 
-        // top boundary, dirichlet
-        Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, Kokkos::make_pair(ny - ngc, ny)), 0.0);
-        // bottom boundary
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc - 1}, {nx - ngc, ny / 3}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                for (int sp = 0; sp < 2; ++sp) {
-                    auto [x, y] = grid.center(i, j);
-                    if (j < ngc) {
-                        // floating nv
-                        // double flux_e = exp(phi(i, ngc)) * v_th_e / sqrt(2 * pi);
-                        // double flux_i = 1 * u0; // n0 * u0 (const)
-                        // E_w(i) += (flux_i - flux_e) * dt;
-                        // phi(i, j) = phi(i, ngc + 1) + E_w(i) * 2 * dy;
-
-                        // neumann (use neumann here, it's not really a sheath edge here)
-                        phi(i, j) = phi(i, ngc + 1);
-                    }
-                    if (surface(x, y) < 0.0) {
-                        // dirichlet for rough spots
-                        phi(i, j) = phi_w;
-                    }
-                }
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                // left and right boundaries are periodic; check them before top/bottom
+                if (i < ngc || i >= nx - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Periodic);
+                else if (j >= ny - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0); // top, dirichlet
+                else if (eta(i, j) < 0.0)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_w_local); // rough spots
+                else if (j < ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // bottom, neumann
+                else
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None);
             });
-
-        // left and right boundary, periodic
-        Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::make_pair(0, ngc), Kokkos::ALL),
-                          Kokkos::subview(phi, Kokkos::make_pair(nx - 2 * ngc, nx - ngc), Kokkos::ALL));
-        Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::make_pair(nx - ngc, nx), Kokkos::ALL),
-                          Kokkos::subview(phi, Kokkos::make_pair(ngc, 2 * ngc), Kokkos::ALL));
     }
 };
 

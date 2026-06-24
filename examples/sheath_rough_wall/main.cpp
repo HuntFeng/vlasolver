@@ -48,15 +48,17 @@ struct ImmersedWorld : World<ImmersedWorld> {
             });
     }
 
-    // Permittivity: large inside the immersed wall (eta <= 0), unity in the plasma.
+    // Permittivity: large inside the immersed wall (eta < 0), unity in the plasma.
     void construct_permittivity() {
         auto& grid              = this->grid;
-        auto& eta               = this->eta;
-        auto& eps               = this->eps;
+        auto& eps_p             = this->eps_p;
+        auto& eps_m             = this->eps_m;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j) { eps(i, j) = (eta(i, j) <= 0.0) ? 1000.0 : 1.0; });
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                eps_p(i, j) = 1.0;    // permittivity in the eta>0 region (plasma)
+                eps_m(i, j) = 1000.0; // permittivity in the eta<0 region (wall)
+            });
     }
 
     // No jump in the potential or its normal derivative across the interface.

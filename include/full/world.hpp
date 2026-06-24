@@ -25,7 +25,8 @@ struct World {
     Kokkos::View<double***> E;      // Ex(x,y), Ey(x,y)
     Kokkos::View<double***> normal; // n1(x,y), n2(x,y) unit normal vector
     Kokkos::View<double**> eta;     // surface field S(x,y), filled by construct_surface()
-    Kokkos::View<double**> eps;     // permittivity field, filled by construct_permittivity()
+    Kokkos::View<double**> eps_p;   // permittivity (eta > 0), filled by construct_permittivity()
+    Kokkos::View<double**> eps_m;   // permittivity (eta < 0), filled by construct_permittivity()
     Kokkos::View<double**> jump_a;  // jump condition [phi]_Gamma, filled by poisson_jump_conditions()
     Kokkos::View<double**> jump_b;  // jump condition [d(phi)/dn]_Gamma, filled by poisson_jump_conditions()
     Kokkos::View<PoissonBCPair**> poisson_bc_map;
@@ -57,7 +58,8 @@ struct World {
         E                       = Kokkos::View<double***>("E", nx, ny, 2);
         normal                  = Kokkos::View<double***>("norm_vec", nx, ny, 2);
         eta                     = Kokkos::View<double**>("eta", nx, ny);
-        eps                     = Kokkos::View<double**>("eps", nx, ny);
+        eps_p                   = Kokkos::View<double**>("eps_p", nx, ny);
+        eps_m                   = Kokkos::View<double**>("eps_m", nx, ny);
         jump_a                  = Kokkos::View<double**>("jump_a", nx, ny);
         jump_b                  = Kokkos::View<double**>("jump_b", nx, ny);
         poisson_bc_map          = Kokkos::View<PoissonBCPair**>("poisson_bc_map", nx, ny);
@@ -74,7 +76,8 @@ struct World {
         Kokkos::deep_copy(E, 0.0);
         Kokkos::deep_copy(normal, 0.0);
         Kokkos::deep_copy(eta, 0.0);
-        Kokkos::deep_copy(eps, 1.0);
+        Kokkos::deep_copy(eps_p, 1.0);
+        Kokkos::deep_copy(eps_m, 1.0);
         Kokkos::deep_copy(jump_a, 0.0);
         Kokkos::deep_copy(jump_b, 0.0);
 

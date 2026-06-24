@@ -24,6 +24,7 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
     World& world;
     double tol;
     Kokkos::View<double**> phi_old;
+    Kokkos::View<double**> eps; // physical permittivity at each cell, built from eps_p/eps_m
     double omega;
     int max_iter; // max iterations for the solver
 
@@ -43,6 +44,25 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         int nx  = world.grid.ncells[0];
         int ny  = world.grid.ncells[1];
         phi_old = Kokkos::View<double**>("phi_old", nx, ny);
+        eps     = Kokkos::View<double**>("eps", nx, ny);
+        construct_permittivity(); // build eps from world.eps_p / world.eps_m
+    }
+
+    /**
+     * Build the physical permittivity field from the region permittivity fields
+     * `eps_p` (eta > 0) and `eps_m` (eta < 0). At each cell the value is the
+     * permittivity of the region that cell belongs to.
+     */
+    void construct_permittivity() {
+        auto eps_local          = eps;
+        auto& eps_p             = world.eps_p;
+        auto& eps_m             = world.eps_m;
+        auto& eta               = world.eta;
+        auto [nx, ny, nvx, nvy] = world.grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                eps_local(i, j) = (eta(i, j) > 0.0) ? eps_p(i, j) : eps_m(i, j);
+            });
     }
 
     /**
@@ -186,7 +206,7 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         auto& normal    = world.normal;
         auto& grid      = world.grid;
         auto& eta_field = world.eta;
-        auto& eps       = world.eps;
+        auto& eps       = this->eps;
         auto& b         = world.jump_b;
         double dx       = grid.spacing(0, 0)[0];
         double dy       = grid.spacing(0, 0)[1];
@@ -343,9 +363,9 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
     void solve() {
         // Fill the jump condition fields for this solve. This is a host method on World,
         // so it can use any (possibly time-dependent) World state. The permittivity field
-        // `world.eps` is filled once at World construction.
+        // `eps` is built once from world.eps_p / world.eps_m at solver construction.
         world.poisson_jump_conditions();
-        auto& eps = world.eps;
+        auto& eps = this->eps;
         auto& a   = world.jump_a;
         auto& b   = world.jump_b;
         auto& rho = world.rho;

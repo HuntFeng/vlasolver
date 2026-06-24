@@ -40,10 +40,14 @@ struct ImmersedWorld : World<ImmersedWorld> {
     }
 
     void construct_permittivity() {
+        auto& eps_p             = this->eps_p;
+        auto& eps_m             = this->eps_m;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j) { eps(i, j) = (eta(i, j) <= 0.0) ? 4.0 : 1.0; });
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                eps_p(i, j) = 1.0; // permittivity in the eta>0 region
+                eps_m(i, j) = 4.0; // permittivity in the eta<0 region
+            });
     }
 
     void initialize_distribution() {

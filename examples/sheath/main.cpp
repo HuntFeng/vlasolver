@@ -37,11 +37,14 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     // Uniform permittivity.
     void construct_permittivity() {
-        auto eps_local          = this->eps;
+        auto eps_p_local        = this->eps_p;
+        auto eps_m_local        = this->eps_m;
         auto [nx, ny, nvx, nvy] = this->grid.ncells;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
-            KOKKOS_LAMBDA(const int i, const int j) { eps_local(i, j) = 1.0; });
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
+                eps_p_local(i, j) = 1.0;
+                eps_m_local(i, j) = 1.0;
+            });
     }
 
     void initialize_distribution() {

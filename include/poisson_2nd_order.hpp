@@ -6,6 +6,7 @@
  *
  **/
 #pragma once
+#include "grid.hpp"
 #include "matrix/solve.hpp"
 #include "poisson.hpp"
 #include <KokkosKernels_Handle.hpp>
@@ -139,10 +140,10 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             Kokkos::abort("PoissonSolver2ndOrder requires grid.ngc >= 3");
 
         // prepare fields (all device-resident)
-        u   = Kokkos::View<double*>("u", nx * ny);
-        rhs = Kokkos::View<double*>("rhs", nx * ny);
+        u          = Kokkos::View<double*>("u", nx * ny);
+        rhs        = Kokkos::View<double*>("rhs", nx * ny);
 
-        a_tau = Kokkos::View<double**>("a_tau", nx, ny);
+        a_tau      = Kokkos::View<double**>("a_tau", nx, ny);
 
         rows_coo   = Kokkos::View<int*>("rows_coo", nx * ny * MAXNNZ);
         cols_coo   = Kokkos::View<int*>("cols_coo", nx * ny * MAXNNZ);
@@ -167,9 +168,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
     // Population count over the 4-bit Direction bitmask (std::popcount is host-only).
     KOKKOS_INLINE_FUNCTION
-    int kk_popcount4(size_t d) const {
-        return (int)((d & 1) + ((d >> 1) & 1) + ((d >> 2) & 1) + ((d >> 3) & 1));
-    }
+    int kk_popcount4(size_t d) const { return (int)((d & 1) + ((d >> 1) & 1) + ((d >> 2) & 1) + ((d >> 3) & 1)); }
 
     KOKKOS_INLINE_FUNCTION
     bool isclose(double val1, double val2, double rtol = 1e-12, double atol = 1e-12) const {
@@ -335,12 +334,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     KOKKOS_INLINE_FUNCTION
-    void compute_grad_coeff(double x_I,
-                            double y_I,
-                            double n1_I,
-                            double n2_I,
-                            const double P_inv[6][6],
-                            double grad_coeff_out[6]) const {
+    void compute_grad_coeff(
+        double x_I, double y_I, double n1_I, double n2_I, const double P_inv[6][6], double grad_coeff_out[6]) const {
         double grad_tau[6] = {
             -2.0 * x_I * n2_I, x_I * n1_I - y_I * n2_I, 2.0 * y_I * n1_I, -n2_I, n1_I, 0.0,
         };
@@ -435,15 +430,15 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             return false;
         };
         for (int d = 0; d < n_intf; ++d) {
-            N[d][offset_<stencil_size>(1, 0)]   = is_cut(Direction::R) ? 0.0 : grad_coeff[d][0];
-            N[d][offset_<stencil_size>(-1, 0)]  = is_cut(Direction::L) ? 0.0 : grad_coeff[d][1];
-            N[d][offset_<stencil_size>(0, 1)]   = is_cut(Direction::T) ? 0.0 : grad_coeff[d][2];
-            N[d][offset_<stencil_size>(0, -1)]  = is_cut(Direction::B) ? 0.0 : grad_coeff[d][3];
-            N[d][offset_<stencil_size>(0, 0)]   = grad_coeff[d][4];
+            N[d][offset_<stencil_size>(1, 0)]                         = is_cut(Direction::R) ? 0.0 : grad_coeff[d][0];
+            N[d][offset_<stencil_size>(-1, 0)]                        = is_cut(Direction::L) ? 0.0 : grad_coeff[d][1];
+            N[d][offset_<stencil_size>(0, 1)]                         = is_cut(Direction::T) ? 0.0 : grad_coeff[d][2];
+            N[d][offset_<stencil_size>(0, -1)]                        = is_cut(Direction::B) ? 0.0 : grad_coeff[d][3];
+            N[d][offset_<stencil_size>(0, 0)]                         = grad_coeff[d][4];
             N[d][offset_<stencil_size>(offset_ext[0], offset_ext[1])] = grad_coeff[d][5];
 
-            int dx = dx_dir[dirs[d]];
-            int dy = dy_dir[dirs[d]];
+            int dx                                                    = dx_dir[dirs[d]];
+            int dy                                                    = dy_dir[dirs[d]];
             for (int k = 0; k < c_size; ++k)
                 N[d][offset_<stencil_size>((k - 1) * dx, (k - 1) * dy)] -= C[d][k];
         }
@@ -468,20 +463,20 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
         // no interface cuts this cell, so every face lies in the cell's region;
         // interpolate that region's permittivity to the half-cell faces
-        double eta      = eta_h(i, j);
+        double eta            = eta_h(i, j);
         const auto& eps_field = (eta > 0.0) ? eps_p_h : eps_m_h;
-        double eps_l    = interp(Direction::L, 0.5, i, j, eps_field);
-        double eps_r    = interp(Direction::R, 0.5, i, j, eps_field);
-        double eps_b    = interp(Direction::B, 0.5, i, j, eps_field);
-        double eps_t    = interp(Direction::T, 0.5, i, j, eps_field);
+        double eps_l          = interp(Direction::L, 0.5, i, j, eps_field);
+        double eps_r          = interp(Direction::R, 0.5, i, j, eps_field);
+        double eps_b          = interp(Direction::B, 0.5, i, j, eps_field);
+        double eps_t          = interp(Direction::T, 0.5, i, j, eps_field);
 
-        int row_idx = index(i, j);
-        int p       = row_idx * MAXNNZ;
-        p           = emit(p, row_idx, index(i - 1, j), eps_l / bot_x);
-        p           = emit(p, row_idx, index(i + 1, j), eps_r / bot_x);
-        p           = emit(p, row_idx, index(i, j - 1), eps_b / bot_y);
-        p           = emit(p, row_idx, index(i, j + 1), eps_t / bot_y);
-        p           = emit(p, row_idx, index(i, j), -(eps_l + eps_r) / bot_x - (eps_b + eps_t) / bot_y);
+        int row_idx           = index(i, j);
+        int p                 = row_idx * MAXNNZ;
+        p                     = emit(p, row_idx, index(i - 1, j), eps_l / bot_x);
+        p                     = emit(p, row_idx, index(i + 1, j), eps_r / bot_x);
+        p                     = emit(p, row_idx, index(i, j - 1), eps_b / bot_y);
+        p                     = emit(p, row_idx, index(i, j + 1), eps_t / bot_y);
+        p                     = emit(p, row_idx, index(i, j), -(eps_l + eps_r) / bot_x - (eps_b + eps_t) / bot_y);
     }
 
     // -----------------------------------------------------------------------
@@ -489,7 +484,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // -----------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION
     InterCaseResult case1(size_t direction, int i, int j) const {
-        auto [x, y]    = center(i, j);
+        auto [x, y] = center(i, j);
         // 2D component views of the unit normal so interp() can index them as field(i, j)
         auto n1        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
         auto n2        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
@@ -544,10 +539,10 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         // half-cell faces lie in the cell's region; interpolate that region's
         // permittivity to the half-cell faces (theta/2 along each direction)
         const auto& eps_field = (eta > 0.0) ? eps_p_h : eps_m_h;
-        double eps_r    = interp(Direction::R, theta_r / 2, i, j, eps_field);
-        double eps_l    = interp(Direction::L, theta_l / 2, i, j, eps_field);
-        double eps_t    = interp(Direction::T, theta_t / 2, i, j, eps_field);
-        double eps_b    = interp(Direction::B, theta_b / 2, i, j, eps_field);
+        double eps_r          = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l          = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t          = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b          = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         // algebraic part
         double B_val;
@@ -651,7 +646,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // -----------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION
     InterCaseResult case2(size_t direction, int i, int j) const {
-        auto [x, y]    = center(i, j);
+        auto [x, y] = center(i, j);
         // 2D component views of the unit normal so interp() can index them as field(i, j)
         auto n1        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
         auto n2        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
@@ -672,10 +667,10 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         // half-cell faces lie in the cell's region; interpolate that region's
         // permittivity to the half-cell faces (theta/2 along each direction)
         const auto& eps_field = (eta > 0.0) ? eps_p_h : eps_m_h;
-        double eps_r    = interp(Direction::R, theta_r / 2, i, j, eps_field);
-        double eps_l    = interp(Direction::L, theta_l / 2, i, j, eps_field);
-        double eps_t    = interp(Direction::T, theta_t / 2, i, j, eps_field);
-        double eps_b    = interp(Direction::B, theta_b / 2, i, j, eps_field);
+        double eps_r          = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l          = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t          = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b          = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         size_t dir[2];
         double theta_arr[2], eps_arr[2];
@@ -881,7 +876,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
     KOKKOS_INLINE_FUNCTION
     InterCaseResult case3(size_t direction, size_t extra, int i, int j) const {
-        auto [x, y]     = center(i, j);
+        auto [x, y] = center(i, j);
         // 2D component views of the unit normal so interp() can index them as field(i, j)
         auto n1         = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
         auto n2         = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
@@ -912,10 +907,10 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         // half-cell faces lie in the cell's region; interpolate that region's
         // permittivity to the half-cell faces (theta/2 along each direction)
         const auto& eps_field = (eta > 0.0) ? eps_p_h : eps_m_h;
-        double eps_r    = interp(Direction::R, theta_r / 2, i, j, eps_field);
-        double eps_l    = interp(Direction::L, theta_l / 2, i, j, eps_field);
-        double eps_t    = interp(Direction::T, theta_t / 2, i, j, eps_field);
-        double eps_b    = interp(Direction::B, theta_b / 2, i, j, eps_field);
+        double eps_r          = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l          = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t          = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b          = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         size_t dir[3];
         double theta_arr[2], theta_extra[2];
@@ -1329,7 +1324,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // -----------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION
     InterCaseResult case4(size_t direction, int i, int j) const {
-        auto [x, y]    = center(i, j);
+        auto [x, y] = center(i, j);
         // 2D component views of the unit normal so interp() can index them as field(i, j)
         auto n1        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
         auto n2        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
@@ -1350,10 +1345,10 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         // half-cell faces lie in the cell's region; interpolate that region's
         // permittivity to the half-cell faces (theta/2 along each direction)
         const auto& eps_field = (eta > 0.0) ? eps_p_h : eps_m_h;
-        double eps_r    = interp(Direction::R, theta_r / 2, i, j, eps_field);
-        double eps_l    = interp(Direction::L, theta_l / 2, i, j, eps_field);
-        double eps_t    = interp(Direction::T, theta_t / 2, i, j, eps_field);
-        double eps_b    = interp(Direction::B, theta_b / 2, i, j, eps_field);
+        double eps_r          = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l          = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t          = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b          = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         size_t dir[3];
         double theta_arr[3], eps_arr[3];

@@ -106,9 +106,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     Kokkos::View<double**> b = world.jump_b;
     Kokkos::View<double**> a_tau;
 
-    // normal (device)
-    Kokkos::View<double**> n1;
-    Kokkos::View<double**> n2;
+    // normal (device handle aliasing world.normal, shape (nx, ny, 2):
+    // component 0 is n1, component 1 is n2)
+    Kokkos::View<double***> normal = world.normal;
 
     // device handles aliasing world level-set and permittivity fields
     Kokkos::View<double**> eta_h   = world.eta;
@@ -142,8 +142,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         u   = Kokkos::View<double*>("u", nx * ny);
         rhs = Kokkos::View<double*>("rhs", nx * ny);
 
-        n1    = Kokkos::View<double**>("n1", nx, ny);
-        n2    = Kokkos::View<double**>("n2", nx, ny);
         a_tau = Kokkos::View<double**>("a_tau", nx, ny);
 
         rows_coo   = Kokkos::View<int*>("rows_coo", nx * ny * MAXNNZ);
@@ -492,6 +490,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     KOKKOS_INLINE_FUNCTION
     InterCaseResult case1(size_t direction, int i, int j) const {
         auto [x, y]    = center(i, j);
+        // 2D component views of the unit normal so interp() can index them as field(i, j)
+        auto n1        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
+        auto n2        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
         double eta     = eta_h(i, j);
         double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
         double theta   = compute_theta(direction, i, j);
@@ -651,6 +652,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     KOKKOS_INLINE_FUNCTION
     InterCaseResult case2(size_t direction, int i, int j) const {
         auto [x, y]    = center(i, j);
+        // 2D component views of the unit normal so interp() can index them as field(i, j)
+        auto n1        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
+        auto n2        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
         double eta     = eta_h(i, j);
         double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
 
@@ -878,6 +882,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     KOKKOS_INLINE_FUNCTION
     InterCaseResult case3(size_t direction, size_t extra, int i, int j) const {
         auto [x, y]     = center(i, j);
+        // 2D component views of the unit normal so interp() can index them as field(i, j)
+        auto n1         = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
+        auto n2         = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
         double eta      = eta_h(i, j);
         double s_eta    = (eta > 0.0) ? 1.0 : -1.0;
 
@@ -1323,6 +1330,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     KOKKOS_INLINE_FUNCTION
     InterCaseResult case4(size_t direction, int i, int j) const {
         auto [x, y]    = center(i, j);
+        // 2D component views of the unit normal so interp() can index them as field(i, j)
+        auto n1        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
+        auto n2        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
         double eta     = eta_h(i, j);
         double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
 
@@ -1686,35 +1696,14 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         world.poisson_jump_conditions(); // fills world.jump_a/jump_b (a/b alias them)
         int ngc = grid.ngc;
 
-        using Kokkos::pow;
-        using Kokkos::sqrt;
-
-        // normal field from the level set field `eta`
-        Kokkos::parallel_for(
-            "poisson2nd_normal", Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                double dx_eta =
-                    (-eta_h(i + 2, j) + 8 * eta_h(i + 1, j) - 8 * eta_h(i - 1, j) + eta_h(i - 2, j)) / (12 * dx);
-                double dy_eta =
-                    (-eta_h(i, j + 2) + 8 * eta_h(i, j + 1) - 8 * eta_h(i, j - 1) + eta_h(i, j - 2)) / (12 * dy);
-                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
-                if (isclose(norm, 0.0)) {
-                    n1(i, j) = 0.0;
-                    n2(i, j) = 0.0;
-                } else {
-                    n1(i, j) = dx_eta / norm;
-                    n2(i, j) = dy_eta / norm;
-                }
-            });
-
-        // tangential derivative of the jump condition a; a separate launch because
-        // it reads the n1/n2 written by the previous kernel
+        // tangential derivative of the jump condition a; reads the unit normal from
+        // world.normal (component 0 is n1, component 1 is n2)
         Kokkos::parallel_for(
             "poisson2nd_a_tau", Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 double dx_a = (-a(i + 2, j) + 8 * a(i + 1, j) - 8 * a(i - 1, j) + a(i - 2, j)) / (12 * dx);
                 double dy_a = (-a(i, j + 2) + 8 * a(i, j + 1) - 8 * a(i, j - 1) + a(i, j - 2)) / (12 * dy);
-                a_tau(i, j) = -dx_a * n2(i, j) + dy_a * n1(i, j);
+                a_tau(i, j) = -dx_a * normal(i, j, 1) + dy_a * normal(i, j, 0);
             });
     }
 

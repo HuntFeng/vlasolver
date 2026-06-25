@@ -26,24 +26,21 @@ struct ImmersedWorld : World<ImmersedWorld> {
     // Fill the surface field eta(i,j) = S(x,y) over the full domain (including ghost cells).
     void construct_surface() {
         auto& grid              = this->grid;
-        auto eta_local          = this->eta;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 auto [x, y]     = grid.center(i, j);
-                eta_local(i, j) = y + 1.0;
+                eta(i, j) = y + 1.0;
             });
     }
 
     // Uniform permittivity.
     void construct_permittivity() {
-        auto eps_p_local        = this->eps_p;
-        auto eps_m_local        = this->eps_m;
         auto [nx, ny, nvx, nvy] = this->grid.ncells;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
-                eps_p_local(i, j) = 1.0;
-                eps_m_local(i, j) = 1.0;
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                eps_p(i, j) = 1.0;
+                eps_m(i, j) = 1.0;
             });
     }
 
@@ -60,43 +57,34 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
         // Initialize potential with Debye-shielded profile for faster relaxation
         {
-            auto phi_local     = this->phi;
-            double phi_w_local = this->phi_w;
             Kokkos::parallel_for(
-                Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
+                Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                     auto [x, y]     = grid.center(i, j);
-                    phi_local(i, j) = phi_w_local * Kokkos::exp(-y / 2.5);
+                    phi(i, j) = phi_w * Kokkos::exp(-y / 2.5);
                 });
         }
 
-        auto f_local        = this->f;
-        auto phi_local      = this->phi;
-        auto m_local        = this->m;
-        double phi_w_local  = this->phi_w;
-        double v_th_e_local = this->v_th_e;
-        double v_th_i_local = this->v_th_i;
-        double u0_local     = this->u0;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
-            KOKKOS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
-                    double v_ce         = sqrt(2 * (phi_local(i, j) - phi_w_local) / m_local[0]);
-                    f_local(i, j, iv, jv, 0) =
+                    double v_ce         = sqrt(2 * (phi(i, j) - phi_w) / m[0]);
+                    f(i, j, iv, jv, 0) =
                         (vy <= v_ce)
-                            ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e_local, 2)) + phi_local(i, j)) /
-                                  (2.0 * pi * pow(v_th_e_local, 2))
+                            ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
+                                  (2.0 * pi * pow(v_th_e, 2))
                             : 0.0;
                 };
                 // ion
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
-                    double v_ci         = -sqrt(2 * abs(phi_local(i, j)) / m_local[1]); // ion cutoff velocity
-                    f_local(i, j, iv, jv, 1) =
-                        (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0_local, 2)) /
-                                           (2.0 * pow(v_th_i_local, 2))) /
-                                           (2.0 * pi * pow(v_th_i_local, 2))
+                    double v_ci         = -sqrt(2 * abs(phi(i, j)) / m[1]); // ion cutoff velocity
+                    f(i, j, iv, jv, 1) =
+                        (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
+                                           (2.0 * pow(v_th_i, 2))) /
+                                           (2.0 * pi * pow(v_th_i, 2))
                                      : 0.0;
                 };
             });
@@ -168,13 +156,11 @@ struct ImmersedWorld : World<ImmersedWorld> {
 
     // No jump in the potential or its normal derivative across the interface.
     void poisson_jump_conditions() {
-        auto jump_a_local       = this->jump_a;
-        auto jump_b_local       = this->jump_b;
         auto [nx, ny, nvx, nvy] = this->grid.ncells;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
-                jump_a_local(i, j) = 0.0;
-                jump_b_local(i, j) = 0.0;
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                jump_a(i, j) = 0.0;
+                jump_b(i, j) = 0.0;
             });
     }
 

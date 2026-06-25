@@ -233,11 +233,10 @@ class Vlasolver {
         using Kokkos::min;
         using Kokkos::trunc;
 
-        const double M_EPS      = 1e-16;
-
         auto& grid              = world.grid;
         auto& f                 = world.f;
         auto& E                 = world.E;
+        auto& eta_field         = world.eta;
         auto& flux              = world.flux;
         auto& flux_1st          = world.flux_1st;
         auto& ep_l              = world.ep_l;
@@ -368,16 +367,15 @@ class Vlasolver {
                 }
             });
 
-        auto [dx, dy, _dvx, _dvy] = grid.spacing(0);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
-                double eta          = world.surface(x, y);
-                double eta_l        = world.surface(x - dx, y);
-                double eta_r        = world.surface(x + dx, y);
-                double eta_b        = world.surface(x, y - dy);
-                double eta_t        = world.surface(x, y + dy);
+                double eta          = eta_field(i, j);
+                double eta_l        = eta_field(i - 1, j);
+                double eta_r        = eta_field(i + 1, j);
+                double eta_b        = eta_field(i, j - 1);
+                double eta_t        = eta_field(i, j + 1);
+
                 if (eta < 0.0)
                     return;
 
@@ -395,15 +393,11 @@ class Vlasolver {
 
                 double ep_left = 0.0, ep_right = 0.0;
                 if (axis == 0) {
-                    ep_left =
-                        (eta_l < 0.0) ? ep_l(i, j, iv, jv) : min(ep_r(i - 1, j, iv, jv), ep_l(i, j, iv, jv));
-                    ep_right =
-                        (eta_r < 0.0) ? ep_r(i, j, iv, jv) : min(ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv));
+                    ep_left  = (eta_l < 0.0) ? ep_l(i, j, iv, jv) : min(ep_r(i - 1, j, iv, jv), ep_l(i, j, iv, jv));
+                    ep_right = (eta_r < 0.0) ? ep_r(i, j, iv, jv) : min(ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv));
                 } else if (axis == 1) {
-                    ep_left =
-                        (eta_b < 0.0) ? ep_l(i, j, iv, jv) : min(ep_r(i, j - 1, iv, jv), ep_l(i, j, iv, jv));
-                    ep_right =
-                        (eta_t < 0.0) ? ep_r(i, j, iv, jv) : min(ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
+                    ep_left  = (eta_b < 0.0) ? ep_l(i, j, iv, jv) : min(ep_r(i, j - 1, iv, jv), ep_l(i, j, iv, jv));
+                    ep_right = (eta_t < 0.0) ? ep_r(i, j, iv, jv) : min(ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
                 } else if (axis == 2) {
                     ep_left  = min(ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
                     ep_right = min(ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));
@@ -412,8 +406,8 @@ class Vlasolver {
                     ep_right = min(ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
                 }
 
-                double flux_hat_l     = ep_left * (flux_left - flux_1st_left) + flux_1st_left;
-                double flux_hat_r     = ep_right * (flux_right - flux_1st_right) + flux_1st_right;
+                double flux_hat_l = ep_left * (flux_left - flux_1st_left) + flux_1st_left;
+                double flux_hat_r = ep_right * (flux_right - flux_1st_right) + flux_1st_right;
                 f(i, j, iv, jv, sp) += flux_hat_l - flux_hat_r;
 
                 // if (j == ngc || i == ngc || j == ny - ngc - 1 || i == nx - ngc - 1) {

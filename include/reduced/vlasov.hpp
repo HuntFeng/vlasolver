@@ -33,6 +33,7 @@ class Vlasolver {
 
     void extrapolate_distribution_1st_order() const {
         auto& grid              = world.grid;
+        auto& eta_field         = world.eta;
         auto& f                 = world.f;
         auto& normal            = world.normal;
         auto [nx, ny, nvx, nvy] = grid.ncells;
@@ -46,15 +47,15 @@ class Vlasolver {
                 auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
 
                 // always extrapolate dist function from the interior of the immersed object
-                double eta = world.surface(x, y);
+                double eta = eta_field(i, j);
                 if (eta >= 0.0)
                     return;
 
                 // now (x,y) is the interior of the immersed object
-                double eta_l = world.surface(x - dx, y);
-                double eta_r = world.surface(x + dx, y);
-                double eta_b = world.surface(x, y - dy);
-                double eta_t = world.surface(x, y + dy);
+                double eta_l = eta_field(i - 1, j);
+                double eta_r = eta_field(i + 1, j);
+                double eta_b = eta_field(i, j - 1);
+                double eta_t = eta_field(i, j + 1);
                 double n1    = normal(i, j, 0);
                 double n2    = normal(i, j, 1);
                 // extrapolate outflow (v.n < 0), zero-inflow(v.n >= 0)
@@ -103,6 +104,7 @@ class Vlasolver {
         using Kokkos::abs;
         using Kokkos::sqrt;
         auto& grid              = world.grid;
+        auto& eta_field         = world.eta;
         auto& f                 = world.f;
         auto& normal            = world.normal;
         auto [nx, ny, nvx, nvy] = grid.ncells;
@@ -119,15 +121,15 @@ class Vlasolver {
                 auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
 
                 // always extrapolate dist function from the interior of the immersed object
-                double eta = world.surface(x, y);
+                double eta = eta_field(i, j);
                 if (eta >= 0.0)
                     return;
 
                 // now (x,y) is the interior of the immersed object
-                double eta_l   = world.surface(x - dx, y);
-                double eta_r   = world.surface(x + dx, y);
-                double eta_b   = world.surface(x, y - dy);
-                double eta_t   = world.surface(x, y + dy);
+                double eta_l   = eta_field(i - 1, j);
+                double eta_r   = eta_field(i + 1, j);
+                double eta_b   = eta_field(i, j - 1);
+                double eta_t   = eta_field(i, j + 1);
                 double n1      = normal(i, j, 0);
                 double n2      = normal(i, j, 1);
                 double v_dot_n = vx * n1 + vy * n2;
@@ -216,6 +218,7 @@ class Vlasolver {
         using Kokkos::abs;
         using Kokkos::sqrt;
         auto& grid              = world.grid;
+        auto& eta_field         = world.eta;
         auto& f                 = world.f;
         auto& normal            = world.normal;
         auto [nx, ny, nvx, nvy] = grid.ncells;
@@ -230,15 +233,15 @@ class Vlasolver {
                 auto [x0, y0, vx, vy] = grid.center(i, j, iv, jv);
 
                 // always extrapolate dist function from the interior of the immersed object
-                double eta = world.surface(x0, y0);
+                double eta = eta_field(i, j);
                 if (eta >= 0.0)
                     return;
 
-                // now (x0,y0) is the interior of the immersed object
-                double eta_l   = world.surface(x0 - dx, y0);
-                double eta_r   = world.surface(x0 + dx, y0);
-                double eta_b   = world.surface(x0, y0 - dy);
-                double eta_t   = world.surface(x0, y0 + dy);
+                // now (x,y) is the interior of the immersed object
+                double eta_l   = eta_field(i - 1, j);
+                double eta_r   = eta_field(i + 1, j);
+                double eta_b   = eta_field(i, j - 1);
+                double eta_t   = eta_field(i, j + 1);
                 double n1      = normal(i, j, 0);
                 double n2      = normal(i, j, 1);
                 double v_dot_n = vx * n1 + vy * n2;
@@ -259,7 +262,7 @@ class Vlasolver {
                             int J               = j + y_offset;
                             auto [x, y, vx, vy] = grid.center(I, J, iv, jv);
                             // skip ghost cells
-                            if (I < ngc || I > nx - ngc - 1 || J < ngc || J > ny - ngc - 1 || world.surface(x, y) < 0)
+                            if (I < ngc || I > nx - ngc - 1 || J < ngc || J > ny - ngc - 1 || eta_field(I, J) < 0)
                                 continue;
 
                             // only extrapolate using fluid cells
@@ -304,6 +307,7 @@ class Vlasolver {
     }
 
     void compute_charge_density() const {
+        auto& eta_field         = world.field;
         auto& phi               = world.phi;
         auto& rho               = world.rho;
         auto& f                 = world.f;
@@ -317,8 +321,7 @@ class Vlasolver {
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                auto [x, y] = grid.center(i, j);
-                if (world.surface(x, y) < 0.0)
+                if (eta_field(i, j) < 0.0)
                     return;
 
                 double number_density = 0.0;
@@ -327,7 +330,7 @@ class Vlasolver {
                         number_density += f(i, j, iv, jv) * dvx * dvy;
                 // only count ion density
                 // electron follow Boltzmann distribution
-                n(i, j) = number_density;
+                n(i, j)   = number_density;
                 rho(i, j) = number_density - Kokkos::exp(phi(i, j));
             });
     }
@@ -342,6 +345,7 @@ class Vlasolver {
         const double M_EPS      = 1e-16;
 
         auto& grid              = world.grid;
+        auto& eta_field         = world.eta;
         auto& f                 = world.f;
         auto& E                 = world.E;
         auto& flux              = world.flux;
@@ -471,9 +475,8 @@ class Vlasolver {
                     }
                 }
 
-                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
-                double eta          = world.surface(x, y);
-                if (eta > 0 && (ep_l(i, j, iv, jv) < 0.0 || ep_l(i, j, iv, jv) < 0.0)) {
+                if (eta_field(i, j) > 0 && (ep_l(i, j, iv, jv) < 0.0 || ep_l(i, j, iv, jv) < 0.0)) {
+                    auto [x, y, vx, vy]       = grid.center(i, j, iv, jv);
                     double advection_velocity = (axis == 0)   ? vx * dt / dx
                                                 : (axis == 1) ? vy * dt / dy
                                                 : (axis == 2) ? E(i, j, 0) * dt / dvx
@@ -541,12 +544,11 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
-                double eta          = world.surface(x, y);
-                double eta_l        = world.surface(x - dx, y);
-                double eta_r        = world.surface(x + dx, y);
-                double eta_b        = world.surface(x, y - dy);
-                double eta_t        = world.surface(x, y + dy);
+                double eta   = eta_field(i, j);
+                double eta_l = eta_field(i - 1, j);
+                double eta_r = eta_field(i + 1, j);
+                double eta_b = eta_field(i, j - 1);
+                double eta_t = eta_field(i, j + 1);
                 if (eta < 0.0)
                     return;
 
@@ -586,6 +588,7 @@ class Vlasolver {
 
                 f(i, j, iv, jv) += flux_hat_l - flux_hat_r;
                 if (eta > 0.0 && f(i, j, iv, jv) < -M_EPS) {
+                    auto [x, y, vx, vy]       = grid.center(i, j, iv, jv);
                     double f_old              = f(i, j, iv, jv) - (flux_hat_l - flux_hat_r);
                     double d_l                = flux_left - flux_1st_left;
                     double d_r                = flux_right - flux_1st_right;

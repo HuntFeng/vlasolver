@@ -365,7 +365,6 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         // so it can use any (possibly time-dependent) World state. The permittivity field
         // `eps` is built once from world.eps_p / world.eps_m at solver construction.
         world.poisson_jump_conditions();
-        auto& eps = this->eps;
         auto& a   = world.jump_a;
         auto& b   = world.jump_b;
         auto& rho = world.rho;

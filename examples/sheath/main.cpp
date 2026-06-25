@@ -122,33 +122,22 @@ struct ImmersedWorld : World<ImmersedWorld> {
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
-        auto f_local            = this->f;
-        auto phi_local          = this->phi;
-        auto n_local            = this->n;
-        auto m_local            = this->m;
-        double phi_w_local      = this->phi_w;
-        double v_th_e_local     = this->v_th_e;
-        double v_th_i_local     = this->v_th_i;
-        double u0_local         = this->u0;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
-            KOKKOS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
-                    double v_ce         = sqrt(2 * (0.0 - phi_w_local) / m_local[0]); // electron cutoff velocity
+                    double v_ce         = sqrt(2 * (0.0 - phi_w) / m[0]); // electron cutoff velocity
                     if (j < ngc && vy > 0.0) {
-                        f_local(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
+                        f(i, j, iv, jv, 0) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
                         // dynamic electron density adjustment
-                        double ne = (n_local(i, ny - ngc - 1, 0) > 0.0)
-                                        ? n_local(i, ny - ngc - 1, 1) / n_local(i, ny - ngc - 1, 0)
-                                        : 1.0;
-                        f_local(i, j, iv, jv, 0) =
-                            (vy <= v_ce)
-                                ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e_local, 2)) + phi_local(i, j)) /
-                                      (2.0 * pi * pow(v_th_e_local, 2)) * ne
-                                : 0.0;
+                        double ne = (n(i, ny - ngc - 1, 0) > 0.0) ? n(i, ny - ngc - 1, 1) / n(i, ny - ngc - 1, 0) : 1.0;
+                        f(i, j, iv, jv, 0) =
+                            (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
+                                               (2.0 * pi * pow(v_th_e, 2)) * ne
+                                         : 0.0;
                     }
                 };
                 // ion
@@ -156,13 +145,13 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
                     double v_ci         = 0.0; // ion cutoff velocity, since phi(y=Lx) = 0
                     if (j < ngc && vy > 0.0) {
-                        f_local(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
+                        f(i, j, iv, jv, 1) = 0.0; // bottom boundary, zero-inflow
                     } else if (j >= ny - ngc) {
-                        f_local(i, j, iv, jv, 1) =
-                            (vy <= v_ci) ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0_local, 2)) /
-                                               (2.0 * pow(v_th_i_local, 2))) /
-                                               (2.0 * pi * pow(v_th_i_local, 2))
-                                         : 0.0;
+                        f(i, j, iv, jv, 1) = (vy <= v_ci)
+                                                 ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
+                                                       (2.0 * pow(v_th_i, 2))) /
+                                                       (2.0 * pi * pow(v_th_i, 2))
+                                                 : 0.0;
                     }
                 };
             });

@@ -263,18 +263,25 @@ class Vlasolver {
                 double floor_velocity     = floor(advection_velocity);
                 int axis_idx              = (axis == 0) ? i : (axis == 1) ? j : (axis == 2) ? iv : jv;
                 int s                     = axis_idx - (int)floor_velocity;
-                double f0                 = (axis == 0)   ? f(s, j, iv, jv, sp)
-                                            : (axis == 1) ? f(i, s, iv, jv, sp)
-                                            : (axis == 2) ? f(i, j, s, jv, sp)
-                                                          : f(i, j, iv, s, sp);
-                double fp1                = (axis == 0)   ? f(s + 1, j, iv, jv, sp)
-                                            : (axis == 1) ? f(i, s + 1, iv, jv, sp)
-                                            : (axis == 2) ? f(i, j, s + 1, jv, sp)
-                                                          : f(i, j, iv, s + 1, sp);
-                double fm1                = (axis == 0)   ? f(s - 1, j, iv, jv, sp)
-                                            : (axis == 1) ? f(i, s - 1, iv, jv, sp)
-                                            : (axis == 2) ? f(i, j, s - 1, jv, sp)
-                                                          : f(i, j, iv, s - 1, sp);
+                // The departure cell s can fall outside the grid when the CFL number
+                // |advection_velocity| exceeds the available cells (large E in velocity space).
+                // Outside the array f = 0 (vacuum at the velocity boundary), so guard the reads.
+                int ext                   = f.extent_int(axis);
+                double f0  = (s >= 0 && s < ext) ? ((axis == 0)   ? f(s, j, iv, jv, sp)
+                                                    : (axis == 1) ? f(i, s, iv, jv, sp)
+                                                    : (axis == 2) ? f(i, j, s, jv, sp)
+                                                                  : f(i, j, iv, s, sp))
+                                                 : 0.0;
+                double fp1 = (s + 1 >= 0 && s + 1 < ext) ? ((axis == 0)   ? f(s + 1, j, iv, jv, sp)
+                                                            : (axis == 1) ? f(i, s + 1, iv, jv, sp)
+                                                            : (axis == 2) ? f(i, j, s + 1, jv, sp)
+                                                                          : f(i, j, iv, s + 1, sp))
+                                                         : 0.0;
+                double fm1 = (s - 1 >= 0 && s - 1 < ext) ? ((axis == 0)   ? f(s - 1, j, iv, jv, sp)
+                                                            : (axis == 1) ? f(i, s - 1, iv, jv, sp)
+                                                            : (axis == 2) ? f(i, j, s - 1, jv, sp)
+                                                                          : f(i, j, iv, s - 1, sp))
+                                                         : 0.0;
 
                 double plus_diff          = fp1 - f0;
                 double minus_diff         = f0 - fm1;
@@ -412,10 +419,13 @@ class Vlasolver {
             pfc_update(dt / 2.0, 0, sp);
             pfc_update(dt / 2.0, 1, sp);
         }
-        Kokkos::printf("(VlasovSolver) Solving electric field\n");
+        Kokkos::printf("(VlasovSolver) Applying Particle BC\n");
         world.particle_boundary_conditions();
+        Kokkos::printf("(VlasovSolver) IB Extrapolation\n");
         extrapolate_distribution_2nd_order();
+        Kokkos::printf("(VlasovSolver) Computing charge density\n");
         compute_charge_density();
+        Kokkos::printf("(VlasovSolver) Solving electric field\n");
         poisson_solver.solve();
         poisson_solver.compute_electric_field();
         Kokkos::printf("(VlasovSolver) PFC update along velocity by dt\n");
@@ -423,15 +433,20 @@ class Vlasolver {
             pfc_update(dt, 2, sp);
             pfc_update(dt, 3, sp);
         }
+        Kokkos::printf("(VlasovSolver) Applying Particle BC\n");
         world.particle_boundary_conditions();
+        Kokkos::printf("(VlasovSolver) IB Extrapolation\n");
         extrapolate_distribution_2nd_order();
         Kokkos::printf("(VlasovSolver) PFC update along space by dt/2\n");
         for (int sp = 0; sp < 2; ++sp) {
             pfc_update(dt / 2.0, 0, sp);
             pfc_update(dt / 2.0, 1, sp);
         }
+        Kokkos::printf("(VlasovSolver) Applying Particle BC\n");
         world.particle_boundary_conditions();
+        Kokkos::printf("(VlasovSolver) IB Extrapolation\n");
         extrapolate_distribution_2nd_order();
+        Kokkos::printf("(VlasovSolver) Computing charge density\n");
         compute_charge_density();
     }
 

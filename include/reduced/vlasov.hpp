@@ -374,18 +374,25 @@ class Vlasolver {
                 double floor_velocity     = floor(advection_velocity);
                 int axis_idx              = (axis == 0) ? i : (axis == 1) ? j : (axis == 2) ? iv : jv;
                 int s                     = axis_idx - (int)floor_velocity;
-                double f0                 = (axis == 0)   ? f(s, j, iv, jv)
-                                            : (axis == 1) ? f(i, s, iv, jv)
-                                            : (axis == 2) ? f(i, j, s, jv)
-                                                          : f(i, j, iv, s);
-                double fp1                = (axis == 0)   ? f(s + 1, j, iv, jv)
-                                            : (axis == 1) ? f(i, s + 1, iv, jv)
-                                            : (axis == 2) ? f(i, j, s + 1, jv)
-                                                          : f(i, j, iv, s + 1);
-                double fm1                = (axis == 0)   ? f(s - 1, j, iv, jv)
-                                            : (axis == 1) ? f(i, s - 1, iv, jv)
-                                            : (axis == 2) ? f(i, j, s - 1, jv)
-                                                          : f(i, j, iv, s - 1);
+                // The departure cell s can fall outside the grid when the CFL number
+                // |advection_velocity| exceeds the available cells (large E in velocity space).
+                // Outside the array f = 0 (vacuum at the velocity boundary), so guard the reads.
+                int ext                   = f.extent_int(axis);
+                double f0  = (s >= 0 && s < ext) ? ((axis == 0)   ? f(s, j, iv, jv)
+                                                    : (axis == 1) ? f(i, s, iv, jv)
+                                                    : (axis == 2) ? f(i, j, s, jv)
+                                                                  : f(i, j, iv, s))
+                                                 : 0.0;
+                double fp1 = (s + 1 >= 0 && s + 1 < ext) ? ((axis == 0)   ? f(s + 1, j, iv, jv)
+                                                            : (axis == 1) ? f(i, s + 1, iv, jv)
+                                                            : (axis == 2) ? f(i, j, s + 1, jv)
+                                                                          : f(i, j, iv, s + 1))
+                                                         : 0.0;
+                double fm1 = (s - 1 >= 0 && s - 1 < ext) ? ((axis == 0)   ? f(s - 1, j, iv, jv)
+                                                            : (axis == 1) ? f(i, s - 1, iv, jv)
+                                                            : (axis == 2) ? f(i, j, s - 1, jv)
+                                                                          : f(i, j, iv, s - 1))
+                                                         : 0.0;
 
                 double diff_0             = (advection_velocity >= 0) ? fp1 - f0 : f0 - fm1;
                 double diff_1             = (advection_velocity < 0) ? fp1 - f0 : f0 - fm1;
@@ -646,8 +653,9 @@ class Vlasolver {
         Kokkos::printf("(VlasovSolver) IB Extrapolation\n");
         // extrapolate_distribution_1st_order();
         extrapolate_distribution_2nd_order();
-        Kokkos::printf("(VlasovSolver) Solving electric field\n");
+        Kokkos::printf("(VlasovSolver) Computing charge density\n");
         compute_charge_density();
+        Kokkos::printf("(VlasovSolver) Solving electric field\n");
         poisson_solver.solve();
         poisson_solver.compute_electric_field();
         Kokkos::printf("(VlasovSolver) PFC update along velocity by dt\n");

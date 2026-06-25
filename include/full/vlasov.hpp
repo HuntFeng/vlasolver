@@ -266,11 +266,11 @@ class Vlasolver {
                 double f0                 = (axis == 0)   ? f(s, j, iv, jv, sp)
                                             : (axis == 1) ? f(i, s, iv, jv, sp)
                                             : (axis == 2) ? f(i, j, s, jv, sp)
-                                                          : f(i, j, iv, s);
+                                                          : f(i, j, iv, s, sp);
                 double fp1                = (axis == 0)   ? f(s + 1, j, iv, jv, sp)
                                             : (axis == 1) ? f(i, s + 1, iv, jv, sp)
                                             : (axis == 2) ? f(i, j, s + 1, jv, sp)
-                                                          : f(i, j, iv, s + 1);
+                                                          : f(i, j, iv, s + 1, sp);
                 double fm1                = (axis == 0)   ? f(s - 1, j, iv, jv, sp)
                                             : (axis == 1) ? f(i, s - 1, iv, jv, sp)
                                             : (axis == 2) ? f(i, j, s - 1, jv, sp)
@@ -329,7 +329,7 @@ class Vlasolver {
 
                 double d_l            = flux_left - flux_1st_left;                // high order correction, left
                 double d_r            = flux_right - flux_1st_right;              // high order correction, right
-                double delta = -f(i, j, iv, jv) - flux_1st_left + flux_1st_right; // 0.0 - 1st_order_update, always <= 0
+                double delta = -f(i, j, iv, jv, sp) - flux_1st_left + flux_1st_right; // 0.0 - 1st_order_update, always <= 0
                 double p     = d_l - d_r - delta; // p is the 3rd order update without limiter
 
                 // Xiong2014 (http://dx.doi.org/10.1016/j.jcp.2014.05.033)

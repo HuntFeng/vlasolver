@@ -307,7 +307,7 @@ class Vlasolver {
     }
 
     void compute_charge_density() const {
-        auto& eta_field         = world.field;
+        auto& eta_field         = world.eta;
         auto& phi               = world.phi;
         auto& rho               = world.rho;
         auto& f                 = world.f;

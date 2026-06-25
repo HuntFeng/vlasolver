@@ -254,45 +254,31 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc - 1, ngc - 1, ngc - 1, ngc - 1}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy]     = grid.center(i, j, iv, jv, sp);
-                auto [dx, dy, dvx, dvy] = grid.spacing(sp);
-                double f0 = 0.0, fp1 = 0.0, fm1 = 0.0;
-                double advection_velocity = 0;
-                int floor_v               = 0;
-                int s                     = 0;
-                if (axis == 0) {
-                    advection_velocity = vx * dt / dx;
-                    floor_v            = (int)Kokkos::floor(advection_velocity);
-                    s                  = i - floor_v;
-                    f0                 = f(s, j, iv, jv, sp);
-                    fp1                = f(s + 1, j, iv, jv, sp);
-                    fm1                = f(s - 1, j, iv, jv, sp);
-                } else if (axis == 1) {
-                    advection_velocity = vy * dt / dy;
-                    floor_v            = (int)Kokkos::floor(advection_velocity);
-                    s                  = j - floor_v;
-                    f0                 = f(i, s, iv, jv, sp);
-                    fp1                = f(i, s + 1, iv, jv, sp);
-                    fm1                = f(i, s - 1, iv, jv, sp);
-                } else if (axis == 2) {
-                    advection_velocity = q[sp] / m[sp] * E(i, j, 0) * dt / dvx;
-                    floor_v            = (int)Kokkos::floor(advection_velocity);
-                    s                  = iv - floor_v;
-                    f0                 = f(i, j, s, jv, sp);
-                    fp1                = f(i, j, s + 1, jv, sp);
-                    fm1                = f(i, j, s - 1, jv, sp);
-                } else if (axis == 3) {
-                    advection_velocity = q[sp] / m[sp] * E(i, j, 1) * dt / dvy;
-                    floor_v            = (int)Kokkos::floor(advection_velocity);
-                    s                  = jv - floor_v;
-                    f0                 = f(i, j, iv, s, sp);
-                    fp1                = f(i, j, iv, s + 1, sp);
-                    fm1                = f(i, j, iv, s - 1, sp);
-                }
+                auto [x, y, vx, vy]       = grid.center(i, j, iv, jv, sp);
+                auto [dx, dy, dvx, dvy]   = grid.spacing(sp);
+                double advection_velocity = (axis == 0)   ? vx * dt / dx
+                                            : (axis == 1) ? vy * dt / dy
+                                            : (axis == 2) ? E(i, j, 0) * dt / dvx
+                                                          : E(i, j, 1) * dt / dvy;
+                double floor_velocity     = floor(advection_velocity);
+                int axis_idx              = (axis == 0) ? i : (axis == 1) ? j : (axis == 2) ? iv : jv;
+                int s                     = axis_idx - (int)floor_velocity;
+                double f0                 = (axis == 0)   ? f(s, j, iv, jv, sp)
+                                            : (axis == 1) ? f(i, s, iv, jv, sp)
+                                            : (axis == 2) ? f(i, j, s, jv, sp)
+                                                          : f(i, j, iv, s);
+                double fp1                = (axis == 0)   ? f(s + 1, j, iv, jv, sp)
+                                            : (axis == 1) ? f(i, s + 1, iv, jv, sp)
+                                            : (axis == 2) ? f(i, j, s + 1, jv, sp)
+                                                          : f(i, j, iv, s + 1);
+                double fm1                = (axis == 0)   ? f(s - 1, j, iv, jv, sp)
+                                            : (axis == 1) ? f(i, s - 1, iv, jv, sp)
+                                            : (axis == 2) ? f(i, j, s - 1, jv, sp)
+                                                          : f(i, j, iv, s - 1, sp);
 
-                double plus_diff  = fp1 - f0;
-                double minus_diff = f0 - fm1;
-                double nu         = advection_velocity - trunc(advection_velocity);
+                double plus_diff          = fp1 - f0;
+                double minus_diff         = f0 - fm1;
+                double nu                 = advection_velocity - trunc(advection_velocity);
                 // high order flux correction (Liu/Xiong PFC)
                 double diff_0          = (advection_velocity >= 0.0) ? plus_diff : minus_diff;
                 double diff_1          = (advection_velocity < 0.0) ? plus_diff : minus_diff;
@@ -352,9 +338,9 @@ class Vlasolver {
                     ep_r(i, j, iv, jv) = 1.0;
                 } else if (d_l >= 0.0 && d_r > 0.0) {
                     ep_l(i, j, iv, jv) = 1.0;
-                    ep_r(i, j, iv, jv) = Kokkos::min(1.0, delta / (-d_r));
+                    ep_r(i, j, iv, jv) = min(1.0, delta / (-d_r));
                 } else if (d_l < 0.0 && d_r <= 0.0) {
-                    ep_l(i, j, iv, jv) = Kokkos::min(1.0, delta / d_l);
+                    ep_l(i, j, iv, jv) = min(1.0, delta / d_l);
                     ep_r(i, j, iv, jv) = 1.0;
                 } else if (d_l < 0.0 && d_r > 0.0) {
                     if (p >= 0) {
@@ -370,11 +356,11 @@ class Vlasolver {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                double eta          = eta_field(i, j);
-                double eta_l        = eta_field(i - 1, j);
-                double eta_r        = eta_field(i + 1, j);
-                double eta_b        = eta_field(i, j - 1);
-                double eta_t        = eta_field(i, j + 1);
+                double eta   = eta_field(i, j);
+                double eta_l = eta_field(i - 1, j);
+                double eta_r = eta_field(i + 1, j);
+                double eta_b = eta_field(i, j - 1);
+                double eta_t = eta_field(i, j + 1);
 
                 if (eta < 0.0)
                     return;

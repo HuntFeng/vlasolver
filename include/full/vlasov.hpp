@@ -151,8 +151,7 @@ class Vlasolver {
                                 int J               = j + y_offset;
                                 auto [x, y, vx, vy] = grid.center(I, J, iv, jv, sp);
                                 // skip ghost cells
-                                if (I < ngc || I > nx - ngc - 1 || J < ngc || J > ny - ngc - 1 ||
-                                    eta_field(I, J) < 0)
+                                if (I < ngc || I > nx - ngc - 1 || J < ngc || J > ny - ngc - 1 || eta_field(I, J) < 0)
                                     continue;
 
                                 // only extrapolate using fluid cells
@@ -228,13 +227,19 @@ class Vlasolver {
     }
 
     void pfc_update(double dt, int axis, int sp) const {
+        using Kokkos::abs;
+        using Kokkos::floor;
+        using Kokkos::max;
+        using Kokkos::min;
+        using Kokkos::trunc;
+
+        const double M_EPS      = 1e-16;
+
         auto& grid              = world.grid;
         auto& f                 = world.f;
         auto& E                 = world.E;
-        auto& flux_l            = world.flux_l;
-        auto& flux_r            = world.flux_r;
-        auto& flux_1st_l        = world.flux_1st_l;
-        auto& flux_1st_r        = world.flux_1st_r;
+        auto& flux              = world.flux;
+        auto& flux_1st          = world.flux_1st;
         auto& ep_l              = world.ep_l;
         auto& ep_r              = world.ep_r;
         auto& m                 = world.m;
@@ -243,10 +248,8 @@ class Vlasolver {
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
-        Kokkos::deep_copy(flux_l, 0.0);
-        Kokkos::deep_copy(flux_r, 0.0);
-        Kokkos::deep_copy(flux_1st_l, 0.0);
-        Kokkos::deep_copy(flux_1st_r, 0.0);
+        Kokkos::deep_copy(flux, 0.0);
+        Kokkos::deep_copy(flux_1st, 0.0);
         Kokkos::deep_copy(ep_l, 1.0);
         Kokkos::deep_copy(ep_r, 1.0);
         Kokkos::parallel_for(
@@ -290,119 +293,101 @@ class Vlasolver {
 
                 double plus_diff  = fp1 - f0;
                 double minus_diff = f0 - fm1;
-                double flux       = 0.0;
+                double flux_val   = 0.0;
                 double nu         = 0.0;
                 if (advection_velocity >= 0.0) {
                     // downwind
-                    nu   = advection_velocity - floor_v;
-                    flux = f0;
-                    flux += (1 - nu) * (2 - nu) * plus_diff / 6.0;
-                    flux += (1 - nu) * (1 + nu) * minus_diff / 6.0;
-                    flux *= nu;
+                    nu       = advection_velocity - floor_v;
+                    flux_val = f0;
+                    flux_val += (1 - nu) * (2 - nu) * plus_diff / 6.0;
+                    flux_val += (1 - nu) * (1 + nu) * minus_diff / 6.0;
+                    flux_val *= nu;
                 } else {
                     // upwind
-                    nu   = advection_velocity - (floor_v + 1);
-                    flux = f0;
-                    flux += -(1 - nu) * (1 + nu) * plus_diff / 6.0;
-                    flux += -(2 + nu) * (1 + nu) * minus_diff / 6.0;
-                    flux *= nu;
+                    nu       = advection_velocity - (floor_v + 1);
+                    flux_val = f0;
+                    flux_val += -(1 - nu) * (1 + nu) * plus_diff / 6.0;
+                    flux_val += -(2 + nu) * (1 + nu) * minus_diff / 6.0;
+                    flux_val *= nu;
                 }
 
                 if (axis == 0) {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= i; ++n)
-                            flux += f(n, j, iv, jv, sp);
+                            flux_val += f(n, j, iv, jv, sp);
                     } else {
                         for (int n = i + 1; n <= min(s - 1, f.extent_int(0) - 1); ++n)
-                            // flux -= f(n, j, iv, jv, sp);
-                            flux += f(n, j, iv, jv, sp);
-                    }
-                    if (i != nx - ngc - 1) {
-                        flux_1st_l(i + 1, j, iv, jv) = nu * f0;
-                        flux_l(i + 1, j, iv, jv)     = flux;
-                    }
-                    if (i != ngc - 1) {
-                        flux_1st_r(i, j, iv, jv) = nu * f0;
-                        flux_r(i, j, iv, jv)     = flux;
+                            flux_val += f(n, j, iv, jv, sp);
                     }
                 } else if (axis == 1) {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= j; ++n)
-                            flux += f(i, n, iv, jv, sp);
+                            flux_val += f(i, n, iv, jv, sp);
                     } else {
                         for (int n = j + 1; n <= min(s - 1, f.extent_int(1) - 1); ++n)
-                            flux += f(i, n, iv, jv, sp);
-                    }
-
-                    if (j != ny - ngc - 1) {
-                        flux_1st_l(i, j + 1, iv, jv) = nu * f0;
-                        flux_l(i, j + 1, iv, jv)     = flux;
-                    }
-                    if (j != ngc - 1) {
-                        flux_1st_r(i, j, iv, jv) = nu * f0;
-                        flux_r(i, j, iv, jv)     = flux;
+                            flux_val += f(i, n, iv, jv, sp);
                     }
                 } else if (axis == 2) {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= iv; ++n)
-                            flux += f(i, j, n, jv, sp);
+                            flux_val += f(i, j, n, jv, sp);
                     } else {
                         for (int n = iv + 1; n <= min(s - 1, f.extent_int(2) - 1); ++n)
-                            flux += f(i, j, n, jv, sp);
-                    }
-
-                    if (iv != nvx - ngc - 1) {
-                        flux_1st_l(i, j, iv + 1, jv) = nu * f0;
-                        flux_l(i, j, iv + 1, jv)     = flux;
-                    }
-                    if (iv != ngc - 1) {
-                        flux_1st_r(i, j, iv, jv) = nu * f0;
-                        flux_r(i, j, iv, jv)     = flux;
+                            flux_val += f(i, j, n, jv, sp);
                     }
                 } else {
                     if (advection_velocity >= 0.0) {
                         for (int n = max(s + 1, 0); n <= jv; ++n)
-                            flux += f(i, j, iv, n, sp);
+                            flux_val += f(i, j, iv, n, sp);
                     } else {
                         for (int n = jv + 1; n <= min(s - 1, f.extent_int(3) - 1); ++n)
-                            flux += f(i, j, iv, n, sp);
-                    }
-
-                    if (jv != nvy - ngc - 1) {
-                        flux_1st_l(i, j, iv, jv + 1) = nu * f0;
-                        flux_l(i, j, iv, jv + 1)     = flux;
-                    }
-                    if (jv != ngc - 1) {
-                        flux_1st_r(i, j, iv, jv) = nu * f0;
-                        flux_r(i, j, iv, jv)     = flux;
+                            flux_val += f(i, j, iv, n, sp);
                     }
                 }
+
+                // store the flux at the right interface of cell (i,j,iv,jv) along the active axis
+                flux_1st(i, j, iv, jv) = nu * f0;
+                flux(i, j, iv, jv)     = flux_val;
             });
 
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                double d_r = flux_r(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
-                double d_l = flux_l(i, j, iv, jv) - flux_1st_l(i, j, iv, jv);
-                // double delta = -f(i, j, iv, jv) + flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
-                // should be left - right, I think the paper has a typo
-                double delta = -f(i, j, iv, jv, sp) - flux_1st_l(i, j, iv, jv) + flux_1st_r(i, j, iv, jv);
-                // if (delta > 0.0) // it should be non-positive since first order monotone fluxes are used
-                //     Kokkos::printf("Positive delta(%d, %d, %d, %d) = %e\n", i, j, iv, jv, delta);
-                double p = d_l - d_r - delta;
-                if (d_l < 0.0 && d_r <= 0.0) {
-                    ep_l(i, j, iv, jv) = Kokkos::min(1.0, delta / d_l);
-                } else if (d_l * d_r < 0.0 && p < 0.0) {
-                    ep_l(i, j, iv, jv) = delta / (d_l - d_r);
-                } else {
+                // flux at left interface is flux(i-1,...) along the active axis, right interface is flux(i,...)
+                double flux_left      = (axis == 0)   ? flux(i - 1, j, iv, jv)
+                                        : (axis == 1) ? flux(i, j - 1, iv, jv)
+                                        : (axis == 2) ? flux(i, j, iv - 1, jv)
+                                                      : flux(i, j, iv, jv - 1);
+                double flux_right     = flux(i, j, iv, jv);
+                double flux_1st_left  = (axis == 0)   ? flux_1st(i - 1, j, iv, jv)
+                                        : (axis == 1) ? flux_1st(i, j - 1, iv, jv)
+                                        : (axis == 2) ? flux_1st(i, j, iv - 1, jv)
+                                                      : flux_1st(i, j, iv, jv - 1);
+                double flux_1st_right = flux_1st(i, j, iv, jv);
+
+                double d_l            = flux_left - flux_1st_left;                // high order correction, left
+                double d_r            = flux_right - flux_1st_right;              // high order correction, right
+                double delta = -f(i, j, iv, jv) - flux_1st_left + flux_1st_right; // 0.0 - 1st_order_update, always <= 0
+                double p     = d_l - d_r - delta; // p is the 3rd order update without limiter
+
+                // Xiong2014 (http://dx.doi.org/10.1016/j.jcp.2014.05.033)
+                if (d_l >= 0 && d_r <= 0.0) {
                     ep_l(i, j, iv, jv) = 1.0;
-                }
-                if (d_l >= 0.0 && d_r > 0.0) {
-                    ep_r(i, j, iv, jv) = Kokkos::min(1.0, -delta / d_r);
-                } else if (d_l * d_r < 0.0 && p < 0.0) {
-                    ep_r(i, j, iv, jv) = delta / (d_l - d_r);
-                } else {
                     ep_r(i, j, iv, jv) = 1.0;
+                } else if (d_l >= 0.0 && d_r > 0.0) {
+                    ep_l(i, j, iv, jv) = 1.0;
+                    ep_r(i, j, iv, jv) = Kokkos::min(1.0, delta / (-d_r));
+                } else if (d_l < 0.0 && d_r <= 0.0) {
+                    ep_l(i, j, iv, jv) = Kokkos::min(1.0, delta / d_l);
+                    ep_r(i, j, iv, jv) = 1.0;
+                } else if (d_l < 0.0 && d_r > 0.0) {
+                    if (p >= 0) {
+                        ep_l(i, j, iv, jv) = 1.0;
+                        ep_r(i, j, iv, jv) = 1.0;
+                    } else {
+                        ep_l(i, j, iv, jv) = delta / (d_l - d_r);
+                        ep_r(i, j, iv, jv) = delta / (d_l - d_r);
+                    }
                 }
             });
 
@@ -424,16 +409,25 @@ class Vlasolver {
                     ep_left  = Kokkos::min(ep_r(i, j, iv, jv - 1), ep_l(i, j, iv, jv));
                     ep_right = Kokkos::min(ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
                 }
-                double flux_hat_l =
-                    ep_left * (flux_l(i, j, iv, jv) - flux_1st_l(i, j, iv, jv)) + flux_1st_l(i, j, iv, jv);
-                double flux_hat_r =
-                    ep_right * (flux_r(i, j, iv, jv) - flux_1st_r(i, j, iv, jv)) + flux_1st_r(i, j, iv, jv);
+                double flux_left      = (axis == 0)   ? flux(i - 1, j, iv, jv)
+                                        : (axis == 1) ? flux(i, j - 1, iv, jv)
+                                        : (axis == 2) ? flux(i, j, iv - 1, jv)
+                                                      : flux(i, j, iv, jv - 1);
+                double flux_right     = flux(i, j, iv, jv);
+                double flux_1st_left  = (axis == 0)   ? flux_1st(i - 1, j, iv, jv)
+                                        : (axis == 1) ? flux_1st(i, j - 1, iv, jv)
+                                        : (axis == 2) ? flux_1st(i, j, iv - 1, jv)
+                                                      : flux_1st(i, j, iv, jv - 1);
+                double flux_1st_right = flux_1st(i, j, iv, jv);
+
+                double flux_hat_l     = ep_left * (flux_left - flux_1st_left) + flux_1st_left;
+                double flux_hat_r     = ep_right * (flux_right - flux_1st_right) + flux_1st_right;
 
                 // udpate distribution function
                 if (j == ngc || i == ngc || j == ny - ngc - 1 || i == nx - ngc - 1) {
                     // TODO: 3rd order flux creates oscillation near edges, do 1st flux as work around
                     // can we do 3rd order flux without oscillation?
-                    f(i, j, iv, jv, sp) += flux_1st_l(i, j, iv, jv) - flux_1st_r(i, j, iv, jv);
+                    f(i, j, iv, jv, sp) += flux_1st_left - flux_1st_right;
                 } else {
                     f(i, j, iv, jv, sp) += flux_hat_l - flux_hat_r;
                 }

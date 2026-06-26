@@ -258,8 +258,8 @@ class Vlasolver {
                 auto [dx, dy, dvx, dvy]   = grid.spacing(sp);
                 double advection_velocity = (axis == 0)   ? vx * dt / dx
                                             : (axis == 1) ? vy * dt / dy
-                                            : (axis == 2) ? E(i, j, 0) * dt / dvx
-                                                          : E(i, j, 1) * dt / dvy;
+                                            : (axis == 2) ? q[sp] / m[sp] * E(i, j, 0) * dt / dvx
+                                                          : q[sp] / m[sp] * E(i, j, 1) * dt / dvy;
                 double floor_velocity     = floor(advection_velocity);
                 int axis_idx              = (axis == 0) ? i : (axis == 1) ? j : (axis == 2) ? iv : jv;
                 int s                     = axis_idx - (int)floor_velocity;

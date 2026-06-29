@@ -17,7 +17,7 @@ G = 3
 x0 = 0.02 * np.sqrt(5)
 y0 = 0.02 * np.sqrt(3)
 eps_safe = 1e-30
-n_range = 2 ** np.arange(4, 9, dtype=int)
+n_range = 2 ** np.arange(4, 10, dtype=int)
 errors_u = np.zeros(n_range.size)
 errors_du = np.zeros(n_range.size)
 for i, n in enumerate(n_range):
@@ -105,10 +105,12 @@ plt.xlabel("h")
 plt.ylabel("err")
 plt.legend()
 plt.title("Example 4.2: convergence of $\\nabla u$")
+plt.savefig(f"{file_path}/convergence_poisson.png")
 
 fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
 ax[0].plot_surface(X, Y, u_exact, edgecolor="black", cmap=cm.coolwarm)
 ax[0].set_title("Example 4.2: exact")
 ax[1].plot_surface(X, Y, u, edgecolor="black", cmap=cm.coolwarm)
 ax[1].set_title("Example 4.2: numerical")
+plt.savefig(f"{file_path}/poisson_solution.png")
 plt.show()

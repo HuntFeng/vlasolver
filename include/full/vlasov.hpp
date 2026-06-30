@@ -197,7 +197,6 @@ class Vlasolver {
     }
 
     void compute_charge_density() const {
-        using Kokkos::max;
         auto& phi               = world.phi;
         auto& rho               = world.rho;
         auto& f                 = world.f;
@@ -215,13 +214,12 @@ class Vlasolver {
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [dx, dy, dvx, dvy] = grid.spacing(sp);
-                    // commented out because we want to compute acculated charge density in the immersed object as well
-                    // if (eta_field(i, j) < 0.0)
-                    //     return;
+                    if (eta_field(i, j) < 0.0)
+                        return;
 
                     for (int iv = ngc; iv < nvx - ngc; ++iv)
                         for (int jv = ngc; jv < nvy - ngc; ++jv)
-                            n(i, j, sp) += max(f(i, j, iv, jv, sp), 0.0) * dvx * dvy;
+                            n(i, j, sp) += f(i, j, iv, jv, sp) * dvx * dvy;
 
                     rho(i, j) += q[sp] * n(i, j, sp);
                 }

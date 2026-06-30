@@ -307,7 +307,6 @@ class Vlasolver {
     }
 
     void compute_charge_density() const {
-        using Kokkos::max;
         auto& eta_field         = world.eta;
         auto& phi               = world.phi;
         auto& rho               = world.rho;
@@ -322,14 +321,13 @@ class Vlasolver {
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                // commented out because we want to compute acculated charge density in the immersed object as well
-                // if (eta_field(i, j) < 0.0)
-                //     return;
+                if (eta_field(i, j) < 0.0)
+                    return;
 
                 double number_density = 0.0;
                 for (int iv = ngc; iv < nvx - ngc; ++iv)
                     for (int jv = ngc; jv < nvy - ngc; ++jv)
-                        number_density += max(f(i, j, iv, jv), 0.0) * dvx * dvy;
+                        number_density += f(i, j, iv, jv) * dvx * dvy;
                 // only count ion density
                 // electron follow Boltzmann distribution
                 n(i, j)   = number_density;

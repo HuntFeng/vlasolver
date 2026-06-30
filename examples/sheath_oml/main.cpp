@@ -12,13 +12,18 @@ struct ImmersedWorld : World<ImmersedWorld> {
     static constexpr double Y_WALL = 2.5;
 
     // all quantities are normalized by electron parameters
-    double phi_w  = -Kokkos::log(Kokkos::sqrt(m[1] / (2 * Kokkos::numbers::pi * m[0]))); // wall potential (estimate)
-    double v_th_e = Kokkos::sqrt(T[0] / m[0]);                                           // electron thermal velocity
-    double v_th_i = Kokkos::sqrt(T[1] / m[1]);                                           // ion thermal velocity
-    double u0     = Kokkos::sqrt(T[0] / m[1]);                                           // Bohm velocity
+    double phi_w = -Kokkos::log(Kokkos::sqrt(m[1] / (2 * Kokkos::numbers::pi * m[0]))); // wall potential (estimate)
+    double shape_factor = 2.5;                       // initial potential shape factor
+    double v_th_e       = Kokkos::sqrt(T[0] / m[0]); // electron thermal velocity
+    double v_th_i       = Kokkos::sqrt(T[1] / m[1]); // ion thermal velocity
+    double u0           = Kokkos::sqrt(T[0] / m[1]); // Bohm velocity
 
-    // accumulated surface charge on the immersed interface (the OML state variable)
-    double sigma_w   = 0.0;
+    // accumulated surface charge on the immersed interface
+    // initial surface charge density
+    // esimated by -(eps^+dphi/dy^+ - eps^-dphi/dy^-)
+    double sigma_w = phi_w / shape_factor;
+
+    // time step guard
     double last_step = -1;
 
     ImmersedWorld(Grid& grid)
@@ -62,7 +67,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 auto [x, y] = grid.center(i, j);
-                phi(i, j)   = (eta(i, j) >= 0.0) ? phi_w * exp(-(y - Y_WALL) / 2.5) : phi_w;
+                phi(i, j)   = (eta(i, j) >= 0.0) ? phi_w * exp(-(y - Y_WALL) / shape_factor) : phi_w;
             });
 
         Kokkos::deep_copy(f, 0.0);
@@ -171,7 +176,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         // only update when time advances, since the BCs are time-dependent through sigma_w
         if (current_step == last_step)
             return;
-        last_step                         = current_step;
+        last_step               = current_step;
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
@@ -187,7 +192,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None);
             });
 
-        auto [_dx_e, _dy_e, dvx_e, dvy_e] = grid.spacing(0);
         auto [_dx_i, _dy_i, dvx_i, dvy_i] = grid.spacing(1);
         double flux                       = 0.0;
         Kokkos::parallel_reduce(
@@ -196,26 +200,20 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 // keep only the first fluid row above the interface
                 if (!(eta(i, j) > 0.0 && eta(i, j - 1) <= 0.0))
                     return;
-                {
-                    auto [_xc, _yc, _vx, vy_e] = grid.center(i, j, iv, jv, 0);
-                    if (vy_e < 0.0)
-                        acc += q[0] * (-vy_e) * f(i, j, iv, jv, 0) * dvx_e * dvy_e;
-                }
-                {
-                    auto [_xc, _yc, _vx, vy_i] = grid.center(i, j, iv, jv, 1);
-                    if (vy_i < 0.0)
-                        acc += q[1] * (-vy_i) * f(i, j, iv, jv, 1) * dvx_i * dvy_i;
+
+                for (int s = 0; s < 2; ++s) {
+                    auto [_xc, _yc, _vx, vy]  = grid.center(i, j, iv, jv, s);
+                    auto [_dx, _dy, dvx, dvy] = grid.spacing(s);
+                    if (vy < 0.0)
+                        acc += q[s] * (-vy) * f(i, j, iv, jv, s) * dvx * dvy;
                 }
             },
             flux);
-        double flux_net = flux / grid.ncells_interior[0];
-        sigma_w += flux_net * dt;
+        // divided by nx_intr because this is a 1D problem intrinsically
+        sigma_w += flux * dt / grid.ncells_interior[0];
     }
 
     void poisson_jump_conditions() {
-        auto& grid              = this->grid;
-        auto& jump_a            = this->jump_a;
-        auto& jump_b            = this->jump_b;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {

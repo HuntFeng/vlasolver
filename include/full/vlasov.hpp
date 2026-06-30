@@ -197,6 +197,7 @@ class Vlasolver {
     }
 
     void compute_charge_density() const {
+        using Kokkos::max;
         auto& phi               = world.phi;
         auto& rho               = world.rho;
         auto& f                 = world.f;
@@ -214,12 +215,13 @@ class Vlasolver {
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [dx, dy, dvx, dvy] = grid.spacing(sp);
-                    if (eta_field(i, j) < 0.0)
-                        return;
+                    // commented out because we want to compute acculated charge density in the immersed object as well
+                    // if (eta_field(i, j) < 0.0)
+                    //     return;
 
                     for (int iv = ngc; iv < nvx - ngc; ++iv)
                         for (int jv = ngc; jv < nvy - ngc; ++jv)
-                            n(i, j, sp) += f(i, j, iv, jv, sp) * dvx * dvy;
+                            n(i, j, sp) += max(f(i, j, iv, jv, sp), 0.0) * dvx * dvy;
 
                     rho(i, j) += q[sp] * n(i, j, sp);
                 }
@@ -266,26 +268,26 @@ class Vlasolver {
                 // The departure cell s can fall outside the grid when the CFL number
                 // |advection_velocity| exceeds the available cells (large E in velocity space).
                 // Outside the array f = 0 (vacuum at the velocity boundary), so guard the reads.
-                int ext                   = f.extent_int(axis);
-                double f0  = (s >= 0 && s < ext) ? ((axis == 0)   ? f(s, j, iv, jv, sp)
-                                                    : (axis == 1) ? f(i, s, iv, jv, sp)
-                                                    : (axis == 2) ? f(i, j, s, jv, sp)
-                                                                  : f(i, j, iv, s, sp))
-                                                 : 0.0;
-                double fp1 = (s + 1 >= 0 && s + 1 < ext) ? ((axis == 0)   ? f(s + 1, j, iv, jv, sp)
-                                                            : (axis == 1) ? f(i, s + 1, iv, jv, sp)
-                                                            : (axis == 2) ? f(i, j, s + 1, jv, sp)
-                                                                          : f(i, j, iv, s + 1, sp))
-                                                         : 0.0;
-                double fm1 = (s - 1 >= 0 && s - 1 < ext) ? ((axis == 0)   ? f(s - 1, j, iv, jv, sp)
-                                                            : (axis == 1) ? f(i, s - 1, iv, jv, sp)
-                                                            : (axis == 2) ? f(i, j, s - 1, jv, sp)
-                                                                          : f(i, j, iv, s - 1, sp))
-                                                         : 0.0;
+                int ext           = f.extent_int(axis);
+                double f0         = (s >= 0 && s < ext) ? ((axis == 0)   ? f(s, j, iv, jv, sp)
+                                                           : (axis == 1) ? f(i, s, iv, jv, sp)
+                                                           : (axis == 2) ? f(i, j, s, jv, sp)
+                                                                         : f(i, j, iv, s, sp))
+                                                        : 0.0;
+                double fp1        = (s + 1 >= 0 && s + 1 < ext) ? ((axis == 0)   ? f(s + 1, j, iv, jv, sp)
+                                                                   : (axis == 1) ? f(i, s + 1, iv, jv, sp)
+                                                                   : (axis == 2) ? f(i, j, s + 1, jv, sp)
+                                                                                 : f(i, j, iv, s + 1, sp))
+                                                                : 0.0;
+                double fm1        = (s - 1 >= 0 && s - 1 < ext) ? ((axis == 0)   ? f(s - 1, j, iv, jv, sp)
+                                                                   : (axis == 1) ? f(i, s - 1, iv, jv, sp)
+                                                                   : (axis == 2) ? f(i, j, s - 1, jv, sp)
+                                                                                 : f(i, j, iv, s - 1, sp))
+                                                                : 0.0;
 
-                double plus_diff          = fp1 - f0;
-                double minus_diff         = f0 - fm1;
-                double nu                 = advection_velocity - trunc(advection_velocity);
+                double plus_diff  = fp1 - f0;
+                double minus_diff = f0 - fm1;
+                double nu         = advection_velocity - trunc(advection_velocity);
                 // high order flux correction (Liu/Xiong PFC)
                 double diff_0          = (advection_velocity >= 0.0) ? plus_diff : minus_diff;
                 double diff_1          = (advection_velocity < 0.0) ? plus_diff : minus_diff;
@@ -334,10 +336,11 @@ class Vlasolver {
                                                       : flux_1st(i, j, iv, jv - 1);
                 double flux_1st_right = flux_1st(i, j, iv, jv);
 
-                double d_l            = flux_left - flux_1st_left;                // high order correction, left
-                double d_r            = flux_right - flux_1st_right;              // high order correction, right
-                double delta = -f(i, j, iv, jv, sp) - flux_1st_left + flux_1st_right; // 0.0 - 1st_order_update, always <= 0
-                double p     = d_l - d_r - delta; // p is the 3rd order update without limiter
+                double d_l            = flux_left - flux_1st_left;   // high order correction, left
+                double d_r            = flux_right - flux_1st_right; // high order correction, right
+                double delta =
+                    -f(i, j, iv, jv, sp) - flux_1st_left + flux_1st_right; // 0.0 - 1st_order_update, always <= 0
+                double p = d_l - d_r - delta;                              // p is the 3rd order update without limiter
 
                 // Xiong2014 (http://dx.doi.org/10.1016/j.jcp.2014.05.033)
                 if (d_l >= 0 && d_r <= 0.0) {

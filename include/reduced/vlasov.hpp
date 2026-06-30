@@ -307,6 +307,7 @@ class Vlasolver {
     }
 
     void compute_charge_density() const {
+        using Kokkos::max;
         auto& eta_field         = world.eta;
         auto& phi               = world.phi;
         auto& rho               = world.rho;
@@ -321,13 +322,14 @@ class Vlasolver {
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                if (eta_field(i, j) < 0.0)
-                    return;
+                // commented out because we want to compute acculated charge density in the immersed object as well
+                // if (eta_field(i, j) < 0.0)
+                //     return;
 
                 double number_density = 0.0;
                 for (int iv = ngc; iv < nvx - ngc; ++iv)
                     for (int jv = ngc; jv < nvy - ngc; ++jv)
-                        number_density += f(i, j, iv, jv) * dvx * dvy;
+                        number_density += max(f(i, j, iv, jv), 0.0) * dvx * dvy;
                 // only count ion density
                 // electron follow Boltzmann distribution
                 n(i, j)   = number_density;
@@ -377,27 +379,27 @@ class Vlasolver {
                 // The departure cell s can fall outside the grid when the CFL number
                 // |advection_velocity| exceeds the available cells (large E in velocity space).
                 // Outside the array f = 0 (vacuum at the velocity boundary), so guard the reads.
-                int ext                   = f.extent_int(axis);
-                double f0  = (s >= 0 && s < ext) ? ((axis == 0)   ? f(s, j, iv, jv)
-                                                    : (axis == 1) ? f(i, s, iv, jv)
-                                                    : (axis == 2) ? f(i, j, s, jv)
-                                                                  : f(i, j, iv, s))
-                                                 : 0.0;
-                double fp1 = (s + 1 >= 0 && s + 1 < ext) ? ((axis == 0)   ? f(s + 1, j, iv, jv)
-                                                            : (axis == 1) ? f(i, s + 1, iv, jv)
-                                                            : (axis == 2) ? f(i, j, s + 1, jv)
-                                                                          : f(i, j, iv, s + 1))
-                                                         : 0.0;
-                double fm1 = (s - 1 >= 0 && s - 1 < ext) ? ((axis == 0)   ? f(s - 1, j, iv, jv)
-                                                            : (axis == 1) ? f(i, s - 1, iv, jv)
-                                                            : (axis == 2) ? f(i, j, s - 1, jv)
-                                                                          : f(i, j, iv, s - 1))
-                                                         : 0.0;
+                int ext                = f.extent_int(axis);
+                double f0              = (s >= 0 && s < ext) ? ((axis == 0)   ? f(s, j, iv, jv)
+                                                                : (axis == 1) ? f(i, s, iv, jv)
+                                                                : (axis == 2) ? f(i, j, s, jv)
+                                                                              : f(i, j, iv, s))
+                                                             : 0.0;
+                double fp1             = (s + 1 >= 0 && s + 1 < ext) ? ((axis == 0)   ? f(s + 1, j, iv, jv)
+                                                                        : (axis == 1) ? f(i, s + 1, iv, jv)
+                                                                        : (axis == 2) ? f(i, j, s + 1, jv)
+                                                                                      : f(i, j, iv, s + 1))
+                                                                     : 0.0;
+                double fm1             = (s - 1 >= 0 && s - 1 < ext) ? ((axis == 0)   ? f(s - 1, j, iv, jv)
+                                                                        : (axis == 1) ? f(i, s - 1, iv, jv)
+                                                                        : (axis == 2) ? f(i, j, s - 1, jv)
+                                                                                      : f(i, j, iv, s - 1))
+                                                                     : 0.0;
 
-                double diff_0             = (advection_velocity >= 0) ? fp1 - f0 : f0 - fm1;
-                double diff_1             = (advection_velocity < 0) ? fp1 - f0 : f0 - fm1;
-                double nu                 = advection_velocity - trunc(advection_velocity);
-                double flux_correction    = 0.0;
+                double diff_0          = (advection_velocity >= 0) ? fp1 - f0 : f0 - fm1;
+                double diff_1          = (advection_velocity < 0) ? fp1 - f0 : f0 - fm1;
+                double nu              = advection_velocity - trunc(advection_velocity);
+                double flux_correction = 0.0;
                 flux_correction += abs(nu) * (1 - abs(nu)) * (2 - abs(nu)) * diff_0 / 6.0;
                 flux_correction += abs(nu) * (1 - abs(nu)) * (1 + abs(nu)) * diff_1 / 6.0;
 

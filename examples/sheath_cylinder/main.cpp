@@ -10,13 +10,11 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     // all quantities are normalized by electron parameters
-    double phi_w  = -Kokkos::log(Kokkos::sqrt(m[1] / (2 * Kokkos::numbers::pi * m[0]))); // wall potential (estimate)
-    double v_th_e = Kokkos::sqrt(T[0] / m[0]);                                           // electron thermal velocity
-    double v_th_i = Kokkos::sqrt(T[1] / m[1]);                                           // ion thermal velocity
-    double u0     = Kokkos::sqrt(T[0] / m[1]);                                           // Bohm velocity
+    double phi_w     = -Kokkos::log(Kokkos::sqrt(m[1] / (2 * Kokkos::numbers::pi * m[0]))); // wall potential (estimate)
+    double v_th_e    = Kokkos::sqrt(T[0] / m[0]);                                           // electron thermal velocity
+    double v_th_i    = Kokkos::sqrt(T[1] / m[1]);                                           // ion thermal velocity
+    double u0        = Kokkos::sqrt(T[0] / m[1]);                                           // Bohm velocity
 
-    // accumulated surface charge on the immersed interface (the OML state variable)
-    double sigma_w   = 0.0;
     double last_step = -1;
 
     ImmersedWorld(Grid& grid)
@@ -130,20 +128,29 @@ struct ImmersedWorld : World<ImmersedWorld> {
     }
 
     void poisson_jump_conditions() {
+        using Kokkos::min;
         if (current_step == last_step)
             return;
         last_step               = current_step;
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        double flux             = 0.0;
-
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                jump_a(i, j) = 0.0;            // no jump in the potential across the interface
-                double area  = 1.0;            // what is the area? 2pir*dr ? or what?
-                jump_b(i, j) = -rho(i, j) / area; // no jump in the normal derivative of the potential across the interface
+            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                double n1      = normal(i, j, 0);
+                double n2      = normal(i, j, 1);
+                double d_sigma = 0.0;
+                for (int s = 0; s < 2; ++s) {
+                    for (int iv = 0; iv < nvx; ++iv) {
+                        for (int jv = 0; jv < nvy; ++jv) {
+                            auto [_x, _y, vx, vy] = grid.center(i, j, iv, jv, s);
+                            // only accumulate when n.v < 0
+                            d_sigma += min(n1 * vx + n2 * vy, 0.0) * f(i, j, iv, jv, s) * dt;
+                        }
+                    }
+                }
+                jump_b(i, j) += -d_sigma;
+                jump_a(i, j) = 0.0; // no jump in the potential across the interface
             });
     }
 };
@@ -188,7 +195,7 @@ int main(int argc, char* argv[]) {
     double total_time         = reader.GetReal("world", "total_time", 1.0);
     int total_steps           = reader.GetInteger("world", "total_steps", 1000);
     int diag_steps            = reader.GetInteger("world", "diag_steps", 10);
-    std::string output_folder = reader.Get("output", "folder", "data/plasma_past_charged_cylinder");
+    std::string output_folder = reader.Get("output", "folder", "data/sheath_cylinder");
     std::string output_prefix = reader.Get("output", "prefix", "output");
 
     Kokkos::printf("Input parameters:\n");

@@ -9,11 +9,6 @@
 #include <string>
 
 struct ImmersedWorld : World<ImmersedWorld> {
-    // all quantities are normalized by electron parameters
-    double v_th_e    = Kokkos::sqrt(T[0] / m[0]);                                           // electron thermal velocity
-    double v_th_i    = Kokkos::sqrt(T[1] / m[1]);                                           // ion thermal velocity
-    double u0        = Kokkos::sqrt(T[0] / m[1]);                                           // Bohm velocity
-
     double last_step = -1;
 
     ImmersedWorld(Grid& grid)
@@ -30,7 +25,7 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 auto [x, y] = grid.center(i, j);
-                eta(i, j)   = Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+                eta(i, j)   = Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.1, 2);
             });
     }
 
@@ -64,13 +59,9 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 // electron
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
-                    double v_ce         = sqrt(2 * (0.0 - phi_w) / m[0]); // electron cutoff velocity
                     if (i < ngc) {
-                        f(i, j, iv, jv, 0) =
-                            (vy <= v_ce) ? exp(-(pow(vx, 2) + pow(vy, 2)) / (2.0 * pow(v_th_e, 2)) + phi(i, j)) /
-                                               (2.0 * pi * pow(v_th_e, 2))
-                                         : 0.0;
-                        // left boundary, injection
+                        f(i, j, iv, jv, 1) =
+                            (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
                     } else if (i >= nx - ngc) {
                         f(i, j, iv, jv, 0) = 0.0; // right domain boundary, zero-inflow
                     } else if (j < ngc) {
@@ -85,13 +76,9 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 // ion
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
-                    double v_ci         = 0.0; // ion cutoff velocity, since phi(left) = 0
                     if (i < ngc) {
-                        f(i, j, iv, jv, 1) = (vy > v_ci)
-                                                 ? exp(-(pow(vx, 2) + pow(sqrt(pow(vy, 2) - pow(v_ci, 2)) - u0, 2)) /
-                                                       (2.0 * pow(v_th_i, 2))) /
-                                                       (2.0 * pi * pow(v_th_i, 2))
-                                                 : 0.0;
+                        f(i, j, iv, jv, 1) =
+                            (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
                     } else if (i >= nx - ngc && vx < 0.0) {
                         f(i, j, iv, jv, 1) = 0.0; // right domain boundary, zero-inflow
                     } else if (j < ngc) {
@@ -213,7 +200,6 @@ int main(int argc, char* argv[]) {
     double mi     = 2 * 1836.0;            // ion mass, normalized to me
     double v_th_e = Kokkos::sqrt(Te / me); // electron thermal velocity
     double v_th_i = Kokkos::sqrt(Ti / mi); // ion thermal velocity, normalized to v_th_e
-    double u0     = Kokkos::sqrt(Te / mi); // Bohm velocity, normalized to v_th_e
 
     Grid grid({nx_intr, ny_intr, nvx_intr, nvy_intr}, ngc);
     grid.set_grid({x_min_e, y_min_e, vx_min_e, vy_min_e}, {Lx_e, Ly_e, Lvx_e, Lvy_e}, 0); // electrons
@@ -228,9 +214,6 @@ int main(int argc, char* argv[]) {
     world.m           = Kokkos::Array<double, 2>{me, mi};    // relative mass of electrons and ions
     world.q           = Kokkos::Array<double, 2>{-1.0, 1.0}; // charge number of electrons and ions
     world.T           = Kokkos::Array<double, 2>{Te, Ti};    // relative temperature of electrons and ions
-    world.v_th_e      = v_th_e;
-    world.v_th_i      = v_th_i;
-    world.u0          = u0;
 
     PoissonSolver2ndOrder poisson_solver(world); // set lower relaxation for convergence
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi"});

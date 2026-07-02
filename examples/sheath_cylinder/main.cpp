@@ -10,7 +10,6 @@
 
 struct ImmersedWorld : World<ImmersedWorld> {
     // all quantities are normalized by electron parameters
-    double phi_w     = -Kokkos::log(Kokkos::sqrt(m[1] / (2 * Kokkos::numbers::pi * m[0]))); // wall potential (estimate)
     double v_th_e    = Kokkos::sqrt(T[0] / m[0]);                                           // electron thermal velocity
     double v_th_i    = Kokkos::sqrt(T[1] / m[1]);                                           // ion thermal velocity
     double u0        = Kokkos::sqrt(T[0] / m[1]);                                           // Bohm velocity
@@ -108,7 +107,6 @@ struct ImmersedWorld : World<ImmersedWorld> {
     };
 
     void potential_boundary_conditions() {
-        // only update when time advances, since the BCs are time-dependent through sigma_w
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
@@ -143,9 +141,10 @@ struct ImmersedWorld : World<ImmersedWorld> {
                 for (int s = 0; s < 2; ++s) {
                     for (int iv = 0; iv < nvx; ++iv) {
                         for (int jv = 0; jv < nvy; ++jv) {
-                            auto [_x, _y, vx, vy] = grid.center(i, j, iv, jv, s);
+                            auto [_x, _y, vx, vy]     = grid.center(i, j, iv, jv, s);
+                            auto [_dx, _dy, dvx, dvy] = grid.spacing(s);
                             // only accumulate when n.v < 0
-                            d_sigma += min(n1 * vx + n2 * vy, 0.0) * f(i, j, iv, jv, s) * dt;
+                            d_sigma += -q[s] * min(n1 * vx + n2 * vy, 0.0) * f(i, j, iv, jv, s) * dvx * dvy * dt;
                         }
                     }
                 }

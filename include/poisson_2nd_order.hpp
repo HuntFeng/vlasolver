@@ -64,7 +64,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     World& world;
     // Value copy of the grid so cell geometry (center/spacing/ngc) is reachable
     // from device kernels without dereferencing the host-resident `world`.
-    Grid grid = world.grid;
+    Grid<World::nspecies> grid = world.grid;
     double tol;
     int gmres_m;
     int max_restart;

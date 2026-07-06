@@ -1,6 +1,6 @@
-#include "full/vlasov.hpp"
-#include "full/world.hpp"
-#include "full/writer.hpp"
+#include "vlasov.hpp"
+#include "world.hpp"
+#include "writer.hpp"
 #include "grid.hpp"
 #include "poisson_2nd_order.hpp"
 #include <INIReader.h>
@@ -8,11 +8,11 @@
 #include <iostream>
 #include <string>
 
-struct ImmersedWorld : World<ImmersedWorld> {
+struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
     double last_step = -1;
 
-    ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {
+    ImmersedWorld(Grid<2>& grid)
+        : World<ImmersedWorld, 2, ElectronModel::Kinetic>(grid) {
         construct_surface();      // fill eta
         construct_permittivity(); // fill eps
         construct_normal_field(); // base method, reads eta
@@ -201,7 +201,7 @@ int main(int argc, char* argv[]) {
     double v_th_e = Kokkos::sqrt(Te / me); // electron thermal velocity
     double v_th_i = Kokkos::sqrt(Ti / mi); // ion thermal velocity, normalized to v_th_e
 
-    Grid grid({nx_intr, ny_intr, nvx_intr, nvy_intr}, ngc);
+    Grid<2> grid({nx_intr, ny_intr, nvx_intr, nvy_intr}, ngc);
     grid.set_grid({x_min_e, y_min_e, vx_min_e, vy_min_e}, {Lx_e, Ly_e, Lvx_e, Lvy_e}, 0); // electrons
     grid.set_grid({x_min_i, y_min_i, vx_min_i * v_th_i, vy_min_i * v_th_i},
                   {Lx_i, Ly_i, Lvx_i * v_th_i, Lvy_i * v_th_i}, 1); // ions
@@ -214,6 +214,7 @@ int main(int argc, char* argv[]) {
     world.m           = Kokkos::Array<double, 2>{me, mi};    // relative mass of electrons and ions
     world.q           = Kokkos::Array<double, 2>{-1.0, 1.0}; // charge number of electrons and ions
     world.T           = Kokkos::Array<double, 2>{Te, Ti};    // relative temperature of electrons and ions
+    world.species_names = {"e", "i"};                        // electron (sp0), ion (sp1)
 
     PoissonSolver2ndOrder poisson_solver(world); // set lower relaxation for convergence
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi"});

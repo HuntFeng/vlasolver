@@ -1,16 +1,16 @@
 #include "grid.hpp"
 #include "poisson_2nd_order.hpp"
-#include "reduced/vlasov.hpp"
-#include "reduced/world.hpp"
-#include "reduced/writer.hpp"
+#include "vlasov.hpp"
+#include "world.hpp"
+#include "writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
 #include <iostream>
 #include <string>
 
-struct ImmersedWorld : World<ImmersedWorld> {
-    ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {
+struct ImmersedWorld : World<ImmersedWorld, 1, ElectronModel::Boltzmann> {
+    ImmersedWorld(Grid<1>& grid)
+        : World<ImmersedWorld, 1, ElectronModel::Boltzmann>(grid) {
         construct_surface();
         construct_permittivity();
         construct_normal_field();
@@ -72,17 +72,17 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
+                auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
                 if (i < ngc) {
-                    f(i, j, iv, jv) =
+                    f(i, j, iv, jv, 0) =
                         (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) / 5 : 0.0; // left boundary, injection
                 } else if (i >= nx - ngc) {
                     if (vx < 0.0)
-                        f(i, j, iv, jv) = 0.0; // right boundary, zero-inflow
+                        f(i, j, iv, jv, 0) = 0.0; // right boundary, zero-inflow
                 } else if (j < ngc) {
-                    f(i, j, iv, jv) = f(i, 2 * ngc - j - 1, iv, nvy - jv - 1); // bottom boundary, reflective
+                    f(i, j, iv, jv, 0) = f(i, 2 * ngc - j - 1, iv, nvy - jv - 1, 0); // bottom boundary, reflective
                 } else if (j >= ny - ngc) {
-                    f(i, j, iv, jv) = f(i, 2 * (ny - ngc) - j - 1, iv, nvy - jv - 1); // top boundary, reflective
+                    f(i, j, iv, jv, 0) = f(i, 2 * (ny - ngc) - j - 1, iv, nvy - jv - 1, 0); // top boundary, reflective
                 }
             });
     };
@@ -156,14 +156,20 @@ int main(int argc, char* argv[]) {
     Kokkos::Array<double, DIM> size     = {Lx, Ly, Lvx, Lvy};                     // size of the grid
     Kokkos::Array<int, DIM> ncells_intr = {nx_intr, ny_intr, nvx_intr, nvy_intr}; // number of interior cells
 
-    Grid grid(ncells_intr, ngc);
+    Grid<1> grid(ncells_intr, ngc);
     grid.set_grid(origin, size, 0);
     ImmersedWorld world(grid);
 
-    world.dt          = dt;          // time step size
-    world.total_time  = total_time;  // total simulation time
-    world.total_steps = total_steps; // number of total_steps
-    world.diag_steps  = diag_steps;  // number of steps between diagnostics
+    world.dt            = dt;          // time step size
+    world.total_time    = total_time;  // total simulation time
+    world.total_steps   = total_steps; // number of total_steps
+    world.diag_steps    = diag_steps;  // number of steps between diagnostics
+    world.species_names = {"i"};       // single kinetic ion species
+    // m, q, T are normalized to electron quantities. Here the single kinetic ion
+    // is normalized to itself, so its mass/charge/temperature all equal 1.
+    world.m = Kokkos::Array<double, 1>{1.0}; // ion mass (= electron mass)
+    world.q = Kokkos::Array<double, 1>{1.0}; // ion charge (= electron charge)
+    world.T = Kokkos::Array<double, 1>{1.0}; // ion temperature (= electron temperature)
 
     PoissonSolver2ndOrder poisson_solver(world, 1e-12);
     Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex", "Ey"});

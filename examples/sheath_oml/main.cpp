@@ -1,6 +1,6 @@
-#include "full/vlasov.hpp"
-#include "full/world.hpp"
-#include "full/writer.hpp"
+#include "vlasov.hpp"
+#include "world.hpp"
+#include "writer.hpp"
 #include "grid.hpp"
 #include "poisson_1st_order.hpp"
 #include <INIReader.h>
@@ -8,15 +8,22 @@
 #include <iostream>
 #include <string>
 
-struct ImmersedWorld : World<ImmersedWorld> {
+struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
     static constexpr double Y_WALL = 2.5;
 
-    // all quantities are normalized by electron parameters
-    double phi_w = -Kokkos::log(Kokkos::sqrt(m[1] / (2 * Kokkos::numbers::pi * m[0]))); // wall potential (estimate)
-    double shape_factor = 2.5;                       // initial potential shape factor
-    double v_th_e       = Kokkos::sqrt(T[0] / m[0]); // electron thermal velocity
-    double v_th_i       = Kokkos::sqrt(T[1] / m[1]); // ion thermal velocity
-    double u0           = Kokkos::sqrt(T[0] / m[1]); // Bohm velocity
+    // all quantities are normalized by electron parameters. Species constants are
+    // defined here (not read from the base m/q/T defaults) so quantities computed
+    // in the member initializers below use the actual masses at construction time.
+    static constexpr double me = 1.0;        // electron mass (normalization)
+    static constexpr double mi = 2 * 1836.0; // ion mass (deuterium), normalized to me
+    static constexpr double Te = 1.0;        // electron temperature (normalization)
+    static constexpr double Ti = 0.1;        // ion temperature, normalized to Te
+
+    double phi_w        = -Kokkos::log(Kokkos::sqrt(mi / (2 * Kokkos::numbers::pi * me))); // wall potential (estimate)
+    double shape_factor = 2.5;             // initial potential shape factor
+    double v_th_e       = Kokkos::sqrt(Te / me); // electron thermal velocity
+    double v_th_i       = Kokkos::sqrt(Ti / mi); // ion thermal velocity
+    double u0           = Kokkos::sqrt(Te / mi); // Bohm velocity
 
     // accumulated surface charge on the immersed interface
     // initial surface charge density
@@ -26,8 +33,8 @@ struct ImmersedWorld : World<ImmersedWorld> {
     // time step guard
     double last_step = -1;
 
-    ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {
+    ImmersedWorld(Grid<2>& grid)
+        : World<ImmersedWorld, 2, ElectronModel::Kinetic>(grid) {
         construct_surface();      // fill eta
         construct_permittivity(); // fill eps
         construct_normal_field(); // base method, reads eta
@@ -276,15 +283,15 @@ int main(int argc, char* argv[]) {
     Kokkos::printf("Simulation control: dt: %f, total_time: %f, total_steps: %d, diag_steps: %d\n", dt, total_time,
                    total_steps, diag_steps);
 
-    double Te     = 1.0;                   // electron temperature
-    double Ti     = 0.1;                   // ion temperature normalized to Te
-    double me     = 1.0;                   // electron mass
-    double mi     = 2 * 1836.0;            // ion mass, normalized to me
+    double Te     = ImmersedWorld::Te;     // electron temperature
+    double Ti     = ImmersedWorld::Ti;     // ion temperature normalized to Te
+    double me     = ImmersedWorld::me;     // electron mass
+    double mi     = ImmersedWorld::mi;     // ion mass, normalized to me
     double v_th_e = Kokkos::sqrt(Te / me); // electron thermal velocity
     double v_th_i = Kokkos::sqrt(Ti / mi); // ion thermal velocity, normalized to v_th_e
     double u0     = Kokkos::sqrt(Te / mi); // Bohm velocity, normalized to v_th_e
 
-    Grid grid({nx_intr, ny_intr, nvx_intr, nvy_intr}, ngc);
+    Grid<2> grid({nx_intr, ny_intr, nvx_intr, nvy_intr}, ngc);
     grid.set_grid({x_min_e, y_min_e, vx_min_e, vy_min_e}, {Lx_e, Ly_e, Lvx_e, Lvy_e}, 0); // electrons
     grid.set_grid({x_min_i, y_min_i, vx_min_i * v_th_i, vy_min_i * v_th_i},
                   {Lx_i, Ly_i, Lvx_i * v_th_i, Lvy_i * v_th_i}, 1); // ions
@@ -297,6 +304,7 @@ int main(int argc, char* argv[]) {
     world.m           = Kokkos::Array<double, 2>{me, mi};    // relative mass of electrons and ions
     world.q           = Kokkos::Array<double, 2>{-1.0, 1.0}; // charge number of electrons and ions
     world.T           = Kokkos::Array<double, 2>{Te, Ti};    // relative temperature of electrons and ions
+    world.species_names = {"e", "i"};                        // electron (sp0), ion (sp1)
     world.v_th_e      = v_th_e;
     world.v_th_i      = v_th_i;
     world.u0          = u0;

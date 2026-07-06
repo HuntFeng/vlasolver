@@ -1,7 +1,7 @@
 #include "grid.hpp"
 #include "poisson_2nd_order.hpp"
-#include "reduced/world.hpp"
-#include "reduced/writer.hpp"
+#include "world.hpp"
+#include "writer.hpp"
 #include <Kokkos_Core.hpp>
 #include <cmath>
 #include <string>
@@ -23,12 +23,12 @@
  *   [u]        = u^+ - u^-
  *   [beta u_n] = (4(x^2+y^2) - 0.1/(x^2+y^2) - 2)*(x*n_x + y*n_y)
  */
-struct ImmersedWorld : World<ImmersedWorld> {
+struct ImmersedWorld : World<ImmersedWorld, 1, ElectronModel::Boltzmann> {
     static constexpr double x0 = 0.02 * 2.23606797749979; // 0.02 * sqrt(5)
     static constexpr double y0 = 0.02 * 1.73205080756888; // 0.02 * sqrt(3)
 
-    ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {
+    ImmersedWorld(Grid<1>& grid)
+        : World<ImmersedWorld, 1, ElectronModel::Boltzmann>(grid) {
 
         construct_surface();
         construct_permittivity();
@@ -133,7 +133,7 @@ int main(int argc, char** argv) {
     Kokkos::Array<int, DIM> ncells_intr = {n, n, 1, 1};
     const int ngc                       = 3;
 
-    Grid grid(ncells_intr, ngc);
+    Grid<1> grid(ncells_intr, ngc);
     grid.set_grid(origin, size, 0);
     ImmersedWorld world(grid);
     PoissonSolver2ndOrder poisson_solver(world);

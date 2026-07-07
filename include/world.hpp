@@ -29,8 +29,6 @@ struct World {
     Kokkos::View<double*****> f;       // distribution function f(x,y,vx,vy,sp) of each kinetic species
     Kokkos::View<double****> flux;     // storing fluxes at cell interfaces
     Kokkos::View<double****> flux_1st; // storing first order fluxes at cell interfaces
-    Kokkos::View<double****> ep_l;     // storing flux limiters at cell interfaces
-    Kokkos::View<double****> ep_r;     // storing flux limiters at cell interfaces
     Kokkos::View<double***> n;      // number density of each species n(x,y,sp)
     Kokkos::View<double**> rho;     // total charge density
     Kokkos::View<double**> phi;     // potential field
@@ -67,8 +65,6 @@ struct World {
         f                       = Kokkos::View<double*****>("f", nx, ny, nvx, nvy, N);
         flux                    = Kokkos::View<double****>("flux", nx, ny, nvx, nvy);
         flux_1st                = Kokkos::View<double****>("flux_1st", nx, ny, nvx, nvy);
-        ep_l                    = Kokkos::View<double****>("ep_l", nx, ny, nvx, nvy);
-        ep_r                    = Kokkos::View<double****>("ep_r", nx, ny, nvx, nvy);
         n                       = Kokkos::View<double***>("n", nx, ny, N);
         rho                     = Kokkos::View<double**>("rho", nx, ny);
         phi                     = Kokkos::View<double**>("phi", nx, ny);
@@ -83,8 +79,6 @@ struct World {
         Kokkos::deep_copy(f, 0.0);
         Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_1st, 0.0);
-        Kokkos::deep_copy(ep_l, 0.0);
-        Kokkos::deep_copy(ep_r, 0.0);
         Kokkos::deep_copy(n, 0.0);
         Kokkos::deep_copy(rho, 0.0);
         Kokkos::deep_copy(phi, 0.0);

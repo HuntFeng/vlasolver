@@ -257,8 +257,6 @@ class Vlasolver {
         auto& eta_field         = world.eta;
         auto& flux              = world.flux;
         auto& flux_1st          = world.flux_1st;
-        auto& ep_l              = world.ep_l;
-        auto& ep_r              = world.ep_r;
         auto& m                 = world.m;
         auto& q                 = world.q;
 
@@ -267,8 +265,6 @@ class Vlasolver {
 
         Kokkos::deep_copy(flux, 0.0);
         Kokkos::deep_copy(flux_1st, 0.0);
-        Kokkos::deep_copy(ep_l, 1.0);
-        Kokkos::deep_copy(ep_r, 1.0);
 
         // Step 1: Compute fluxes at cell interfaces
         Kokkos::parallel_for(
@@ -339,50 +335,11 @@ class Vlasolver {
                 flux(i, j, iv, jv)     = flux_1st(i, j, iv, jv) + flux_correction;
             });
 
-        // Step 2: Compute flux limiters
-        Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
-            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                // flux at left interface is flux(i-1,...) along the active axis, right interface is flux(i,...)
-                double flux_left      = (axis == 0)   ? flux(i - 1, j, iv, jv)
-                                        : (axis == 1) ? flux(i, j - 1, iv, jv)
-                                        : (axis == 2) ? flux(i, j, iv - 1, jv)
-                                                      : flux(i, j, iv, jv - 1);
-                double flux_right     = flux(i, j, iv, jv);
-                double flux_1st_left  = (axis == 0)   ? flux_1st(i - 1, j, iv, jv)
-                                        : (axis == 1) ? flux_1st(i, j - 1, iv, jv)
-                                        : (axis == 2) ? flux_1st(i, j, iv - 1, jv)
-                                                      : flux_1st(i, j, iv, jv - 1);
-                double flux_1st_right = flux_1st(i, j, iv, jv);
-
-                double d_l            = flux_left - flux_1st_left;   // high order correction, left
-                double d_r            = flux_right - flux_1st_right; // high order correction, right
-                double delta =
-                    -f(i, j, iv, jv, sp) - flux_1st_left + flux_1st_right; // 0.0 - 1st_order_update, always <= 0
-                double p = d_l - d_r - delta;                              // p is the 3rd order update without limiter
-
-                // Xiong2014 (http://dx.doi.org/10.1016/j.jcp.2014.05.033)
-                if (d_l >= 0 && d_r <= 0.0) {
-                    ep_l(i, j, iv, jv) = 1.0;
-                    ep_r(i, j, iv, jv) = 1.0;
-                } else if (d_l >= 0.0 && d_r > 0.0) {
-                    ep_l(i, j, iv, jv) = 1.0;
-                    ep_r(i, j, iv, jv) = min(1.0, delta / (-d_r));
-                } else if (d_l < 0.0 && d_r <= 0.0) {
-                    ep_l(i, j, iv, jv) = min(1.0, delta / d_l);
-                    ep_r(i, j, iv, jv) = 1.0;
-                } else if (d_l < 0.0 && d_r > 0.0) {
-                    if (p >= 0) {
-                        ep_l(i, j, iv, jv) = 1.0;
-                        ep_r(i, j, iv, jv) = 1.0;
-                    } else {
-                        ep_l(i, j, iv, jv) = delta / (d_l - d_r);
-                        ep_r(i, j, iv, jv) = delta / (d_l - d_r);
-                    }
-                }
-            });
-
-        // Step 3: Update distribution function
+        // Step 2: Compute flux limiters and update distribution function (fused).
+        // The Xiong2014 limiters (ep_l, ep_r) are a purely local function of the
+        // already-computed interface fluxes, so we recompute them on the fly for
+        // the current cell and its two neighbors along the active axis instead of
+        // storing them in full-domain views.
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
@@ -395,7 +352,46 @@ class Vlasolver {
                 if (eta < 0.0)
                     return;
 
-                // Get fluxes and limiters at left and right interfaces
+                // Xiong2014 (http://dx.doi.org/10.1016/j.jcp.2014.05.033) flux limiters
+                // for the cell (I,J,Iv,Jv), returned as {ep_l, ep_r}.
+                auto compute_ep = [&](int I, int J, int Iv, int Jv) -> Kokkos::pair<double, double> {
+                    double fl_l  = (axis == 0)   ? flux(I - 1, J, Iv, Jv)
+                                   : (axis == 1) ? flux(I, J - 1, Iv, Jv)
+                                   : (axis == 2) ? flux(I, J, Iv - 1, Jv)
+                                                 : flux(I, J, Iv, Jv - 1);
+                    double fl_r  = flux(I, J, Iv, Jv);
+                    double f1_l  = (axis == 0)   ? flux_1st(I - 1, J, Iv, Jv)
+                                   : (axis == 1) ? flux_1st(I, J - 1, Iv, Jv)
+                                   : (axis == 2) ? flux_1st(I, J, Iv - 1, Jv)
+                                                 : flux_1st(I, J, Iv, Jv - 1);
+                    double f1_r  = flux_1st(I, J, Iv, Jv);
+                    double d_l   = fl_l - f1_l;                        // high order correction, left
+                    double d_r   = fl_r - f1_r;                        // high order correction, right
+                    double delta = -f(I, J, Iv, Jv, sp) - f1_l + f1_r; // 0.0 - 1st_order_update, always <= 0
+                    double p     = d_l - d_r - delta;                  // 3rd order update without limiter
+                    double ep_l_val = 1.0, ep_r_val = 1.0;
+                    if (d_l >= 0 && d_r <= 0.0) {
+                        ep_l_val = 1.0;
+                        ep_r_val = 1.0;
+                    } else if (d_l >= 0.0 && d_r > 0.0) {
+                        ep_l_val = 1.0;
+                        ep_r_val = min(1.0, delta / (-d_r));
+                    } else if (d_l < 0.0 && d_r <= 0.0) {
+                        ep_l_val = min(1.0, delta / d_l);
+                        ep_r_val = 1.0;
+                    } else if (d_l < 0.0 && d_r > 0.0) {
+                        if (p >= 0) {
+                            ep_l_val = 1.0;
+                            ep_r_val = 1.0;
+                        } else {
+                            ep_l_val = delta / (d_l - d_r);
+                            ep_r_val = delta / (d_l - d_r);
+                        }
+                    }
+                    return {ep_l_val, ep_r_val};
+                };
+
+                // Get fluxes at left and right interfaces
                 double flux_left      = (axis == 0)   ? flux(i - 1, j, iv, jv)
                                         : (axis == 1) ? flux(i, j - 1, iv, jv)
                                         : (axis == 2) ? flux(i, j, iv - 1, jv)
@@ -407,19 +403,33 @@ class Vlasolver {
                                                       : flux_1st(i, j, iv, jv - 1);
                 double flux_1st_right = flux_1st(i, j, iv, jv);
 
+                // limiters for this cell and its two neighbors along the active axis
+                Kokkos::pair<double, double> ep_c = compute_ep(i, j, iv, jv);
+                Kokkos::pair<double, double> ep_lo, ep_hi;
+                if (axis == 0) {
+                    ep_lo = compute_ep(i - 1, j, iv, jv);
+                    ep_hi = compute_ep(i + 1, j, iv, jv);
+                } else if (axis == 1) {
+                    ep_lo = compute_ep(i, j - 1, iv, jv);
+                    ep_hi = compute_ep(i, j + 1, iv, jv);
+                } else if (axis == 2) {
+                    ep_lo = compute_ep(i, j, iv - 1, jv);
+                    ep_hi = compute_ep(i, j, iv + 1, jv);
+                } else {
+                    ep_lo = compute_ep(i, j, iv, jv - 1);
+                    ep_hi = compute_ep(i, j, iv, jv + 1);
+                }
+
                 double ep_left = 0.0, ep_right = 0.0;
                 if (axis == 0) {
-                    ep_left  = (eta_l < 0.0) ? ep_l(i, j, iv, jv) : min(ep_r(i - 1, j, iv, jv), ep_l(i, j, iv, jv));
-                    ep_right = (eta_r < 0.0) ? ep_r(i, j, iv, jv) : min(ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv));
+                    ep_left  = (eta_l < 0.0) ? ep_c.first : min(ep_lo.second, ep_c.first);
+                    ep_right = (eta_r < 0.0) ? ep_c.second : min(ep_c.second, ep_hi.first);
                 } else if (axis == 1) {
-                    ep_left  = (eta_b < 0.0) ? ep_l(i, j, iv, jv) : min(ep_r(i, j - 1, iv, jv), ep_l(i, j, iv, jv));
-                    ep_right = (eta_t < 0.0) ? ep_r(i, j, iv, jv) : min(ep_r(i, j, iv, jv), ep_l(i, j + 1, iv, jv));
-                } else if (axis == 2) {
-                    ep_left  = min(ep_r(i, j, iv - 1, jv), ep_l(i, j, iv, jv));
-                    ep_right = min(ep_r(i, j, iv, jv), ep_l(i, j, iv + 1, jv));
+                    ep_left  = (eta_b < 0.0) ? ep_c.first : min(ep_lo.second, ep_c.first);
+                    ep_right = (eta_t < 0.0) ? ep_c.second : min(ep_c.second, ep_hi.first);
                 } else {
-                    ep_left  = min(ep_r(i, j, iv, jv - 1), ep_l(i, j, iv, jv));
-                    ep_right = min(ep_r(i, j, iv, jv), ep_l(i, j, iv, jv + 1));
+                    ep_left  = min(ep_lo.second, ep_c.first);
+                    ep_right = min(ep_c.second, ep_hi.first);
                 }
 
                 double flux_hat_l = ep_left * (flux_left - flux_1st_left) + flux_1st_left;
@@ -458,19 +468,25 @@ class Vlasolver {
                     }
                     Kokkos::printf("\nWarning: Negative distribution\n\
                         sp = %d, axis = %d, s = %d\n\
-                        f(%d, %d, %d, %d) = %e\n\
-                        f_old = %e\n\
-                        (left) ep_r = %e, ep_l = %e   (right) ep_r = %e, ep_l = %e\n\
+                        i = %d, j = %d, iv = %d, jv = %d\n\
+                        x = %e, y = %e, vx = %e, vy = %e\n\
+                        dx = %e, dy = %e, dvx = %e, dvy = %e\n\
+                        eta = %e, eta_l = %e, eta_r = %e, eta_b = %e, eta_t = %e\n\
+                        f = %e, f_old = %e\n\
+                        ep_c   (ep_l = %e, ep_r = %e)\n\
+                        ep_lo  (ep_l = %e, ep_r = %e)\n\
+                        ep_hi  (ep_l = %e, ep_r = %e)\n\
                         ep_left = %e, ep_right = %e\n\
                         flux_left = %e, flux_right = %e\n\
                         flux_1st_left = %e, flux_1st_right = %e\n\
                         flux_hat_l = %e, flux_hat_r = %e\n\
-                        v_adv = %e\n\
+                        v_adv = %e, floor_velocity = %e\n\
                         d_l = %e, d_r = %e, delta = %e, p = %e\n",
-                                   sp, axis, s, i, j, iv, jv, f(i, j, iv, jv, sp), f_old, ep_r(i - 1, j, iv, jv),
-                                   ep_l(i, j, iv, jv), ep_r(i, j, iv, jv), ep_l(i + 1, j, iv, jv), ep_left, ep_right,
-                                   flux_left, flux_right, flux_1st_left, flux_1st_right, flux_hat_l, flux_hat_r,
-                                   advection_velocity, d_l, d_r, delta, p);
+                                   sp, axis, s, i, j, iv, jv, x, y, vx, vy, dx, dy, dvx, dvy, eta, eta_l, eta_r, eta_b,
+                                   eta_t, f(i, j, iv, jv, sp), f_old, ep_c.first, ep_c.second, ep_lo.first, ep_lo.second,
+                                   ep_hi.first, ep_hi.second, ep_left, ep_right, flux_left, flux_right, flux_1st_left,
+                                   flux_1st_right, flux_hat_l, flux_hat_r, advection_velocity, floor_velocity, d_l, d_r,
+                                   delta, p);
                     if (f(i, j, iv, jv, sp) < -1e-15)
                         Kokkos::abort("Abort: Negative distribution");
                 }

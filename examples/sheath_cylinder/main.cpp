@@ -1,8 +1,8 @@
+#include "grid.hpp"
+#include "poisson_2nd_order.hpp"
 #include "vlasov.hpp"
 #include "world.hpp"
 #include "writer.hpp"
-#include "grid.hpp"
-#include "poisson_2nd_order.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
 #include <iostream>
@@ -25,7 +25,7 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 auto [x, y] = grid.center(i, j);
-                eta(i, j)   = Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.1, 2);
+                eta(i, j)   = Kokkos::pow(x + 0.5, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.1, 2);
             });
     }
 
@@ -40,7 +40,7 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
             });
     }
 
-    void initialize_distribution() {};
+    void initialize_distribution(){};
 
     void particle_boundary_conditions() {
         using Kokkos::exp;
@@ -197,7 +197,7 @@ int main(int argc, char* argv[]) {
     double Te     = 1.0;                   // electron temperature
     double Ti     = 0.1;                   // ion temperature normalized to Te
     double me     = 1.0;                   // electron mass
-    double mi     = 2 * 1836.0;            // ion mass, normalized to me
+    double mi     = 1.0;                   // ion mass, normalized to me
     double v_th_e = Kokkos::sqrt(Te / me); // electron thermal velocity
     double v_th_i = Kokkos::sqrt(Ti / mi); // ion thermal velocity, normalized to v_th_e
 
@@ -207,14 +207,14 @@ int main(int argc, char* argv[]) {
                   {Lx_i, Ly_i, Lvx_i * v_th_i, Lvy_i * v_th_i}, 1); // ions
 
     ImmersedWorld world(grid);
-    world.dt          = dt;                                  // time step size
-    world.total_time  = total_time;                          // total simulation time
-    world.total_steps = total_steps;                         // number of total_steps
-    world.diag_steps  = diag_steps;                          // number of steps between diagnostics
-    world.m           = Kokkos::Array<double, 2>{me, mi};    // relative mass of electrons and ions
-    world.q           = Kokkos::Array<double, 2>{-1.0, 1.0}; // charge number of electrons and ions
-    world.T           = Kokkos::Array<double, 2>{Te, Ti};    // relative temperature of electrons and ions
-    world.species_names = {"e", "i"};                        // electron (sp0), ion (sp1)
+    world.dt            = dt;                                  // time step size
+    world.total_time    = total_time;                          // total simulation time
+    world.total_steps   = total_steps;                         // number of total_steps
+    world.diag_steps    = diag_steps;                          // number of steps between diagnostics
+    world.m             = Kokkos::Array<double, 2>{me, mi};    // relative mass of electrons and ions
+    world.q             = Kokkos::Array<double, 2>{-1.0, 1.0}; // charge number of electrons and ions
+    world.T             = Kokkos::Array<double, 2>{Te, Ti};    // relative temperature of electrons and ions
+    world.species_names = {"e", "i"};                          // electron (sp0), ion (sp1)
 
     PoissonSolver2ndOrder poisson_solver(world); // set lower relaxation for convergence
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi"});

@@ -23,7 +23,7 @@ Lx, Ly = 2, 2
 G = 3
 is_include_circle = True
 
-step = 30
+step = 1000
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
     f"{file_path}/../../data/sheath_cylinder/output_{step:04d}.h5",
@@ -34,8 +34,8 @@ with h5py.File(
 
 dx = Lx / nx
 dy = Ly / ny
-x = np.arange(dx / 2 - G * dx +x_min, x_min + Lx + G * dx, dx)
-y = np.arange(dy / 2 - G * dy +y_min, y_min + Ly + G * dy, dy)
+x = np.arange(dx / 2 - G * dx + x_min, x_min + Lx + G * dx, dx)
+y = np.arange(dy / 2 - G * dy + y_min, y_min + Ly + G * dy, dy)
 X, Y = np.meshgrid(x, y, indexing="ij")
 
 fig, ax = plt.subplots(figsize=(6, 3))
@@ -44,17 +44,17 @@ plt.colorbar(c)
 plt.title("$n_i$")
 if is_include_circle:
     circle = Wedge(
-        center=(0.375, 0),
-        r=0.125,
+        center=(-0.5, 0),
+        r=0.1,
         theta1=0,
-        theta2=180,
+        theta2=360,
         facecolor="white",
         edgecolor="k",
         linewidth=2,
     )
     ax.add_patch(circle)
-ax.set_xlim(0, 1)
-ax.set_ylim(0, 0.5)
+ax.set_xlim(x_min, x_min + Lx)
+ax.set_ylim(y_min, y_min + Ly)
 ax.set_xlabel("$x/L_x$")
 ax.set_ylabel("$y/L_x$")
 plt.tight_layout()
@@ -66,17 +66,17 @@ plt.colorbar(c)
 plt.title("$e\\phi/2k_BT_i$")
 if is_include_circle:
     circle = Wedge(
-        center=(0.375, 0),
-        r=0.125,
+        center=(-0.5, 0),
+        r=0.1,
         theta1=0,
-        theta2=180,
+        theta2=360,
         facecolor="white",
         edgecolor="k",
         linewidth=2,
     )
     ax.add_patch(circle)
-ax.set_xlim(0, 1)
-ax.set_ylim(0, 0.5)
+ax.set_xlim(x_min, x_min + Lx)
+ax.set_ylim(y_min, y_min + Ly)
 ax.set_xlabel("$x/L_x$")
 ax.set_ylabel("$y/L_x$")
 plt.tight_layout()

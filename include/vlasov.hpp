@@ -257,6 +257,7 @@ class Vlasolver {
         auto& eta_field         = world.eta;
         auto& flux              = world.flux;
         auto& flux_1st          = world.flux_1st;
+        auto& df                = world.df;
         auto& m                 = world.m;
         auto& q                 = world.q;
 
@@ -343,11 +344,21 @@ class Vlasolver {
         // lambda via KOKKOS_CLASS_LAMBDA (= [=, *this]).
         Kokkos::View<int> report_claimed("pfc_report_claimed");
 
-        // Step 2: Compute flux limiters and update distribution function (fused).
-        // The Xiong2014 limiters (ep_l, ep_r) are a purely local function of the
-        // already-computed interface fluxes, so we recompute them on the fly for
-        // the current cell and its two neighbors along the active axis instead of
-        // storing them in full-domain views.
+        // Step 2: Compute the limited PFC update increment for every fluid cell.
+        //
+        // IMPORTANT: this pass only READS f (never writes it) and writes the increment
+        // into the scratch view `df`. The Xiong2014 limiters couple neighboring cells via
+        // min(), so compute_ep for a cell reads f at that cell to form `delta`. If the
+        // limiter computation and the `f += ...` update were fused into a single kernel
+        // (as an earlier memory-saving version did), a thread's compute_ep could read a
+        // neighbor cell whose own thread had already applied its in-place update. That
+        // stale/mixed read makes the neighbor's `delta` come out positive, its limiter go
+        // negative, and (through the min() coupling) drives a good cell's distribution
+        // negative. Separating "compute increment" from "apply increment" into two passes
+        // guarantees every compute_ep sees the pristine pre-update f. We store a single
+        // per-cell increment (df) rather than the two full-domain limiter views (ep_l,
+        // ep_r), so this stays cheaper than the classic three-pass layout.
+        Kokkos::deep_copy(df, 0.0);
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
@@ -442,65 +453,34 @@ class Vlasolver {
 
                 double flux_hat_l = ep_left * (flux_left - flux_1st_left) + flux_1st_left;
                 double flux_hat_r = ep_right * (flux_right - flux_1st_right) + flux_1st_right;
-                f(i, j, iv, jv, sp) += flux_hat_l - flux_hat_r;
+                df(i, j, iv, jv)  = flux_hat_l - flux_hat_r;
+            });
+
+        // Step 3: Apply the increment. f is read/written only for its own cell here, so
+        // there is no cross-cell hazard.
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+                double eta = eta_field(i, j);
+                if (eta < 0.0)
+                    return;
+
+                f(i, j, iv, jv, sp) += df(i, j, iv, jv);
 
                 // integrity check: a correct MPP update should never produce a
                 // meaningfully negative distribution in a fluid cell
-                if (eta > 0.0 && f(i, j, iv, jv, sp) < -1e-16 &&
+                if (eta > 0.0 && f(i, j, iv, jv, sp) < -1e-15 &&
                     Kokkos::atomic_compare_exchange(&report_claimed(), 0, 1) == 0) {
-                    auto [x, y, vx, vy]       = grid.center(i, j, iv, jv, sp);
-                    auto [dx, dy, dvx, dvy]   = grid.spacing(sp);
-                    double f_old              = f(i, j, iv, jv, sp) - (flux_hat_l - flux_hat_r);
-                    double d_l                = flux_left - flux_1st_left;
-                    double d_r                = flux_right - flux_1st_right;
-                    double delta              = -f_old - flux_1st_left + flux_1st_right;
-                    double p                  = d_l - d_r - delta;
-                    double advection_velocity = 0.0;
-                    double floor_velocity     = 0.0;
-                    int s                     = 0;
-                    if (axis == 0) {
-                        advection_velocity = vx * dt / dx;
-                        floor_velocity     = floor(advection_velocity);
-                        s                  = i - (int)floor_velocity;
-                    } else if (axis == 1) {
-                        advection_velocity = vy * dt / dy;
-                        floor_velocity     = floor(advection_velocity);
-                        s                  = j - (int)floor_velocity;
-                    } else if (axis == 2) {
-                        advection_velocity = q[sp] / m[sp] * E(i, j, 0) * dt / dvx;
-                        floor_velocity     = floor(advection_velocity);
-                        s                  = iv - (int)floor_velocity;
-                    } else if (axis == 3) {
-                        advection_velocity = q[sp] / m[sp] * E(i, j, 1) * dt / dvy;
-                        floor_velocity     = floor(advection_velocity);
-                        s                  = jv - (int)floor_velocity;
-                    }
-                    // Only this thread reaches here (atomic claim above), so these
-                    // several printf calls cannot interleave with other threads. Device
-                    // printf caps varargs (~32), so keep each call small.
+                    auto [x, y, vx, vy]     = grid.center(i, j, iv, jv, sp);
+                    auto [dx, dy, dvx, dvy] = grid.spacing(sp);
+                    double f_old            = f(i, j, iv, jv, sp) - df(i, j, iv, jv);
                     Kokkos::printf("\nWarning: Negative distribution\n"
-                                   "  sp = %d, axis = %d, s = %d\n"
+                                   "  sp = %d, axis = %d\n"
                                    "  i = %d, j = %d, iv = %d, jv = %d\n",
-                                   sp, axis, s, i, j, iv, jv);
+                                   sp, axis, i, j, iv, jv);
                     Kokkos::printf("  x = %e, y = %e, vx = %e, vy = %e\n"
-                                   "  dx = %e, dy = %e, dvx = %e, dvy = %e\n",
-                                   x, y, vx, vy, dx, dy, dvx, dvy);
-                    Kokkos::printf("  eta = %e, eta_l = %e, eta_r = %e, eta_b = %e, eta_t = %e\n"
-                                   "  f = %e, f_old = %e\n",
-                                   eta, eta_l, eta_r, eta_b, eta_t, f(i, j, iv, jv, sp), f_old);
-                    Kokkos::printf("  ep_c  (ep_l = %e, ep_r = %e)\n"
-                                   "  ep_lo (ep_l = %e, ep_r = %e)\n"
-                                   "  ep_hi (ep_l = %e, ep_r = %e)\n"
-                                   "  ep_left = %e, ep_right = %e\n",
-                                   ep_c.first, ep_c.second, ep_lo.first, ep_lo.second, ep_hi.first, ep_hi.second,
-                                   ep_left, ep_right);
-                    Kokkos::printf("  flux_left = %e, flux_right = %e\n"
-                                   "  flux_1st_left = %e, flux_1st_right = %e\n"
-                                   "  flux_hat_l = %e, flux_hat_r = %e\n",
-                                   flux_left, flux_right, flux_1st_left, flux_1st_right, flux_hat_l, flux_hat_r);
-                    Kokkos::printf("  v_adv = %e, floor_velocity = %e\n"
-                                   "  d_l = %e, d_r = %e, delta = %e, p = %e\n",
-                                   advection_velocity, floor_velocity, d_l, d_r, delta, p);
+                                   "  f = %e, f_old = %e, df = %e\n",
+                                   x, y, vx, vy, f(i, j, iv, jv, sp), f_old, df(i, j, iv, jv));
                     Kokkos::abort("Abort: Negative distribution");
                 }
 

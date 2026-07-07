@@ -29,6 +29,7 @@ struct World {
     Kokkos::View<double*****> f;       // distribution function f(x,y,vx,vy,sp) of each kinetic species
     Kokkos::View<double****> flux;     // storing fluxes at cell interfaces
     Kokkos::View<double****> flux_1st; // storing first order fluxes at cell interfaces
+    Kokkos::View<double****> df;       // per-cell PFC update increment (computed before applying to f)
     Kokkos::View<double***> n;      // number density of each species n(x,y,sp)
     Kokkos::View<double**> rho;     // total charge density
     Kokkos::View<double**> phi;     // potential field
@@ -65,6 +66,7 @@ struct World {
         f                       = Kokkos::View<double*****>("f", nx, ny, nvx, nvy, N);
         flux                    = Kokkos::View<double****>("flux", nx, ny, nvx, nvy);
         flux_1st                = Kokkos::View<double****>("flux_1st", nx, ny, nvx, nvy);
+        df                      = Kokkos::View<double****>("df", nx, ny, nvx, nvy);
         n                       = Kokkos::View<double***>("n", nx, ny, N);
         rho                     = Kokkos::View<double**>("rho", nx, ny);
         phi                     = Kokkos::View<double**>("phi", nx, ny);

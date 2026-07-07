@@ -335,6 +335,14 @@ class Vlasolver {
                 flux(i, j, iv, jv)     = flux_1st(i, j, iv, jv) + flux_correction;
             });
 
+        // Diagnostic guard: the negative-distribution report below aborts the run, so we
+        // only need one thread's output. This scalar View (zero-initialized) is claimed
+        // atomically by the first offending thread; every other thread skips the report.
+        // Without this, splitting the report into several printf calls would let the
+        // messages from concurrent threads interleave. Captured by value into the device
+        // lambda via KOKKOS_CLASS_LAMBDA (= [=, *this]).
+        Kokkos::View<int> report_claimed("pfc_report_claimed");
+
         // Step 2: Compute flux limiters and update distribution function (fused).
         // The Xiong2014 limiters (ep_l, ep_r) are a purely local function of the
         // already-computed interface fluxes, so we recompute them on the fly for
@@ -438,7 +446,8 @@ class Vlasolver {
 
                 // integrity check: a correct MPP update should never produce a
                 // meaningfully negative distribution in a fluid cell
-                if (eta > 0.0 && f(i, j, iv, jv, sp) < -1e-16) {
+                if (eta > 0.0 && f(i, j, iv, jv, sp) < -1e-16 &&
+                    Kokkos::atomic_compare_exchange(&report_claimed(), 0, 1) == 0) {
                     auto [x, y, vx, vy]       = grid.center(i, j, iv, jv, sp);
                     auto [dx, dy, dvx, dvy]   = grid.spacing(sp);
                     double f_old              = f(i, j, iv, jv, sp) - (flux_hat_l - flux_hat_r);
@@ -466,29 +475,33 @@ class Vlasolver {
                         floor_velocity     = floor(advection_velocity);
                         s                  = jv - (int)floor_velocity;
                     }
-                    Kokkos::printf("\nWarning: Negative distribution\n\
-                        sp = %d, axis = %d, s = %d\n\
-                        i = %d, j = %d, iv = %d, jv = %d\n\
-                        x = %e, y = %e, vx = %e, vy = %e\n\
-                        dx = %e, dy = %e, dvx = %e, dvy = %e\n\
-                        eta = %e, eta_l = %e, eta_r = %e, eta_b = %e, eta_t = %e\n\
-                        f = %e, f_old = %e\n\
-                        ep_c   (ep_l = %e, ep_r = %e)\n\
-                        ep_lo  (ep_l = %e, ep_r = %e)\n\
-                        ep_hi  (ep_l = %e, ep_r = %e)\n\
-                        ep_left = %e, ep_right = %e\n\
-                        flux_left = %e, flux_right = %e\n\
-                        flux_1st_left = %e, flux_1st_right = %e\n\
-                        flux_hat_l = %e, flux_hat_r = %e\n\
-                        v_adv = %e, floor_velocity = %e\n\
-                        d_l = %e, d_r = %e, delta = %e, p = %e\n",
-                                   sp, axis, s, i, j, iv, jv, x, y, vx, vy, dx, dy, dvx, dvy, eta, eta_l, eta_r, eta_b,
-                                   eta_t, f(i, j, iv, jv, sp), f_old, ep_c.first, ep_c.second, ep_lo.first, ep_lo.second,
-                                   ep_hi.first, ep_hi.second, ep_left, ep_right, flux_left, flux_right, flux_1st_left,
-                                   flux_1st_right, flux_hat_l, flux_hat_r, advection_velocity, floor_velocity, d_l, d_r,
-                                   delta, p);
-                    if (f(i, j, iv, jv, sp) < -1e-15)
-                        Kokkos::abort("Abort: Negative distribution");
+                    // Only this thread reaches here (atomic claim above), so these
+                    // several printf calls cannot interleave with other threads. Device
+                    // printf caps varargs (~32), so keep each call small.
+                    Kokkos::printf("\nWarning: Negative distribution\n"
+                                   "  sp = %d, axis = %d, s = %d\n"
+                                   "  i = %d, j = %d, iv = %d, jv = %d\n",
+                                   sp, axis, s, i, j, iv, jv);
+                    Kokkos::printf("  x = %e, y = %e, vx = %e, vy = %e\n"
+                                   "  dx = %e, dy = %e, dvx = %e, dvy = %e\n",
+                                   x, y, vx, vy, dx, dy, dvx, dvy);
+                    Kokkos::printf("  eta = %e, eta_l = %e, eta_r = %e, eta_b = %e, eta_t = %e\n"
+                                   "  f = %e, f_old = %e\n",
+                                   eta, eta_l, eta_r, eta_b, eta_t, f(i, j, iv, jv, sp), f_old);
+                    Kokkos::printf("  ep_c  (ep_l = %e, ep_r = %e)\n"
+                                   "  ep_lo (ep_l = %e, ep_r = %e)\n"
+                                   "  ep_hi (ep_l = %e, ep_r = %e)\n"
+                                   "  ep_left = %e, ep_right = %e\n",
+                                   ep_c.first, ep_c.second, ep_lo.first, ep_lo.second, ep_hi.first, ep_hi.second,
+                                   ep_left, ep_right);
+                    Kokkos::printf("  flux_left = %e, flux_right = %e\n"
+                                   "  flux_1st_left = %e, flux_1st_right = %e\n"
+                                   "  flux_hat_l = %e, flux_hat_r = %e\n",
+                                   flux_left, flux_right, flux_1st_left, flux_1st_right, flux_hat_l, flux_hat_r);
+                    Kokkos::printf("  v_adv = %e, floor_velocity = %e\n"
+                                   "  d_l = %e, d_r = %e, delta = %e, p = %e\n",
+                                   advection_velocity, floor_velocity, d_l, d_r, delta, p);
+                    Kokkos::abort("Abort: Negative distribution");
                 }
 
                 // fix any negative value due to numerical error

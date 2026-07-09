@@ -80,7 +80,7 @@ if is_include_circle:
 ax[0].set_xlim(x_min, x_min + Lx)
 ax[0].set_ylim(y_min, y_min + Ly)
 ax[0].set_xlabel("$x/L_x$")
-ax[0].set_ylabel("$y/L_x$")
+ax[0].set_ylabel("$y/L_y$")
 ax[0].set_aspect("equal")
 
 c2 = ax[1].contourf(X, Y, phi0, cmap="jet", levels=50, norm=phi_norm)
@@ -90,7 +90,7 @@ if is_include_circle:
 ax[1].set_xlim(x_min, x_min + Lx)
 ax[1].set_ylim(y_min, y_min + Ly)
 ax[1].set_xlabel("$x/L_x$")
-ax[1].set_ylabel("$y/L_x$")
+ax[1].set_ylabel("$y/L_y$")
 ax[1].set_aspect("equal")
 
 fig.tight_layout()
@@ -129,7 +129,7 @@ anim = animation.FuncAnimation(
 
 with tqdm(total=num_frames, desc="Rendering animation") as pbar:
     anim.save(
-        f"{file_path}/star.mp4",
+        f"{file_path}/sheath_cylinder.mp4",
         progress_callback=lambda i, n: pbar.update(1),
     )
 plt.show()

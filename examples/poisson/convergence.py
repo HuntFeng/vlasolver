@@ -6,6 +6,18 @@ import matplotlib.cm as cm
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
+plt.rcParams.update(
+    {
+        "font.size": 14,  # Base font size
+        "axes.labelsize": 16,  # Size for x and y labels
+        "axes.titlesize": 16,  # Size for plot titles
+        "xtick.labelsize": 14,  # Size for x-axis tick labels
+        "ytick.labelsize": 14,  # Size for y-axis tick labels
+        "legend.fontsize": 14,  # Size for legend text
+        "figure.titlesize": 16,  # Size for figure titles
+    }
+)
+
 def surface(x, y):
     rr = np.sqrt((x - x0) ** 2 + (y - y0) ** 2)
     ang = np.arctan2(y - y0, x - x0)
@@ -91,21 +103,21 @@ for idx, n in enumerate(n_range):
     )
 
 plt.figure()
-plt.subplot(121)
 plt.loglog(1 / n_range, errors_u, "o-", label="actual")
 plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
 plt.xlabel("h")
 plt.ylabel("err")
 plt.legend()
 plt.title("Example 4.2: convergence of $u$")
-plt.subplot(122)
+plt.savefig(f"{file_path}/convergence_poisson_solution.png")
+plt.figure()
 plt.loglog(1 / n_range, errors_du, "o-", label="actual")
 plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
 plt.xlabel("h")
 plt.ylabel("err")
 plt.legend()
 plt.title("Example 4.2: convergence of $\\nabla u$")
-plt.savefig(f"{file_path}/convergence_poisson.png")
+plt.savefig(f"{file_path}/convergence_poisson_gradient.png")
 
 fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
 ax[0].plot_surface(X, Y, u_exact, edgecolor="black", cmap=cm.coolwarm)

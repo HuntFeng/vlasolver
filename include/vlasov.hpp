@@ -19,7 +19,7 @@
  * - Kinetic model:   all species evolved kinetically; rho = sum q[sp] n[sp].
  * - Boltzmann model: only ions evolved kinetically; rho = sum q[sp] n[sp] - exp(phi).
  */
-#include "matrix/solve.hpp"
+#include "linalg.hpp"
 #include "world.hpp"
 #include "writer.hpp"
 #include <Kokkos_Core.hpp>

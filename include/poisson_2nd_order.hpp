@@ -7,7 +7,7 @@
  **/
 #pragma once
 #include "grid.hpp"
-#include "matrix/solve.hpp"
+#include "linalg.hpp"
 #include "poisson.hpp"
 #include <KokkosKernels_Handle.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>

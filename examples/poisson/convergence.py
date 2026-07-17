@@ -21,7 +21,7 @@ plt.rcParams.update(
 def surface(x, y):
     rr = np.sqrt((x - x0) ** 2 + (y - y0) ** 2)
     ang = np.arctan2(y - y0, x - x0)
-    return rr - (0.5 + 0.15 * np.sin(5 * ang))
+    return rr - (0.5 + 0.05 * np.sin(5 * ang))
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 G = 3
@@ -29,7 +29,7 @@ G = 3
 x0 = 0.02 * np.sqrt(5)
 y0 = 0.02 * np.sqrt(3)
 eps_safe = 1e-30
-n_range = 2 ** np.arange(3, 10, dtype=int)
+n_range = 2 ** np.arange(5, 9, dtype=int)
 errors_u = np.zeros(n_range.size)
 errors_du = np.zeros(n_range.size)
 for i, n in enumerate(n_range):
@@ -119,16 +119,11 @@ plt.legend()
 plt.title("Convergence of $\\nabla u$")
 plt.savefig(f"{file_path}/convergence_poisson_gradient.png")
 
-fig, ax = plt.subplots(1, 2, subplot_kw={"projection": "3d"})
-ax[0].plot_surface(X, Y, u_exact, edgecolor="black", cmap=cm.coolwarm)
-ax[0].set_xlabel("x")
-ax[0].set_ylabel("y")
-ax[0].set_title("Exact")
-ax[0].view_init(elev=85, azim=10, roll=0)
-ax[1].plot_surface(X, Y, phi, edgecolor="black", cmap=cm.coolwarm)
-ax[1].set_xlabel("x")
-ax[1].set_ylabel("y")
-ax[1].set_title("Numerical")
-ax[1].view_init(elev=85, azim=10, roll=0)
+fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+ax.plot_surface(X, Y, phi, edgecolor="black", cmap=cm.coolwarm)
+ax.set_xlabel("x")
+ax.set_ylabel("y")
+ax.set_zticks([])
+ax.view_init(elev=85, azim=10, roll=0)
 plt.savefig(f"{file_path}/poisson_solution.png", dpi=200)
 plt.show()

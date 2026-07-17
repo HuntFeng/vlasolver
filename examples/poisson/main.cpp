@@ -7,10 +7,10 @@
 #include <string>
 
 /**
- * Example 4.2 in Cho et al. (2019): irregular interface Gamma.
+ * Mimic Example 4.2 in Cho et al. (2019): irregular interface Gamma.
  *
  * Domain: [-1, 1]^2.
- * Interface: phi(x,y) = r - (0.5 + 0.15*sin(5*ang)) centered at (x0,y0).
+ * Interface: phi(x,y) = r - (0.5 + 0.05*sin(5*ang)) centered at (x0,y0).
  *
  * Solution:
  *   u^- = x^2 + y^2                                     if phi < 0
@@ -47,7 +47,7 @@ struct ImmersedWorld : World<ImmersedWorld, 1, ElectronModel::Boltzmann> {
                 double dy     = y - y0;
                 double rr     = Kokkos::sqrt(dx * dx + dy * dy);
                 double ang    = Kokkos::atan2(dy, dx);
-                double radius = 0.5 + 0.15 * Kokkos::sin(5.0 * ang);
+                double radius = 0.5 + 0.05 * Kokkos::sin(5.0 * ang);
                 eta(i, j)     = rr - radius;
             });
     }

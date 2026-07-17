@@ -29,7 +29,7 @@ G = 3
 x0 = 0.02 * np.sqrt(5)
 y0 = 0.02 * np.sqrt(3)
 eps_safe = 1e-30
-n_range = 2 ** np.arange(4, 10, dtype=int)
+n_range = 2 ** np.arange(3, 10, dtype=int)
 errors_u = np.zeros(n_range.size)
 errors_du = np.zeros(n_range.size)
 for i, n in enumerate(n_range):

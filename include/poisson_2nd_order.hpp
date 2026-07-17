@@ -4,6 +4,9 @@
  * A Second-Order Boundary Condition Capturing Method for Solving the Elliptic Interface Problems on Irregular Domains
  * by Hyuntae Cho 2019, Journal of Scientific Computing, doi: https://doi.org/10.1007/s10915-019-01016-y
  *
+ * FIXME: Suspect case 3 and 4 have minor bugs. In very coarse grid, a few (~<2) case 3 / 4 cells have large error.
+ * This bug only affects a few cells in very coarse grid like 8x8, 16x16.
+ * This bug does not affect the 2nd order convergence.
  **/
 #pragma once
 #include "grid.hpp"

@@ -42,7 +42,7 @@ X, Y = np.meshgrid(x, y, indexing="ij")
 
 
 def surface(x, y):
-    return (x + 0.5) ** 2 + y**2 - 0.1**2
+    return x**2 + y**2 - 0.1**2
 
 
 def load_data(step):
@@ -62,16 +62,20 @@ def draw_circle(ax):
     ax.contour(X, Y, surface(X, Y), levels=[0], colors="black", linewidths=2)
 
 
+# Potential profile slice indices (matching plottings.py)
+idx_y_neg1 = G  # y ≈ -1 (bottom edge)
+idx_y_0 = (ny + 2 * G) // 2  # y ≈ 0 (mid-plane)
+
 # Set up figure and subplots
-fig, ax = plt.subplots(1, 2, figsize=(10, 10))
+fig, ax = plt.subplots(1, 3, figsize=(18, 6))
 
 # Preload first frame to create colorbars once
 ni0, phi0 = load_data(start_step)
 if ni0 is None:
     raise FileNotFoundError(f"No data found at step {start_step}")
 
-ni_norm = mcolors.Normalize(vmin=0, vmax=1.2)
-phi_norm = mcolors.Normalize(vmin=0, vmax=1.5)
+ni_norm = mcolors.Normalize(vmin=0, vmax=ni0.max())
+phi_norm = mcolors.Normalize(vmin=-1.0, vmax=0.0)
 
 ax[0].contourf(X, Y, ni0, cmap="jet", levels=50)
 cb1 = fig.colorbar(cm.ScalarMappable(norm=ni_norm, cmap="jet"), ax=ax[0])
@@ -92,6 +96,17 @@ ax[1].set_ylim(y_min, y_min + Ly)
 ax[1].set_xlabel("$x/L_x$")
 ax[1].set_ylabel("$y/L_y$")
 ax[1].set_aspect("equal")
+
+# Potential profile line plot
+(line_neg1,) = ax[2].plot(x, phi0[:, idx_y_neg1], "o-", label="$y/L_y=-1$")
+(line_0,) = ax[2].plot(x, phi0[:, idx_y_0], "o-", label="$y/L_y=0$")
+ax[2].set_xlabel("$x/L_x$")
+ax[2].set_ylabel("$e\\phi/2k_BT_i$")
+ax[2].set_title(f"Potential Profile (Step: {start_step})")
+ax[2].legend()
+ax[2].set_xlim(x_min, x_min + Lx)
+ax[2].set_ylim(-1.0, 1.0)
+ax[2].grid(True, alpha=0.3)
 
 fig.tight_layout()
 
@@ -117,6 +132,10 @@ def animate(frame):
     if is_include_circle:
         draw_circle(ax[1])
     ax[1].set_title(f"$e\\phi/2k_BT_i$ (Step: {current_step})")
+
+    line_neg1.set_ydata(phi[:, idx_y_neg1])
+    line_0.set_ydata(phi[:, idx_y_0])
+    ax[2].set_title(f"Potential Profile (Step: {current_step})")
 
     return ()
 

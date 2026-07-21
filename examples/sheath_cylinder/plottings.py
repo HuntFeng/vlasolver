@@ -44,7 +44,7 @@ plt.colorbar(c)
 plt.title("$n_i$")
 if is_include_circle:
     circle = Wedge(
-        center=(-0.5, 0),
+        center=(0, 0),
         r=0.1,
         theta1=0,
         theta2=360,
@@ -66,7 +66,7 @@ plt.colorbar(c)
 plt.title("$e\\phi/2k_BT_i$")
 if is_include_circle:
     circle = Wedge(
-        center=(-0.5, 0),
+        center=(0, 0),
         r=0.1,
         theta1=0,
         theta2=360,

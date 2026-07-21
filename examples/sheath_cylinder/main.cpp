@@ -76,9 +76,9 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
                     if (eta(i, j) > 0.0) {
-                        f(i, j, iv, jv, 0) = exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)); 
+                        f(i, j, iv, jv, 1) = exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2));
                     } else {
-                        f(i, j, iv, jv, 0) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
+                        f(i, j, iv, jv, 1) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
                     }
                 };
             });

@@ -11,6 +11,15 @@
 struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
     double last_step = -1;
 
+    static constexpr double Te = 1.0;
+    static constexpr double Ti = 1.0;
+    
+    static constexpr double me = 1.0;
+    static constexpr double mi = 100.0;
+
+    double v_th_e = Kokkos::sqrt(Te / me);
+    double v_th_i = Kokkos::sqrt(Ti / mi);
+
     ImmersedWorld(Grid<2>& grid)
         : World<ImmersedWorld, 2, ElectronModel::Kinetic>(grid) {
         construct_surface();      // fill eta
@@ -25,7 +34,7 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 auto [x, y] = grid.center(i, j);
-                eta(i, j)   = Kokkos::pow(x + 0.5, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.1, 2);
+                eta(i, j)   = Kokkos::pow(x, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.1, 2);
             });
     }
 
@@ -40,7 +49,40 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
             });
     }
 
-    void initialize_distribution(){};
+    void initialize_distribution() {
+        using Kokkos::exp;
+        using Kokkos::pow;
+        using Kokkos::sqrt;
+        using Kokkos::numbers::pi;
+        auto& grid              = this->grid;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        int ngc                 = grid.ngc;
+
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({ngc, ngc, ngc, ngc}, {nx - ngc, ny - ngc, nvx - ngc, nvy - ngc}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
+                double n1 = normal(i, j, 0);
+                double n2 = normal(i, j, 1);
+                // electron
+                {
+                    auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
+                    if (eta(i, j) > 0.0) {
+                        f(i, j, iv, jv, 0) = exp(-pow(vx/ v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)); 
+                    } else {
+                        f(i, j, iv, jv, 0) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
+                    }
+                };
+                // ion
+                {
+                    auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
+                    if (eta(i, j) > 0.0) {
+                        f(i, j, iv, jv, 0) = exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)); 
+                    } else {
+                        f(i, j, iv, jv, 0) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
+                    }
+                };
+            });
+    };
 
     void particle_boundary_conditions() {
         using Kokkos::exp;
@@ -60,15 +102,17 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
                     if (i < ngc) {
-                        f(i, j, iv, jv, 1) =
-                            (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
+                        f(i, j, iv, jv, 0) =
+                            (vx > 0.0) ? exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // left boundary, injection
                     } else if (i >= nx - ngc) {
-                        f(i, j, iv, jv, 0) = 0.0; // right domain boundary, zero-inflow
+                        f(i, j, iv, jv, 0) =
+                            (vx < 0.0) ? exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // right boundary, injection
                     } else if (j < ngc) {
-                        f(i, j, iv, jv, 0) = f(i, 2 * ngc - j - 1, iv, nvy - jv - 1, 0); // bottom boundary, reflective
+                        f(i, j, iv, jv, 0) =
+                            (vy > 0.0) ? exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // bottom boundary, injection
                     } else if (j >= ny - ngc) {
                         f(i, j, iv, jv, 0) =
-                            f(i, 2 * (ny - ngc) - j - 1, iv, nvy - jv - 1, 0); // top boundary, reflective
+                            (vy < 0.0) ? exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // top boundary, injection
                     } else if (eta(i, j) < 0.0 && vx * n1 + vy * n2 > 0.0) {
                         f(i, j, iv, jv, 0) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
                     }
@@ -78,14 +122,16 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
                     if (i < ngc) {
                         f(i, j, iv, jv, 1) =
-                            (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
-                    } else if (i >= nx - ngc && vx < 0.0) {
-                        f(i, j, iv, jv, 1) = 0.0; // right domain boundary, zero-inflow
+                            (vx > 0.0) ? exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // left boundary, injection
+                    } else if (i >= nx - ngc) {
+                        f(i, j, iv, jv, 1) =
+                            (vx < 0.0) ? exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // right boundary, injection
                     } else if (j < ngc) {
-                        f(i, j, iv, jv, 1) = f(i, 2 * ngc - j - 1, iv, nvy - jv - 1, 0); // bottom boundary, reflective
+                        f(i, j, iv, jv, 1) =
+                            (vy > 0.0) ? exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // bottom boundary, injection
                     } else if (j >= ny - ngc) {
                         f(i, j, iv, jv, 1) =
-                            f(i, 2 * (ny - ngc) - j - 1, iv, nvy - jv - 1, 0); // top boundary, reflective
+                            (vy < 0.0) ? exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // top boundary, injection
                     } else if (eta(i, j) < 0.0 && vx * n1 + vy * n2 > 0.0) {
                         f(i, j, iv, jv, 1) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
                     }
@@ -102,11 +148,11 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                 if (i < ngc)
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0); // left
                 else if (i >= nx - ngc)
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // right
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0); // right
                 else if (j < ngc)
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // bottom
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0); // bottom
                 else if (j >= ny - ngc)
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // top
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0); // top
                 else
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
             });
@@ -194,12 +240,12 @@ int main(int argc, char* argv[]) {
     Kokkos::printf("Simulation control: dt: %f, total_time: %f, total_steps: %d, diag_steps: %d\n", dt, total_time,
                    total_steps, diag_steps);
 
-    double Te     = 1.0;                   // electron temperature
-    double Ti     = 0.1;                   // ion temperature normalized to Te
-    double me     = 1.0;                   // electron mass
-    double mi     = 1.0;                   // ion mass, normalized to me
-    double v_th_e = Kokkos::sqrt(Te / me); // electron thermal velocity
-    double v_th_i = Kokkos::sqrt(Ti / mi); // ion thermal velocity, normalized to v_th_e
+    double Te     = ImmersedWorld::Te;
+    double Ti     = ImmersedWorld::Ti;
+    double me     = ImmersedWorld::me;
+    double mi     = ImmersedWorld::mi;
+    double v_th_e = Kokkos::sqrt(Te / me);
+    double v_th_i = Kokkos::sqrt(Ti / mi);
 
     Grid<2> grid({nx_intr, ny_intr, nvx_intr, nvy_intr}, ngc);
     grid.set_grid({x_min_e, y_min_e, vx_min_e, vy_min_e}, {Lx_e, Ly_e, Lvx_e, Lvy_e}, 0); // electrons

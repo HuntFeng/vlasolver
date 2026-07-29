@@ -21,14 +21,14 @@ plt.rcParams.update(
 )
 
 # Animation parameters
-total_steps = 1000
-frame_interval = 10
+total_steps = 4000
+frame_interval = 40
 start_step = 0
 
 # Grid parameters
 nx, ny = 128, 128
-Lx, Ly = 2, 2
-x_min, y_min = -1, -1
+Lx, Ly = 20, 20
+x_min, y_min = -10, -10
 G = 3
 is_include_circle = True
 
@@ -98,7 +98,6 @@ ax[1].set_ylabel("$y/L_y$")
 ax[1].set_aspect("equal")
 
 # Potential profile line plot
-(line_neg1,) = ax[2].plot(x, phi0[:, idx_y_neg1], "o-", label="$y/L_y=-1$")
 (line_0,) = ax[2].plot(x, phi0[:, idx_y_0], "o-", label="$y/L_y=0$")
 ax[2].set_xlabel("$x/L_x$")
 ax[2].set_ylabel("$e\\phi/2k_BT_i$")
@@ -133,7 +132,6 @@ def animate(frame):
         draw_circle(ax[1])
     ax[1].set_title(f"$e\\phi/2k_BT_i$ (Step: {current_step})")
 
-    line_neg1.set_ydata(phi[:, idx_y_neg1])
     line_0.set_ydata(phi[:, idx_y_0])
     ax[2].set_title(f"Potential Profile (Step: {current_step})")
 

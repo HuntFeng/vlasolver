@@ -20,6 +20,10 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
     double v_th_e = Kokkos::sqrt(Te / me);
     double v_th_i = Kokkos::sqrt(Ti / mi);
 
+    // normalization for dist. need to make them quasineutral
+    double A_e = 1.0 / (v_th_e * v_th_e);
+    double A_i = 1.0 / (v_th_i * v_th_i);
+
     ImmersedWorld(Grid<2>& grid)
         : World<ImmersedWorld, 2, ElectronModel::Kinetic>(grid) {
         construct_surface();      // fill eta
@@ -34,7 +38,7 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 auto [x, y] = grid.center(i, j);
-                eta(i, j)   = Kokkos::pow(x, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.1, 2);
+                eta(i, j)   = Kokkos::pow(x, 2) + Kokkos::pow(y, 2) - Kokkos::pow(1, 2);
             });
     }
 
@@ -67,7 +71,7 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
                     if (eta(i, j) > 0.0) {
-                        f(i, j, iv, jv, 0) = exp(-pow(vx/ v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)); 
+                        f(i, j, iv, jv, 0) = A_e * exp(-pow(vx/ v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)); 
                     } else {
                         f(i, j, iv, jv, 0) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
                     }
@@ -76,7 +80,7 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                 {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
                     if (eta(i, j) > 0.0) {
-                        f(i, j, iv, jv, 1) = exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2));
+                        f(i, j, iv, jv, 1) = A_i * exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2));
                     } else {
                         f(i, j, iv, jv, 1) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
                     }
@@ -103,16 +107,16 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
                     if (i < ngc) {
                         f(i, j, iv, jv, 0) =
-                            (vx > 0.0) ? exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // left boundary, injection
+                            (vx > 0.0) ? A_e * exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // left boundary, injection
                     } else if (i >= nx - ngc) {
                         f(i, j, iv, jv, 0) =
-                            (vx < 0.0) ? exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // right boundary, injection
+                            (vx < 0.0) ? A_e * exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // right boundary, injection
                     } else if (j < ngc) {
                         f(i, j, iv, jv, 0) =
-                            (vy > 0.0) ? exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // bottom boundary, injection
+                            (vy > 0.0) ? A_e * exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // bottom boundary, injection
                     } else if (j >= ny - ngc) {
                         f(i, j, iv, jv, 0) =
-                            (vy < 0.0) ? exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // top boundary, injection
+                            (vy < 0.0) ? A_e * exp(-pow(vx / v_th_e, 2)) * exp(-pow(vy / v_th_e, 2)) : 0.0; // top boundary, injection
                     } else if (eta(i, j) < 0.0 && vx * n1 + vy * n2 > 0.0) {
                         f(i, j, iv, jv, 0) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
                     }
@@ -122,16 +126,16 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
                     if (i < ngc) {
                         f(i, j, iv, jv, 1) =
-                            (vx > 0.0) ? exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // left boundary, injection
+                            (vx > 0.0) ? A_i * exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // left boundary, injection
                     } else if (i >= nx - ngc) {
                         f(i, j, iv, jv, 1) =
-                            (vx < 0.0) ? exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // right boundary, injection
+                            (vx < 0.0) ? A_i * exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // right boundary, injection
                     } else if (j < ngc) {
                         f(i, j, iv, jv, 1) =
-                            (vy > 0.0) ? exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // bottom boundary, injection
+                            (vy > 0.0) ? A_i * exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // bottom boundary, injection
                     } else if (j >= ny - ngc) {
                         f(i, j, iv, jv, 1) =
-                            (vy < 0.0) ? exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // top boundary, injection
+                            (vy < 0.0) ? A_i * exp(-pow(vx / v_th_i, 2)) * exp(-pow(vy / v_th_i, 2)) : 0.0; // top boundary, injection
                     } else if (eta(i, j) < 0.0 && vx * n1 + vy * n2 > 0.0) {
                         f(i, j, iv, jv, 1) = 0.0; // immersed wall absorbs, emits nothing back into the plasma
                     }

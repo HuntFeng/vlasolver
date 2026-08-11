@@ -4,9 +4,11 @@
  * A Second-Order Boundary Condition Capturing Method for Solving the Elliptic Interface Problems on Irregular Domains
  * by Hyuntae Cho 2019, Journal of Scientific Computing, doi: https://doi.org/10.1007/s10915-019-01016-y
  *
- * FIXME: Suspect case 3 and 4 have minor bugs. In very coarse grid, a few (~<2) case 3 / 4 cells have large error.
- * This bug only affects a few cells in very coarse grid like 8x8, 16x16.
- * This bug does not affect the 2nd order convergence.
+ * NOTE: On very coarse grids (8x8, 16x16) a few degenerate cells remain where the
+ * interface crosses a stencil ray twice but the cell has ncuts == 1 or 3; the extra
+ * crossing is only detected/handled for ncuts == 2 (case 3). Such cells fall back to
+ * case 1/4 stencils that reach one wrong-region point. The error is localized and
+ * vanishes under refinement ("use finer grid" category).
  **/
 #pragma once
 #include "grid.hpp"
@@ -299,6 +301,28 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         a_term      = -s * a_I * eps_p * _phi;
     }
 
+    // The extension point x_ext must be a diagonal neighbor lying in the SAME
+    // region as the cell (paper Sec. 3.2.1: "any of the four points ... belonging
+    // to Omega^-"). The per-case prescribed corner is kept when valid; otherwise
+    // fall back to another same-region diagonal.
+    KOKKOS_INLINE_FUNCTION
+    void pick_ext(int i, int j, int offset_ext[2], double& x_ext, double& y_ext) const {
+        double eta = eta_field(i, j);
+        if (eta_field(i + offset_ext[0], j + offset_ext[1]) * eta <= 0) {
+            const int cand[4][2] = {{-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
+            for (int c = 0; c < 4; ++c) {
+                if (eta_field(i + cand[c][0], j + cand[c][1]) * eta > 0) {
+                    offset_ext[0] = cand[c][0];
+                    offset_ext[1] = cand[c][1];
+                    break;
+                }
+            }
+        }
+        auto [x, y] = center(i, j);
+        x_ext       = x + offset_ext[0] * dx;
+        y_ext       = y + offset_ext[1] * dy;
+    }
+
     KOKKOS_INLINE_FUNCTION
     void compute_P_inv(double x,
                        double y,
@@ -532,6 +556,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             offset_ext[0] = -1;
             offset_ext[1] = 1;
         }
+        pick_ext(i, j, offset_ext, x_ext, y_ext);
 
         double x_r   = x + theta_r * dx;
         double x_l   = x - theta_l * dx;
@@ -742,6 +767,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             offset_ext[0] = -1;
             offset_ext[1] = 1;
         }
+        pick_ext(i, j, offset_ext, x_ext, y_ext);
 
         double s[2]  = {dirsign(dir[0]), dirsign(dir[1])};
         bool is_x[2] = {dir[0] == Direction::R || dir[0] == Direction::L,
@@ -1073,6 +1099,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             Kokkos::printf("case3: invalid direction/extra %d/%d\n", (int)direction, (int)extra);
             Kokkos::abort("case3: invalid sub-case");
         }
+        pick_ext(i, j, offset_ext, x_ext, y_ext);
 
         double s[3] = {dirsign(dir[0]), dirsign(dir[1]), dirsign(dir[2], true)};
 
@@ -1296,6 +1323,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         r.theta[1] = theta_arr[1];
         r.is_x[0]  = is_x[0];
         r.is_x[1]  = is_x[1];
+        r.dir[0]   = dir[0];
+        r.dir[1]   = dir[1];
 
         return r;
     }
@@ -1451,6 +1480,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             offset_ext[0] = -1;
             offset_ext[1] = 1;
         }
+        pick_ext(i, j, offset_ext, x_ext, y_ext);
         for (int d = 0; d < 3; ++d)
             is_x[d] = (dir[d] == Direction::R || dir[d] == Direction::L);
 
@@ -1661,11 +1691,24 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             ghosts[0] += r.M_inv_N[0][k] * u_arr[k];
             ghosts[1] += r.M_inv_N[1][k] * u_arr[k];
         }
+        // case3 orders dir[0] = non-extra, dir[1] = extra base direction, so the
+        // ghost-to-face mapping must go through r.dir (not the case2 convention)
+        int idx_l = -1, idx_r = -1, idx_b = -1, idx_t = -1;
+        for (int d = 0; d < 2; ++d) {
+            if (r.dir[d] == Direction::L)
+                idx_l = d;
+            else if (r.dir[d] == Direction::R)
+                idx_r = d;
+            else if (r.dir[d] == Direction::B)
+                idx_b = d;
+            else if (r.dir[d] == Direction::T)
+                idx_t = d;
+        }
         return {
-            (direction & Direction::L) ? ghosts[0] : u(i - 1, j),
-            (direction & Direction::R) ? ghosts[0] : u(i + 1, j),
-            (direction & Direction::B) ? ghosts[1] : u(i, j - 1),
-            (direction & Direction::T) ? ghosts[1] : u(i, j + 1),
+            (direction & Direction::L) ? ghosts[idx_l] : u(i - 1, j),
+            (direction & Direction::R) ? ghosts[idx_r] : u(i + 1, j),
+            (direction & Direction::B) ? ghosts[idx_b] : u(i, j - 1),
+            (direction & Direction::T) ? ghosts[idx_t] : u(i, j + 1),
             r.theta_l,
             r.theta_r,
             r.theta_b,

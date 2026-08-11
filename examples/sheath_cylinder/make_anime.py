@@ -21,14 +21,14 @@ plt.rcParams.update(
 )
 
 # Animation parameters
-total_steps = 4000
-frame_interval = 40
+total_steps = 12000
+frame_interval = 120
 start_step = 0
 
 # Grid parameters
 nx, ny = 128, 128
-Lx, Ly = 20, 20
-x_min, y_min = -10, -10
+Lx, Ly = 40, 40
+x_min, y_min = -20, -20
 G = 3
 is_include_circle = True
 
@@ -48,7 +48,7 @@ def surface(x, y):
 def load_data(step):
     try:
         with h5py.File(
-            f"{file_path}/../../data/sheath_cylinder/output_{step:04d}.h5", "r"
+            f"{file_path}/../../data/sheath_cylinder/output_{step:05d}.h5", "r"
         ) as f:
             ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
             phi = f["VTKHDF/CellData/phi"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -75,7 +75,7 @@ if ni0 is None:
     raise FileNotFoundError(f"No data found at step {start_step}")
 
 ni_norm = mcolors.Normalize(vmin=0, vmax=ni0.max())
-phi_norm = mcolors.Normalize(vmin=-1.0, vmax=0.0)
+phi_norm = mcolors.Normalize(vmin=-2.0, vmax=0.0)
 
 ax[0].contourf(X, Y, ni0, cmap="jet", levels=50)
 cb1 = fig.colorbar(cm.ScalarMappable(norm=ni_norm, cmap="jet"), ax=ax[0])
@@ -104,7 +104,7 @@ ax[2].set_ylabel("$e\\phi/2k_BT_i$")
 ax[2].set_title(f"Potential Profile (Step: {start_step})")
 ax[2].legend()
 ax[2].set_xlim(x_min, x_min + Lx)
-ax[2].set_ylim(-1.0, 1.0)
+ax[2].set_ylim(-2.0, 1.0)
 ax[2].grid(True, alpha=0.3)
 
 fig.tight_layout()

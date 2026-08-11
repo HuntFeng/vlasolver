@@ -15,7 +15,7 @@ centered at $(\tfrac{\sqrt{5}}{50}, \tfrac{\sqrt{3}}{50})$. The dielectric permi
 From the project root:
 
 ```bash
-cmake -B build && cmake --build build
+cmake -B build && cmake --build build --target poisson
 ```
 
 ## Run

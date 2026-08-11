@@ -14,7 +14,7 @@ A Vlasov-Poisson simulation of a plasma flowing past a grounded, charged cylinde
 ## Build
 
 ```bash
-cmake -B build && cmake --build build
+cmake -B build && cmake --build build --target cylinder
 ```
 
 ## Run

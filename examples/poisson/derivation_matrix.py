@@ -23,6 +23,34 @@ Sec 3.2.2:
 
 This script derives both equations for all 4 Cartesian directions
 (Right, Left, Top, Bottom).
+
+IMPORTANT CONVENTIONS (getting these wrong caused real implementation bugs):
+
+1. The SECOND interface point theta_{D2} is measured from the FAR grid point
+   BACK toward the cell (paper eq. 31):
+       x_r = x_{i+2} - theta_{R2} * dx     (Right direction)
+   NOT forward from x_{i+1}. In the solver this means
+       theta_rr = compute_theta(Direction::L, i + 2, j)
+   and NOT compute_theta(Direction::R, i + 1, j).
+
+2. theta_other is the theta of the OPPOSITE direction on the minus side
+   (e.g. theta_L for the Right equation). It is 1 when that side is uncut
+   (the far stencil point is then the grid point u_{i-1}). When the opposite
+   side IS cut (case 4: three cut directions always contain an opposite
+   pair), keep theta_other < 1: the far stencil value becomes the other
+   interface unknown u^-_{opp}, i.e. an OFF-DIAGONAL entry of B, and the
+   u_{i-1} column of C must be dropped. The coefficients below (c_far, c_uc)
+   are derived for general theta_other precisely for this purpose.
+
+3. In eq.(33) BOTH jump values a (at x_D) and a_r (at x_{D2}) appear in BOTH
+   rows (cross terms), because u^+ at both collinear interfaces enters each
+   one-sided Omega+ stencil. Note a_vec and a2_vec below each have two
+   nonzero entries; the paper's eq.(33) displays only the diagonal terms.
+
+4. Only u^-_D (the first interface value) is part of the quadratic
+   polynomial P stencil used for the geometric jump approximation
+   (eqs. 26-28). The second interface value u^-_{D2} is NOT, so when
+   assembling M no grad_coeff term may be subtracted from its column.
 """
 
 import sympy as sp
@@ -172,24 +200,26 @@ def derive_eq30(
     display(Markdown("**$a$ coefficient:**"))
     display(c_a)
 
-    # # Verification
-    # all_ok = True
-    # all_ok &= (sp.simplify(c_self + beta_hat) == 0)
-    # all_ok &= (sp.simplify(c_far - (-bm * th / ((th + to) * to))) == 0)
-    # all_ok &= (sp.simplify(c_uc - (bm * (th + to) / (th * to))) == 0)
-    # all_ok &= (sp.simplify(c_near - (bp * (2 - th) / (1 - th))) == 0)
-    # all_ok &= (sp.simplify(c_far2 - (-bp * (1 - th) / (2 - th))) == 0)
-    # all_ok &= (sp.simplify(c_a - (-bp * (3 - 2 * th) / ((1 - th) * (2 - th)))) == 0)
-    # status = "✅ All checks passed" if all_ok else "❌ Some checks FAILED"
-    # display(Markdown(f"**Verification:** {status}"))
+    # Verification against the closed-form coefficients used in the solver.
+    # Note c_far and c_uc are kept general in theta_other: with th_other = 1
+    # they reduce to the case 1/2/3 formulas (uncut opposite side); with
+    # th_other < 1 they give the case 4 collinear-pair coupling (u_far is then
+    # the opposite interface unknown, an off-diagonal entry of B).
+    all_ok = True
+    all_ok &= sp.simplify(c_self + beta_hat) == 0
+    all_ok &= sp.simplify(c_far - (-bm * th / ((th + to) * to))) == 0
+    all_ok &= sp.simplify(c_uc - (bm * (th + to) / (th * to))) == 0
+    all_ok &= sp.simplify(c_near - (bp * (2 - th) / (1 - th))) == 0
+    all_ok &= sp.simplify(c_far2 - (-bp * (1 - th) / (2 - th))) == 0
+    all_ok &= sp.simplify(c_a - (-bp * (3 - 2 * th) / ((1 - th) * (2 - th)))) == 0
+    status = "All checks PASSED" if all_ok else "Some checks FAILED"
+    display(Markdown(f"**Verification:** {status}"))
 
-    # return B_vec, C_vec, c_a, expr_h
-    return B_vec, C_vec, c_a
+    return B_vec, C_vec, c_a, expr_h
 
 
 # Direction: Right
-# B_R, C_R, ca_R, expr_R = derive_eq30(
-B_R, C_R, ca_R = derive_eq30("Right", th_R, th_L, uRm, uLm, u_m1, u_p1, u_p2, dx)
+B_R, C_R, ca_R, expr_R = derive_eq30("Right", th_R, th_L, uRm, uLm, u_m1, u_p1, u_p2, dx)
 
 # Direction: Left
 B_L, C_L, ca_L, expr_L = derive_eq30("Left", th_L, th_R, uLm, uRm, u_p1, u_m1, u_m2, dx)
@@ -226,10 +256,18 @@ def derive_eq33(
     """
     Derive Eq.(33) for a single direction.
 
+    Convention (paper eq. 31): th_self2 is measured from the FAR grid point
+    back toward the cell, e.g. for Right the second interface sits at
+    x_r = x_{i+2} - th_self2 * dx. In the solver this corresponds to
+    compute_theta evaluated at the far cell in the REVERSED direction
+    (e.g. compute_theta(Direction::L, i + 2, j)).
+
     Returns (B_mat, C_mat, a_vec, a2_vec, expr_vec).
-      B_mat: 2×2 for [u_self_m, u_self2_m]
-      C_mat: 2×5 for [u_far_m, uc, u_near, u_far2, u_far3]
-      a_vec, a2_vec: 2×1 jump contributions
+      B_mat: 2x2 for [u_self_m, u_self2_m]
+      C_mat: 2x5 for [u_far_m, uc, u_near, u_far2, u_far3]
+      a_vec, a2_vec: 2x1 jump contributions. Both vectors are dense: the jump
+      at EACH collinear interface contributes to BOTH rows (cross terms),
+      since u^+ at both interfaces enters each one-sided Omega+ stencil.
     """
     th = th_self
     to = th_other
@@ -365,14 +403,17 @@ def derive_eq33(
     )
     display(sp.Matrix([sub_R, sub_r]))
 
-    # Verify B[0,0] == -beta_hat_R and B[1,1] == -beta_hat_r
+    # Verify B[0,0] == -beta_hat_R and B[1,1] == +beta_hat_r.
+    # The signs differ because Omega- lies on the cell side of the first
+    # interface but on the FAR side of the second one, flipping the one-sided
+    # difference orientation (cf. the +beta_hat_r entry in the paper's eq. 33).
     ok_R = sp.simplify(B_mat[0, 0] + beta_hat_R) == 0
-    ok_r = sp.simplify(B_mat[1, 1] + beta_hat_r) == 0
-    status = "✅" if ok_R and ok_r else "❌"
+    ok_r = sp.simplify(B_mat[1, 1] - beta_hat_r) == 0
+    status = "PASSED" if ok_R and ok_r else "FAILED"
     display(
         Markdown(
             f"**Verification:** $B_{{00}} = -\\hat\\beta_R$: {ok_R}, "
-            f"$B_{{11}} = -\\hat\\beta_r$: {ok_r}  {status}"
+            f"$B_{{11}} = +\\hat\\beta_r$: {ok_r}  {status}"
         )
     )
 
@@ -437,9 +478,27 @@ This gives a $2\!\times\!2$ system:
 $$
 B_D \begin{bmatrix} u^-_D \\ u^-_{D2} \end{bmatrix}
 + C_D \begin{bmatrix} u^-_{\text{far}} \\ u_c \\ u_{\text{near}} \\ u_{\text{far2}} \\ u_{\text{far3}} \end{bmatrix}
-+ a_{\text{terms}}
++ a\,\text{-vec}\cdot a_D + a_r\text{-vec}\cdot a_{D2}
 = \begin{bmatrix} [\beta u_n]_{x_D} \\ [\beta u_n]_{x_{D2}} \end{bmatrix}
 $$
 where $B_D \in \mathbb{R}^{2\times 2}$, $C_D \in \mathbb{R}^{2\times 5}$.
+
+---
+
+**Implementation notes** (conventions that are easy to get wrong):
+
+1. $\theta_{D2}$ is measured from the far grid point back toward the cell
+   (paper eq. 31): $x_{D2} = x_{i+2} - \theta_{D2}\Delta x$ for direction R.
+   In the solver: `compute_theta(Direction::L, i + 2, j)`.
+2. Both $a$-vectors are dense (cross terms): the jump at each collinear
+   interface contributes to both rows of the system.
+3. $\theta_{\text{other}}$ in eq. (30) is 1 only when the opposite side is
+   uncut. When it is cut (case 4: three cut directions always contain an
+   opposite pair), $u^-_{\text{far}}$ is the opposite interface unknown:
+   its coefficient moves from $C$ into an off-diagonal entry of $B$, and
+   the grid-point column of $C$ is dropped.
+4. Only $u^-_D$ enters the quadratic polynomial $P$ (paper eqs. 26-28) used
+   for the geometric jump approximation; $u^-_{D2}$ does not, so no
+   $\nabla P$ coupling may be subtracted from its column when assembling M.
 """)
 )

@@ -893,15 +893,17 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double bot_x    = (theta_r + theta_l) / 2.0 * dx * dx;
         double bot_y    = (theta_t + theta_b) / 2.0 * dy * dy;
 
+        // Paper eq.(31): the extra interface is measured from the far grid point
+        // back toward the cell, e.g. x_r = x_{i+2} - theta_rr*dx for extra == R.
         double theta_rr = 0, theta_tt = 0, theta_ll = 0, theta_bb = 0;
         if (extra & Direction::R)
-            theta_rr = compute_theta(Direction::R, i + 1, j);
+            theta_rr = compute_theta(Direction::L, i + 2, j);
         if (extra & Direction::T)
-            theta_tt = compute_theta(Direction::T, i, j + 1);
+            theta_tt = compute_theta(Direction::B, i, j + 2);
         if (extra & Direction::L)
-            theta_ll = compute_theta(Direction::L, i - 1, j);
+            theta_ll = compute_theta(Direction::R, i - 2, j);
         if (extra & Direction::B)
-            theta_bb = compute_theta(Direction::B, i, j - 1);
+            theta_bb = compute_theta(Direction::T, i, j - 2);
 
         double x_r = x + theta_r * dx;
         double x_l = x - theta_l * dx;
@@ -1171,9 +1173,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         C5[0][3]        = -s_eta * s[0] * (-eps_p[0] * (1 - t0) / (2 - t0));
         C5[0][4]        = 0.0;
 
-        // Row 1: -s_eta * s[1] * [...], with t0 in denominator for entry [1]
+        // Row 1: -s_eta * s[1] * [...]
         C5[1][0] = -s_eta * s[1] * (-eps_m[1] * t1 / (1 + t1));
-        C5[1][1] = -s_eta * s[1] * (eps_m[1] * (t1 + 1) / (t1 * (t0 + 1)));
+        C5[1][1] = -s_eta * s[1] * (eps_m[1] * (t1 + 1) / t1);
         C5[1][2] = -s_eta * s[1] * (eps_p[1] * (2 - t1 - te1) / ((1 - t1) * (1 - te1)));
         C5[1][3] = 0.0;
         C5[1][4] = 0.0;
@@ -1181,15 +1183,20 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         // Row 2: +s_eta * s[2] * [...] (positive sign, NOT negative!)
         C5[2][0] = 0.0;
         C5[2][1] = 0.0;
-        C5[2][2] = s_eta * s[2] * (-eps_p[2] * (2 - t1 - te1) / ((2 - t1) * (1 - te1)));
+        C5[2][2] = s_eta * s[2] * (-eps_p[2] * (2 - t1 - te1) / ((1 - t1) * (1 - te1)));
         C5[2][3] = s_eta * s[2] * (-eps_m[2] * (te1 + 1) / te1);
         C5[2][4] = s_eta * s[2] * (eps_m[2] * te1 / (te1 + 1));
 
-        // a_term (3)
+        // a_term (3); rows 1 and 2 each carry the jump contributions of BOTH
+        // collinear interfaces since u^+ at both enters each one-sided stencil
         double a_term3[3];
         a_term3[0] = -s[0] * a_I[0] * eps_p[0] * (3 - 2 * t0) / ((1 - t0) * (2 - t0));
-        a_term3[1] = -s[1] * a_I[1] * eps_p[1] * (3 - 2 * t1 - te1) / ((1 - t1) * (2 - t1 - te1));
-        a_term3[2] = -s[2] * a_I[2] * eps_p[1] * (3 - 2 * te1 - t1) / ((1 - te1) * (2 - t1 - te1));
+        a_term3[1] = -s[1] * eps_p[1] *
+                     (a_I[1] * (3 - 2 * t1 - te1) / ((1 - t1) * (2 - t1 - te1)) +
+                      a_I[2] * (1 - t1) / ((2 - t1 - te1) * (1 - te1)));
+        a_term3[2] = -s[2] * eps_p[2] *
+                     (a_I[2] * (3 - 2 * te1 - t1) / ((1 - te1) * (2 - t1 - te1)) +
+                      a_I[1] * (1 - te1) / ((2 - t1 - te1) * (1 - t1)));
 
         // geometric
         double P_inv[6][6];
@@ -1233,9 +1240,12 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double M3[3][3], N3[3][49], D3[3];
         for (int d = 0; d < 3; ++d)
             D3[d] = a_tau_term3[d] + b_term3[d] - a_term3[d];
+        // The P polynomial only interpolates the first two interface values
+        // (x_I[0], x_I[1]); the extra interface value u_r^- (column 2) does not
+        // appear in the geometric gradient, so no grad_coeff is subtracted there.
         for (int d = 0; d < 3; ++d)
             for (int e = 0; e < 3; ++e)
-                M3[d][e] = B3[d][e] - grad_coeff[d][grad_idx[dir[e]]];
+                M3[d][e] = B3[d][e] - ((e == 2) ? 0.0 : grad_coeff[d][grad_idx[dir[e]]]);
         for (int d = 0; d < 3; ++d)
             for (int k = 0; k < 49; ++k)
                 N3[d][k] = 0.0;
@@ -1469,12 +1479,34 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             b_I[d]     = interp(dir[d], theta_arr[d], i, j, b);
         }
 
-        // algebraic: diagonal B (no collinear interfaces in case4)
-        double B[3];
+        // algebraic part. Three cuts always contain one collinear (opposite)
+        // pair, e.g. R and L. For such a pair the far point of each one-sided
+        // minus stencil is the OTHER interface value (not a grid point), so the
+        // pair couples through off-diagonal B entries with theta_opp instead of
+        // the theta_opp = 1 grid-point assumption baked into per_iface_algebraic.
+        double B_full[3][3] = {};
         Kokkos::Array<double, 4> C[3];
         double a_term[3];
         for (int d = 0; d < 3; ++d)
-            per_iface_algebraic(s_eta, s[d], eps_p[d], eps_m[d], theta_arr[d], a_I[d], B[d], C[d], a_term[d]);
+            per_iface_algebraic(s_eta, s[d], eps_p[d], eps_m[d], theta_arr[d], a_I[d], B_full[d][d], C[d], a_term[d]);
+        for (int d = 0; d < 3; ++d) {
+            size_t opp = (dir[d] == Direction::R)   ? (size_t)Direction::L
+                         : (dir[d] == Direction::L) ? (size_t)Direction::R
+                         : (dir[d] == Direction::T) ? (size_t)Direction::B
+                                                    : (size_t)Direction::T;
+            for (int q = 0; q < 3; ++q) {
+                if (dir[q] != opp)
+                    continue;
+                double td    = theta_arr[d];
+                double tq    = theta_arr[q];
+                B_full[d][d] = s_eta * s[d] *
+                               (eps_p[d] * (3 - 2 * td) / ((1 - td) * (2 - td)) +
+                                eps_m[d] * (2 * td + tq) / (td * (td + tq)));
+                B_full[d][q] = s_eta * s[d] * eps_m[d] * td / ((td + tq) * tq);
+                C[d][0]      = 0.0; // far grid point lies across the interface
+                C[d][1]      = -s_eta * s[d] * (eps_m[d] * (td + tq) / (td * tq));
+            }
+        }
 
         // geometric
         double P_inv[6][6];
@@ -1500,7 +1532,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         r.n_intf       = 3;
         r.stencil_size = 25;
         double M[3][3], N[3][25], D[3];
-        assemble_MND<25>(3, B, nullptr, C, 4, a_term, grad_coeff, a_tau_term, b_term, dir, offset_ext, M, N, D);
+        assemble_MND<25>(3, nullptr, B_full, C, 4, a_term, grad_coeff, a_tau_term, b_term, dir, offset_ext, M, N, D);
 
         double invM[3][3];
         invert3x3(M, invM);

@@ -38,6 +38,8 @@ The script compares numerical $\phi$ and $\mathbf{E}$ against the exact solution
 
 ![Solution](figures/poisson_solution.png)
 
-![Convergence](figures/convergence_poisson.png)
+![Convergence Solution](figures/convergence_poisson_solution.png)
+
+![Convergence Gradient](figures/convergence_poisson_gradient.png)
 
 Numerical solution matches the exact solution. The convergence plot shows $\mathcal{O}(h^2)$ decay for both $u$ and $\nabla u$, confirming the 2nd-order accuracy.

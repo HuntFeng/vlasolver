@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+from matplotlib.ticker import LogLocator, LogFormatter
 
 plt.rcParams.update(
     {
@@ -21,7 +22,7 @@ plt.rcParams.update(
 def surface(x, y):
     rr = np.sqrt((x - x0) ** 2 + (y - y0) ** 2)
     ang = np.arctan2(y - y0, x - x0)
-    return rr - (0.5 + 0.05 * np.sin(5 * ang))
+    return rr - (0.5 + 0.15 * np.sin(5 * ang))
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 G = 3
@@ -29,7 +30,7 @@ G = 3
 x0 = 0.02 * np.sqrt(5)
 y0 = 0.02 * np.sqrt(3)
 eps_safe = 1e-30
-n_range = 2 ** np.arange(5, 9, dtype=int)
+n_range = 2 ** np.arange(4, 9, dtype=int)
 errors_u = np.zeros(n_range.size)
 errors_du = np.zeros(n_range.size)
 for i, n in enumerate(n_range):
@@ -102,19 +103,28 @@ for idx, n in enumerate(n_range):
         f"{order_du:8.2f}"
     )
 
+h_values = 1 / n_range
+h_labels = [f"$2^{{{int(np.log2(h))}}}$" for h in h_values]
+
 plt.figure()
-plt.loglog(1 / n_range, errors_u, "o-", label="actual")
-plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
-plt.xlabel("h")
-plt.ylabel("err")
+plt.loglog(h_values, errors_u, "o-", label="actual")
+plt.loglog(h_values, 1 / n_range**2, "--", label="$O(h^2)$")
+ax = plt.gca()
+ax.xaxis.set_major_locator(LogLocator(base=2.0))
+plt.xticks(h_values, h_labels)
+plt.xlabel("$h$")
+plt.ylabel("$\|u - u_{exact}\|_\infty$")
 plt.legend()
 plt.title("Convergence of $u$")
 plt.savefig(f"{file_path}/convergence_poisson_solution.png")
 plt.figure()
-plt.loglog(1 / n_range, errors_du, "o-", label="actual")
-plt.loglog(1 / n_range, 1 / n_range**2, "--", label="$O(h^2)$")
-plt.xlabel("h")
-plt.ylabel("err")
+plt.loglog(h_values, errors_du, "o-", label="actual")
+plt.loglog(h_values, 1 / n_range**2, "--", label="$O(h^2)$")
+ax = plt.gca()
+ax.xaxis.set_major_locator(LogLocator(base=2.0))
+plt.xticks(h_values, h_labels)
+plt.xlabel("$h$")
+plt.ylabel("$\|u - u_{exact}\|_\infty$")
 plt.legend()
 plt.title("Convergence of $\\nabla u$")
 plt.savefig(f"{file_path}/convergence_poisson_gradient.png")

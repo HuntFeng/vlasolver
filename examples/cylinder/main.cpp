@@ -1,20 +1,50 @@
 #include "grid.hpp"
 #include "poisson_1st_order.hpp"
-#include "reduced/vlasov.hpp"
-#include "reduced/world.hpp"
-#include "reduced/writer.hpp"
+#include "vlasov.hpp"
+#include "world.hpp"
+#include "writer.hpp"
 #include <INIReader.h>
 #include <Kokkos_Core.hpp>
 #include <iostream>
 #include <string>
 
-struct ImmersedWorld : World<ImmersedWorld> {
-    ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+struct ImmersedWorld : World<ImmersedWorld, 1, ElectronModel::Boltzmann> {
+    ImmersedWorld(Grid<1>& grid)
+        : World<ImmersedWorld, 1, ElectronModel::Boltzmann>(grid) {
+        construct_surface();      // fill eta
+        construct_permittivity(); // fill eps_p / eps_m
+        construct_normal_field(); // base method, reads eta
+    }
 
-    KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const {
-        return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+    // fill the level set field `eta` over the full domain (including ghost cells)
+    void construct_surface() {
+        auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y] = grid.center(i, j);
+                eta(i, j)   = Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+            });
+    }
+
+    // fill the region permittivity fields over the full domain
+    void construct_permittivity() {
+        auto& grid              = this->grid;
+        auto& eps_p             = this->eps_p;
+        auto& eps_m             = this->eps_m;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                eps_p(i, j) = 1.0;    // permittivity in the eta>0 region
+                eps_m(i, j) = 1000.0; // permittivity in the eta<0 region
+            });
+    }
+
+    // fill the Poisson jump condition fields (no jumps for this case)
+    void poisson_jump_conditions() {
+        Kokkos::deep_copy(jump_a, 0.0);
+        Kokkos::deep_copy(jump_b, 0.0);
     }
 
     void initialize_distribution() {
@@ -28,60 +58,43 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
+                auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
                 if (i < ngc) {
-                    f(i, j, iv, jv) =
+                    f(i, j, iv, jv, 0) =
                         (vx > 0.0) ? exp(-pow(vx - 5, 2)) * exp(-pow(vy, 2)) : 0.0; // left boundary, injection
                 } else if (i >= nx - ngc) {
                     if (vx < 0.0)
-                        f(i, j, iv, jv) = 0.0; // right boundary, zero-inflow
+                        f(i, j, iv, jv, 0) = 0.0; // right boundary, zero-inflow
                 } else if (j < ngc) {
-                    f(i, j, iv, jv) = f(i, 2 * ngc - j - 1, iv, nvy - jv - 1); // bottom boundary, reflective
+                    f(i, j, iv, jv, 0) = f(i, 2 * ngc - j - 1, iv, nvy - jv - 1, 0); // bottom boundary, reflective
                 } else if (j >= ny - ngc) {
-                    f(i, j, iv, jv) = f(i, 2 * (ny - ngc) - j - 1, iv, nvy - jv - 1); // top boundary, reflective
+                    f(i, j, iv, jv, 0) = f(i, 2 * (ny - ngc) - j - 1, iv, nvy - jv - 1, 0); // top boundary, reflective
                 }
             });
     };
 
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_a(double x, double y) const { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_b(double x, double y) const { return 0.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) const { return surface(x, y) < 0.0 ? 1000.0 : 1.0; }
-
     void potential_boundary_conditions() {
-        using Kokkos::abs;
-        auto& grid    = this->grid;
-        int ngc       = grid.ngc;
-        int nx        = phi.extent(0);
-        int ny        = phi.extent(1);
-        auto [dx, dy] = grid.spacing(0, 0);
-        double phi_w  = -20.0 / (2 * 0.15); // cylinder potential normalized to ion quantities
+        double phi_w            = -20.0 / (2 * 0.15); // cylinder potential normalized to ion quantities
+        int ngc                 = grid.ngc;
+        int nx                  = grid.ncells[0];
+        int ny                  = grid.ncells[1];
+        auto& eta               = this->eta;
+        auto& poisson_bc_map    = this->poisson_bc_map;
         Kokkos::parallel_for(
-            Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                double x   = (i - ngc + 0.5) * dx;
-                double y   = (j - ngc + 0.5) * dy;
-                double eta = surface(x, y);
-                if (eta < 0.0) {
-                    phi(i, j) = phi_w; // inside the immersed object, set potential to a constant value
-                }
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                if (i < ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0); // left
+                else if (i >= nx - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // right
+                else if (j < ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // bottom
+                else if (j >= ny - ngc)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Neumann, 0.0); // top
+                else if (eta(i, j) <= 0.0)
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_w); // immersed object
+                else
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
             });
-
-        for (int k = 0; k < ngc; ++k) {
-            // left boundary, dirichlet
-            Kokkos::deep_copy(Kokkos::subview(phi, k, Kokkos::ALL), 0.0);
-            // right boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(phi, nx - k - 1, Kokkos::ALL),
-                              Kokkos::subview(phi, nx - 2 * ngc + k, Kokkos::ALL));
-            // bottom boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, k), Kokkos::subview(phi, Kokkos::ALL, 2 * ngc - k - 1));
-            // top boundary, neumann
-            Kokkos::deep_copy(Kokkos::subview(phi, Kokkos::ALL, ny - k - 1),
-                              Kokkos::subview(phi, Kokkos::ALL, ny - 2 * ngc + k));
-        }
     }
 };
 
@@ -129,14 +142,20 @@ int main(int argc, char* argv[]) {
     Kokkos::Array<double, DIM> size     = {Lx, Ly, Lvx, Lvy};                     // size of the grid
     Kokkos::Array<int, DIM> ncells_intr = {nx_intr, ny_intr, nvx_intr, nvy_intr}; // number of interior cells
 
-    Grid grid(ncells_intr, ngc);
+    Grid<1> grid(ncells_intr, ngc);
     grid.set_grid(origin, size, 0);
     ImmersedWorld world(grid);
 
-    world.dt          = dt;          // time step size
-    world.total_time  = total_time;  // total simulation time
-    world.total_steps = total_steps; // number of total_steps
-    world.diag_steps  = diag_steps;  // number of steps between diagnostics
+    world.dt            = dt;          // time step size
+    world.total_time    = total_time;  // total simulation time
+    world.total_steps   = total_steps; // number of total_steps
+    world.diag_steps    = diag_steps;  // number of steps between diagnostics
+    world.species_names = {"i"};       // single kinetic ion species
+    // m, q, T are normalized to electron quantities. Here the single kinetic ion
+    // is normalized to itself, so its mass/charge/temperature all equal 1.
+    world.m = Kokkos::Array<double, 1>{1.0}; // ion mass (= electron mass)
+    world.q = Kokkos::Array<double, 1>{1.0}; // ion charge (= electron charge)
+    world.T = Kokkos::Array<double, 1>{1.0}; // ion temperature (= electron temperature)
 
     PoissonSolver1stOrder poisson_solver(world);
     Writer writer(world, output_folder, output_prefix, {"ni", "phi", "Ex"});

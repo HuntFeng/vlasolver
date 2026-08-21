@@ -1,19 +1,28 @@
 #include "grid.hpp"
 #include "poisson.hpp"
-#include "reduced/vlasov.hpp"
-#include "reduced/world.hpp"
-#include "reduced/writer.hpp"
+#include "vlasov.hpp"
+#include "world.hpp"
+#include "writer.hpp"
 #include <Kokkos_Core.hpp>
 #include <string>
 
-struct ImmersedWorld : World<ImmersedWorld> {
-    ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {}
+struct ImmersedWorld : World<ImmersedWorld, 1, ElectronModel::Boltzmann> {
+    ImmersedWorld(Grid<1>& grid)
+        : World<ImmersedWorld, 1, ElectronModel::Boltzmann>(grid) {
+        construct_surface();      // fill eta
+        construct_normal_field(); // base method, reads eta
+    }
 
-    KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const {
-        // return 1.0;
-        return Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+    // fill the level set field `eta` over the full domain (including ghost cells)
+    void construct_surface() {
+        auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y] = grid.center(i, j);
+                eta(i, j)   = Kokkos::pow(x - 0.375, 2) + Kokkos::pow(y, 2) - Kokkos::pow(0.125, 2);
+            });
     }
 
     void initialize_distribution() {
@@ -33,14 +42,14 @@ struct ImmersedWorld : World<ImmersedWorld> {
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, nvy}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                auto [x, y, vx, vy] = grid.center(i, j, iv, jv);
-                if (surface(x, y) <= 0.0)
+                auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
+                if (eta(i, j) <= 0.0)
                     return;
                 double f0 = Kokkos::exp(-Kokkos::pow((x - x0) / sigma_x, 2)) / (dvx * dvy);
                 if (iv == ivx_peak && jv == ivy_peak) {
-                    f(i, j, iv, jv) = f0;
+                    f(i, j, iv, jv, 0) = f0;
                 } else {
-                    f(i, j, iv, jv) = 0.0;
+                    f(i, j, iv, jv, 0) = 0.0;
                 }
             });
     };
@@ -57,30 +66,30 @@ struct ImmersedWorld : World<ImmersedWorld> {
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {ngc, ny, nvx, nvy}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
                 // left ghost = right interior
-                f(i, j, iv, jv) = f(nx - 2 * ngc + i, j, iv, jv);
+                f(i, j, iv, jv, 0) = f(nx - 2 * ngc + i, j, iv, jv, 0);
                 // right ghost = left interior
-                f(nx - ngc + i, j, iv, jv) = f(ngc + i, j, iv, jv);
+                f(nx - ngc + i, j, iv, jv, 0) = f(ngc + i, j, iv, jv, 0);
             });
         // y-direction
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ngc, nvx, nvy}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                f(i, j, iv, jv)            = f(i, ny - 2 * ngc + j, iv, jv);
-                f(i, ny - ngc + j, iv, jv) = f(i, ngc + j, iv, jv);
+                f(i, j, iv, jv, 0)            = f(i, ny - 2 * ngc + j, iv, jv, 0);
+                f(i, ny - ngc + j, iv, jv, 0) = f(i, ngc + j, iv, jv, 0);
             });
         // vx-direction
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, ngc, nvy}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                f(i, j, iv, jv)             = f(i, j, nvx - 2 * ngc + iv, jv);
-                f(i, j, nvx - ngc + iv, jv) = f(i, j, ngc + iv, jv);
+                f(i, j, iv, jv, 0)             = f(i, j, nvx - 2 * ngc + iv, jv, 0);
+                f(i, j, nvx - ngc + iv, jv, 0) = f(i, j, ngc + iv, jv, 0);
             });
         // vy-direction
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, 0, 0}, {nx, ny, nvx, ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
-                f(i, j, iv, jv)             = f(i, j, iv, nvy - 2 * ngc + jv);
-                f(i, j, iv, nvy - ngc + jv) = f(i, j, iv, ngc + jv);
+                f(i, j, iv, jv, 0)             = f(i, j, iv, nvy - 2 * ngc + jv, 0);
+                f(i, j, iv, nvy - ngc + jv, 0) = f(i, j, iv, ngc + jv, 0);
             });
         Kokkos::fence();
     }
@@ -119,10 +128,16 @@ int main(int argc, char* argv[]) {
     Kokkos::Array<double, DIM> size     = {Lx, Ly, Lvx, Lvy};             // size of the grid
     Kokkos::Array<int, DIM> ncells_intr = {nx, ny, nvx, nvy};             // number of interior cells
 
-    Grid grid(ncells_intr, ngc);
+    Grid<1> grid(ncells_intr, ngc);
     grid.set_grid(origin, size, 0);
     ImmersedWorld world(grid);
-    double total_time = 1.0;
+    world.species_names = {"i"}; // single kinetic ion species
+    // m, q, T are normalized to electron quantities. Here the single kinetic ion
+    // is normalized to itself, so its mass/charge/temperature all equal 1.
+    world.m = Kokkos::Array<double, 1>{1.0}; // ion mass (= electron mass)
+    world.q = Kokkos::Array<double, 1>{1.0}; // ion charge (= electron charge)
+    world.T = Kokkos::Array<double, 1>{1.0}; // ion temperature (= electron temperature)
+    double total_time   = 1.0;
     double CFL        = 1.0; // I know vx is 0.1, so CFL=1.0 is enough
     double dt         = CFL * grid.spacing(0, 0)[0] / Lvx;
     int total_steps   = total_time / dt;

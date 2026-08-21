@@ -17,7 +17,7 @@ A two-species Vlasov-Poisson simulation of a plasma sheath adjacent to a rough w
 ## Build
 
 ```bash
-cmake -B build && cmake --build build
+cmake -B build && cmake --build build --target sheath_rough_wall
 ```
 
 ## Run

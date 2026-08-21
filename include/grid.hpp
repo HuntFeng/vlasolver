@@ -5,18 +5,21 @@ const int DIM = 4; // Number of dimensions in the Vlasov solver
 
 /**
  * Grid struct contains the parameters of the grid used in the Vlasov solver.
- * The grid is defined in a 4D phase space (x, y, vx, vy) for up to two species.
- * Both species share the same spatial grid but may have different velocity grids.
+ * The grid is defined in a 4D phase space (x, y, vx, vy) for N species.
+ * All species share the same spatial grid but may have different velocity grids.
+ * @tparam N number of species (1 for the Boltzmann-electron model, >=2 for the
+ *           fully kinetic model with electron + one or more ion species)
  */
+template <int N>
 struct Grid {
     int ngc;                                              // number of ghost cells on each side
     Kokkos::Array<int, DIM> ncells;                       // number of all cells in each dimension
     Kokkos::Array<int, DIM> ncells_interior;              // number of interior cells in each dimension
 
-    // Per-species grid parameters (sp=0 for ion, sp=1 for electron)
-    Kokkos::Array<Kokkos::Array<double, DIM>, 2> origin;  // origin per species
-    Kokkos::Array<Kokkos::Array<double, DIM>, 2> size;    // size per species
-    Kokkos::Array<Kokkos::Array<double, DIM>, 2> sp;      // spacing per species (dx,dy,dvx,dvy)
+    // Per-species grid parameters (sp is the species index in [0, N))
+    Kokkos::Array<Kokkos::Array<double, DIM>, N> origin;  // origin per species
+    Kokkos::Array<Kokkos::Array<double, DIM>, N> size;    // size per species
+    Kokkos::Array<Kokkos::Array<double, DIM>, N> sp;      // spacing per species (dx,dy,dvx,dvy)
 
     // Convenience ranges for species 0 (spatial + velocity min/max)
     Kokkos::Array<double, DIM> velocity_ranges;

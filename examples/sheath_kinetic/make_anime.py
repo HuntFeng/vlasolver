@@ -19,8 +19,8 @@ plt.rcParams.update(
 )
 
 # Animation parameters
-total_steps = 3000  # User can modify this
-frame_interval = 30  # User can modify this (step interval between frames)
+total_steps = 50000  # User can modify this
+frame_interval = 500  # User can modify this (step interval between frames)
 start_step = 0  # Starting step
 
 # Grid parameters
@@ -51,7 +51,7 @@ def load_data(step):
     """Load data for a given step"""
     try:
         with h5py.File(
-            f"{file_path}/../../data/sheath/output_{step:04d}.h5",
+            f"{file_path}/../../data/sheath_kinetic/output_{step:05d}.h5",
             "r",
         ) as f:
             ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -106,21 +106,21 @@ else:
 # equation
 #     d^2 phi / dy^2 = n_e - n_i = exp(phi) - 1/sqrt(1 - 2*phi),
 # with phi = phi_w at the wall and phi = 0 in the bulk.
-y_wall = 0.0  # wall surface where the sheath begins (in Debye lengths)
+y_wall = 2.5  # wall surface where the sheath begins (in Debye lengths)
 phi_w = -np.log(np.sqrt(mi / (2 * np.pi * me)))  # wall potential in Te/e
 L_sheath = Ly - y_wall  # wall-to-bulk distance in Debye lengths
 
 
-def sheath_ode(s, y):
-    phi = y[0]
+def sheath_ode(s, yv):
+    phi = yv[0]
     ne = np.exp(phi)  # Boltzmann electrons
     arg = np.maximum(1.0 - 2.0 * phi, 1e-12)
     ni = 1.0 / np.sqrt(arg)  # cold Bohm ions
     d2phi = ne - ni  # normalized Poisson (Debye lengths, Te/e)
-    return np.vstack((y[1], d2phi))
+    return np.vstack((yv[1], d2phi))
 
 
-def bc(ya, yb):
+def sheath_bc(ya, yb):
     return np.array([
         ya[0] - phi_w,  # wall potential
         yb[0],  # bulk (plasma) potential = 0
@@ -131,7 +131,7 @@ s_mesh = np.linspace(0.0, L_sheath, 400)
 phi_guess = phi_w * np.exp(-s_mesh / (L_sheath / 10))
 y_guess = np.vstack((phi_guess, np.gradient(phi_guess, s_mesh)))
 
-sol = solve_bvp(sheath_ode, bc, s_mesh, y_guess, max_nodes=10000)
+sol = solve_bvp(sheath_ode, sheath_bc, s_mesh, y_guess, max_nodes=10000)
 if not sol.success:
     print(sol.message)
 
@@ -142,17 +142,15 @@ phi_analytic = sol.sol(s_plot)[0] / (2 * Tr)
 # Set up the figure and subplots
 fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(10, 8))
 
-# Plot the static analytical potential
-ax1.plot(y_analytic, phi_analytic, "-", color="red", label="$\\phi$ (analytic)")
-
 # Initialize empty line objects
 (line_phi,) = ax1.plot([], [], "b-", linewidth=2, label="$\\phi$ (sim)")
+ax1.plot(y_analytic, phi_analytic, "r-", linewidth=2, label="$\\phi$ (analytic)")
+ax1.legend()
 (line_ni,) = ax2.plot([], [], "r-", label="$n_i$", linewidth=2)
 (line_ne,) = ax2.plot([], [], "b-", label="$n_e$", linewidth=2)
 
 # Set up the axes
 ax1.set_ylabel("$\\phi$")
-ax1.legend()
 ax1.grid(True, alpha=0.3)
 
 ax2.set_xlabel("$y$")

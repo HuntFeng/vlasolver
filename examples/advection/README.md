@@ -9,7 +9,7 @@ All boundaries are periodic. This tests the advection operator and immersed boun
 From the project root:
 
 ```bash
-cmake -B build && cmake --build build
+cmake -B build && cmake --build build --target advection
 ```
 
 ## Run

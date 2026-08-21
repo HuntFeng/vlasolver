@@ -1,13 +1,13 @@
 #include "grid.hpp"
 #include "poisson_2nd_order.hpp"
-#include "reduced/world.hpp"
-#include "reduced/writer.hpp"
+#include "world.hpp"
+#include "writer.hpp"
 #include <Kokkos_Core.hpp>
 #include <cmath>
 #include <string>
 
 /**
- * Example 4.2 in Cho et al. (2019): irregular interface Gamma.
+ * Mimic Example 4.2 in Cho et al. (2019): irregular interface Gamma.
  *
  * Domain: [-1, 1]^2.
  * Interface: phi(x,y) = r - (0.5 + 0.15*sin(5*ang)) centered at (x0,y0).
@@ -23,75 +23,102 @@
  *   [u]        = u^+ - u^-
  *   [beta u_n] = (4(x^2+y^2) - 0.1/(x^2+y^2) - 2)*(x*n_x + y*n_y)
  */
-struct ImmersedWorld : World<ImmersedWorld> {
+struct ImmersedWorld : World<ImmersedWorld, 1, ElectronModel::Boltzmann> {
     static constexpr double x0 = 0.02 * 2.23606797749979; // 0.02 * sqrt(5)
     static constexpr double y0 = 0.02 * 1.73205080756888; // 0.02 * sqrt(3)
 
-    ImmersedWorld(Grid& grid)
-        : World<ImmersedWorld>(grid) {
+    ImmersedWorld(Grid<1>& grid)
+        : World<ImmersedWorld, 1, ElectronModel::Boltzmann>(grid) {
 
-        int ngc = grid.ngc;
-        int nx  = grid.ncells[0];
-        int ny  = grid.ncells[1];
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
+        construct_surface();
+        construct_permittivity();
+        construct_normal_field();
+    }
+
+    // fill the level set field `eta` over the full domain
+    void construct_surface() {
+        auto& grid              = this->grid;
+        auto& eta               = this->eta;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y]   = grid.center(i, j);
+                double dx     = x - x0;
+                double dy     = y - y0;
+                double rr     = Kokkos::sqrt(dx * dx + dy * dy);
+                double ang    = Kokkos::atan2(dy, dx);
+                double radius = 0.5 + 0.15 * Kokkos::sin(5.0 * ang);
+                eta(i, j)     = rr - radius;
+            });
+    }
+
+    // fill the region permittivity fields over the full domain (beta^- = 1, beta^+ = 10)
+    void construct_permittivity() {
+        auto& grid              = this->grid;
+        auto& eps_p             = this->eps_p;
+        auto& eps_m             = this->eps_m;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                eps_p(i, j) = 10.0; // permittivity in the eta>0 region (beta^+)
+                eps_m(i, j) = 1.0;  // permittivity in the eta<0 region (beta^-)
+            });
+    }
+
+    // fill the Poisson jump condition fields over the full domain
+    void poisson_jump_conditions() {
+        auto& grid              = this->grid;
+        auto& jump_a            = this->jump_a;
+        auto& jump_b            = this->jump_b;
+        auto& eta               = this->eta;
+        auto [nx, ny, nvx, nvy] = grid.ncells;
+        double dx               = grid.spacing(0, 0)[0];
+        double dy               = grid.spacing(0, 0)[1];
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                auto [x, y]    = grid.center(i, j);
+                double R2      = x * x + y * y;
+                double R2_safe = R2 < 1e-30 ? 1e-30 : R2;
+
+                // [u] = u^+ - u^-
+                double u_plus  = 0.1 * R2 * R2 - 0.01 * Kokkos::log(2.0 * Kokkos::sqrt(R2_safe));
+                double u_minus = R2;
+                jump_a(i, j)   = u_plus - u_minus;
+
+                // [beta u_n] = (4 R^2 - 0.1/R^2 - 2)(x n_x + y n_y)
+                double factor = 4.0 * R2_safe - 0.1 / R2_safe - 2.0;
+                double dx_s =
+                    (-eta(i + 2, j) + 8.0 * eta(i + 1, j) - 8.0 * eta(i - 1, j) + eta(i - 2, j)) / (12.0 * dx);
+                double dy_s =
+                    (-eta(i, j + 2) + 8.0 * eta(i, j + 1) - 8.0 * eta(i, j - 1) + eta(i, j - 2)) / (12.0 * dy);
+                double norm = Kokkos::sqrt(dx_s * dx_s + dy_s * dy_s);
+                if (norm < 1e-15) {
+                    jump_b(i, j) = 0.0;
+                } else {
+                    double n_x   = dx_s / norm;
+                    double n_y   = dy_s / norm;
+                    jump_b(i, j) = factor * (x * n_x + y * n_y);
+                }
+            });
+    }
+
+    void potential_boundary_conditions() {
+        auto& grid = this->grid;
+        int ngc    = grid.ngc;
+        int nx     = grid.ncells[0];
+        int ny     = grid.ncells[1];
+        Kokkos::parallel_for(
+            Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc) {
-                    auto [x,y] = grid.center(i, j);
-                    double R2      = x * x + y * y;
-                    double R2_safe      = R2 < 1e-30 ? 1e-30 : R2;
-                    double u_plus = 0.1 * R2*R2 - 0.01 * Kokkos::log(2.0 * Kokkos::sqrt(R2_safe));
+                    auto [x, y]          = grid.center(i, j);
+                    double R2            = x * x + y * y;
+                    double R2_safe       = R2 < 1e-30 ? 1e-30 : R2;
+                    double u_plus        = 0.1 * R2 * R2 - 0.01 * Kokkos::log(2.0 * Kokkos::sqrt(R2_safe));
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, u_plus);
                 } else {
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::None, 0.0);
                 }
-            }
-        }
-    }
-
-    KOKKOS_INLINE_FUNCTION
-    double surface(double x, double y) const {
-        double dx     = x - x0;
-        double dy     = y - y0;
-        double rr     = Kokkos::sqrt(dx * dx + dy * dy);
-        double ang    = Kokkos::atan2(dy, dx);
-        double radius = 0.5 + 0.15 * Kokkos::sin(5.0 * ang);
-        return rr - radius;
-    }
-
-    KOKKOS_INLINE_FUNCTION
-    double permittivity(double x, double y) const { return surface(x, y) < 0.0 ? 1.0 : 10.0; }
-
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_a(double x, double y) const {
-        double R2      = x * x + y * y;
-        double u_plus  = 0.1 * R2 * R2 - 0.01 * Kokkos::log(2.0 * Kokkos::sqrt(R2));
-        double u_minus = R2;
-        return u_plus - u_minus;
-    }
-
-    KOKKOS_INLINE_FUNCTION
-    double poisson_jump_condition_b(double x, double y) const {
-        double R2 = x * x + y * y;
-        if (R2 < 1e-30)
-            R2 = 1e-30;
-        double factor = 4.0 * R2 - 0.1 / R2 - 2.0;
-
-        // Compute normal using the same 4th-order formula as construct_fields
-        double dx = grid.spacing(0, 0)[0];
-        double dy = grid.spacing(0, 0)[1];
-        double dx_s =
-            (-surface(x + 2 * dx, y) + 8.0 * surface(x + dx, y) - 8.0 * surface(x - dx, y) + surface(x - 2 * dx, y)) /
-            (12.0 * dx);
-        double dy_s =
-            (-surface(x, y + 2 * dy) + 8.0 * surface(x, y + dy) - 8.0 * surface(x, y - dy) + surface(x, y - 2 * dy)) /
-            (12.0 * dy);
-        double norm = Kokkos::sqrt(dx_s * dx_s + dy_s * dy_s);
-        if (norm < 1e-15)
-            return 0.0;
-        double nx = dx_s / norm;
-        double ny = dy_s / norm;
-
-        return factor * (x * nx + y * ny);
+            });
     }
 };
 
@@ -106,7 +133,7 @@ int main(int argc, char** argv) {
     Kokkos::Array<int, DIM> ncells_intr = {n, n, 1, 1};
     const int ngc                       = 3;
 
-    Grid grid(ncells_intr, ngc);
+    Grid<1> grid(ncells_intr, ngc);
     grid.set_grid(origin, size, 0);
     ImmersedWorld world(grid);
     PoissonSolver2ndOrder poisson_solver(world);
@@ -120,14 +147,13 @@ int main(int argc, char** argv) {
     Kokkos::View<double**, Kokkos::HostSpace> dudx_exact_h("dudx_exact", nx, ny);
     Kokkos::View<double**, Kokkos::HostSpace> dudy_exact_h("dudy_exact", nx, ny);
 
+    auto& eta = world.eta;
     Kokkos::parallel_for(
         Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_LAMBDA(const int i, const int j) {
             auto [x, y] = grid.center(i, j);
-            double R2           = x * x + y * y;
-            double phi          = world.surface(x, y);
-            bool inside         = phi < 0.0;
+            double R2   = x * x + y * y;
 
-            if (inside) {
+            if (eta(i, j) < 0.0) {
                 rho(i, j) = -4.0;
             } else {
                 rho(i, j) = -16.0 * R2;
@@ -144,16 +170,15 @@ int main(int argc, char** argv) {
     // Build exact solution on host for error checking
     auto phi_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
     auto E_h   = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
+    auto eta_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.eta);
 
     for (int i = ngc; i < nx - ngc; ++i) {
         for (int j = ngc; j < ny - ngc; ++j) {
-            auto [x, y] = grid.center(i, j);
-            double R2           = x * x + y * y;
-            double R2_safe      = R2 < 1e-30 ? 1e-30 : R2;
-            double phi          = world.surface(x, y);
-            bool inside         = phi < 0.0;
+            auto [x, y]    = grid.center(i, j);
+            double R2      = x * x + y * y;
+            double R2_safe = R2 < 1e-30 ? 1e-30 : R2;
 
-            if (inside) {
+            if (eta_h(i, j) < 0.0) {
                 u_exact_h(i, j)    = R2;
                 dudx_exact_h(i, j) = 2.0 * x;
                 dudy_exact_h(i, j) = 2.0 * y;

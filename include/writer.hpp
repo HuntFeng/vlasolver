@@ -9,21 +9,21 @@
 template <typename World>
 class Writer {
   private:
+    static constexpr int N = World::nspecies;
+
     World& world;
     std::set<std::string> diag_fields;
     std::string folder;
     std::string prefix;
 
-    // host arrays to temporary store the data for writing
-    std::vector<double> fi;
-    std::vector<double> ni;
+    // host arrays to temporarily store the data for writing
+    std::vector<double> f_buf; // per-species distribution buffer (reused)
+    std::vector<double> n_buf; // per-species number density buffer (reused)
     std::vector<double> phi;
     std::vector<double> Ex;
     std::vector<double> Ey;
 
   public:
-    // Writer(World& world, const std::string& folder, const std::string& prefix, const std::set<std::string>
-    // diag_fields);
     Writer(World& world, const std::string& folder, const std::string& prefix, const std::set<std::string> diag_fields)
         : world(world),
           diag_fields(diag_fields),
@@ -35,15 +35,14 @@ class Writer {
             std::filesystem::remove_all(folder);
         std::filesystem::create_directories(folder);
 
-        using namespace HighFive;
         auto [nx, ny, nvx, nvy] = world.grid.ncells;
 
         // host arrays for temporary holding the data
-        fi  = std::vector<double>(nx * ny * nvx * nvy);
-        ni  = std::vector<double>(nx * ny);
-        phi = std::vector<double>(nx * ny);
-        Ex  = std::vector<double>(nx * ny);
-        Ey  = std::vector<double>(nx * ny);
+        f_buf = std::vector<double>(nx * ny * nvx * nvy);
+        n_buf = std::vector<double>(nx * ny);
+        phi   = std::vector<double>(nx * ny);
+        Ex    = std::vector<double>(nx * ny);
+        Ey    = std::vector<double>(nx * ny);
     }
 
     void write(double time) {
@@ -55,57 +54,63 @@ class Writer {
         HighFive::File file(folder + "/" + prefix + "_" + oss.str() + ".h5", HighFive::File::Overwrite);
         auto [nx, ny, nvx, nvy] = world.grid.ncells;
 
-        if (diag_fields.contains("fi")) {
-            auto f_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.f);
-            for (int i = 0; i < nx; ++i) {
-                for (int j = 0; j < ny; ++j) {
-                    for (int iv = 0; iv < nvx; ++iv) {
-                        for (int jv = 0; jv < nvy; ++jv) {
-                            fi[i * ny * nvx * nvy + j * nvx * nvy + iv * nvy + jv] = f_host(i, j, iv, jv);
-                        }
-                    }
-                }
-            }
-            file.createDataSet("VTKHDF/CellData/fi", fi);
+        // Per-species distribution ("f"+name) and number density ("n"+name) fields.
+        // e.g. species_names = {"e","i"} -> fe/fi, ne/ni; {"i"} -> fi, ni.
+        bool need_f = false, need_n = false;
+        for (int sp = 0; sp < N; ++sp) {
+            need_f |= diag_fields.contains("f" + world.species_names[sp]);
+            need_n |= diag_fields.contains("n" + world.species_names[sp]);
         }
 
-        if (diag_fields.contains("ni")) {
-            auto n_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.n);
-            for (int i = 0; i < nx; ++i) {
-                for (int j = 0; j < ny; ++j) {
-                    ni[i * ny + j] = n_host(i, j);
-                }
+        if (need_f) {
+            auto f_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.f);
+            for (int sp = 0; sp < N; ++sp) {
+                std::string key = "f" + world.species_names[sp];
+                if (!diag_fields.contains(key))
+                    continue;
+                for (int i = 0; i < nx; ++i)
+                    for (int j = 0; j < ny; ++j)
+                        for (int iv = 0; iv < nvx; ++iv)
+                            for (int jv = 0; jv < nvy; ++jv)
+                                f_buf[i * ny * nvx * nvy + j * nvx * nvy + iv * nvy + jv] = f_host(i, j, iv, jv, sp);
+                file.createDataSet("VTKHDF/CellData/" + key, f_buf);
             }
-            file.createDataSet("VTKHDF/CellData/ni", ni);
+        }
+
+        if (need_n) {
+            auto n_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.n);
+            for (int sp = 0; sp < N; ++sp) {
+                std::string key = "n" + world.species_names[sp];
+                if (!diag_fields.contains(key))
+                    continue;
+                for (int i = 0; i < nx; ++i)
+                    for (int j = 0; j < ny; ++j)
+                        n_buf[i * ny + j] = n_host(i, j, sp);
+                file.createDataSet("VTKHDF/CellData/" + key, n_buf);
+            }
         }
 
         if (diag_fields.contains("phi")) {
             auto phi_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
-            for (int i = 0; i < nx; ++i) {
-                for (int j = 0; j < ny; ++j) {
+            for (int i = 0; i < nx; ++i)
+                for (int j = 0; j < ny; ++j)
                     phi[i * ny + j] = phi_host(i, j);
-                }
-            }
             file.createDataSet("VTKHDF/CellData/phi", phi);
         }
 
         if (diag_fields.contains("Ex")) {
             auto E_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
-            for (int i = 0; i < nx; ++i) {
-                for (int j = 0; j < ny; ++j) {
+            for (int i = 0; i < nx; ++i)
+                for (int j = 0; j < ny; ++j)
                     Ex[i * ny + j] = E_host(i, j, 0);
-                }
-            }
             file.createDataSet("VTKHDF/CellData/Ex", Ex);
         }
 
         if (diag_fields.contains("Ey")) {
             auto E_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
-            for (int i = 0; i < nx; ++i) {
-                for (int j = 0; j < ny; ++j) {
+            for (int i = 0; i < nx; ++i)
+                for (int j = 0; j < ny; ++j)
                     Ey[i * ny + j] = E_host(i, j, 1);
-                }
-            }
             file.createDataSet("VTKHDF/CellData/Ey", Ey);
         }
     }

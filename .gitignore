@@ -18,3 +18,4 @@ reports/
 dev.sh
 .venv/
 __pycache__/
+**/*.npz

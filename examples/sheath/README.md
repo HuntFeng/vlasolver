@@ -14,7 +14,7 @@ A **full two-species** (electron + ion) Vlasov-Poisson simulation of a plasma sh
 ## Build
 
 ```bash
-cmake -B build && cmake --build build
+cmake -B build && cmake --build build --target sheath
 ```
 
 ## Run

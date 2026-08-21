@@ -4,20 +4,26 @@
  * A Second-Order Boundary Condition Capturing Method for Solving the Elliptic Interface Problems on Irregular Domains
  * by Hyuntae Cho 2019, Journal of Scientific Computing, doi: https://doi.org/10.1007/s10915-019-01016-y
  *
+ * NOTE: On very coarse grids (8x8, 16x16) a few degenerate cells remain where the
+ * interface crosses a stencil ray twice but the cell has ncuts == 1 or 3; the extra
+ * crossing is only detected/handled for ncuts == 2 (case 3). Such cells fall back to
+ * case 1/4 stencils that reach one wrong-region point. The error is localized and
+ * vanishes under refinement ("use finer grid" category).
  **/
 #pragma once
-#include "matrix/solve.hpp"
+#include "grid.hpp"
+#include "linalg.hpp"
 #include "poisson.hpp"
 #include <KokkosKernels_Handle.hpp>
 #include <KokkosSparse_CrsMatrix.hpp>
 #include <KokkosSparse_IOUtils.hpp>
 #include <KokkosSparse_LUPrec.hpp>
+#include <KokkosSparse_SortCrs.hpp>
+#include <KokkosSparse_coo2crs.hpp>
 #include <KokkosSparse_gmres.hpp>
 #include <KokkosSparse_par_ilut.hpp>
 #include <KokkosSparse_spiluk.hpp>
 #include <Kokkos_Core.hpp>
-#include <bit>
-#include <vector>
 
 enum Direction : size_t {
     R = 1 << 0, // 0001
@@ -54,10 +60,16 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     using CRS          = KokkosSparse::CrsMatrix<double, int, EXSP>;
     using KernelHandle = KokkosKernels::Experimental::KokkosKernelsHandle<int, int, double, EXSP, MESP, MESP>;
 
-    KernelHandle kh;
+    // Held behind a shared_ptr so that capturing *this into KOKKOS_CLASS_LAMBDA
+    // closures only bumps a refcount: KokkosKernelsHandle has shallow-copy +
+    // freeing-destructor semantics that would double-free if copied by value.
+    std::shared_ptr<KernelHandle> kh = std::make_shared<KernelHandle>();
 
     // input params
     World& world;
+    // Value copy of the grid so cell geometry (center/spacing/ngc) is reachable
+    // from device kernels without dereferencing the host-resident `world`.
+    Grid<World::nspecies> grid = world.grid;
     double tol;
     int gmres_m;
     int max_restart;
@@ -67,7 +79,6 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     double ilut_drop_tol;
     int ilut_max_iter;
     double ilut_fill_limit;
-    bool enable_scaling;
 
     // some useful params
     const int nx    = world.grid.ncells[0];
@@ -78,39 +89,47 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // diagonal scaling vector (D^{-1/2}) for preconditioner equilibration
     Kokkos::View<double*> D_inv_sqrt;
 
-    // using coordinate format for constructing sparse matrix -nabla^2
-    std::vector<int> rows_coo;
-    std::vector<int> cols_coo;
-    std::vector<double> vals_coo;
+    // Maximum number of matrix entries (nonzeros) produced per cell. The richest
+    // stencil is case3 (7x7 = 49). Each cell c=index(i,j) owns the fixed device
+    // COO slot range [c*MAXNNZ, c*MAXNNZ + MAXNNZ); unused slots are padded with
+    // a (row=c, col=c, val=0) entry which coo2crs sums harmlessly into the diagonal.
+    static constexpr int MAXNNZ = 49;
+
+    // Coordinate (COO) format device arrays for the sparse matrix -nabla^2
+    Kokkos::View<int*> rows_coo;
+    Kokkos::View<int*> cols_coo;
+    Kokkos::View<double*> vals_coo;
 
     // use to crs format for GMRES performance
     CRS A;
-    std::unique_ptr<KokkosSparse::Experimental::LUPrec<CRS, KernelHandle>> prec;
+    std::shared_ptr<KokkosSparse::Experimental::LUPrec<CRS, KernelHandle>> prec;
     Kokkos::View<double*> u;
+    // rhs encodes the source term, jumps, and boundary conditions (device)
     Kokkos::View<double*> rhs;
-    // rhs_h encodes jumps and boundary conditions
-    Kokkos::View<double*, Kokkos::HostSpace> rhs_h;
 
-    // jump conditions
-    Kokkos::View<double**, Kokkos::HostSpace> a;
-    Kokkos::View<double**, Kokkos::HostSpace> b;
-    Kokkos::View<double**, Kokkos::HostSpace> a_tau;
+    // jump conditions (device handles aliasing the world fields filled each solve)
+    Kokkos::View<double**> a = world.jump_a;
+    Kokkos::View<double**> b = world.jump_b;
+    Kokkos::View<double**> a_tau;
 
-    // normal
-    Kokkos::View<double**, Kokkos::HostSpace> n1;
-    Kokkos::View<double**, Kokkos::HostSpace> n2;
+    // normal (device handle aliasing world.normal, shape (nx, ny, 2):
+    // component 0 is n1, component 1 is n2)
+    Kokkos::View<double***> normal = world.normal;
+
+    // device handles aliasing world level-set and permittivity fields
+    Kokkos::View<double**> eta_field   = world.eta;
+    Kokkos::View<double**> eps_p_field = world.eps_p;
+    Kokkos::View<double**> eps_m_field = world.eps_m;
 
   public:
-    PoissonSolver2ndOrder(
-        World& world,
-        double tol = 1e-12,
-        int gmres_m = 100,
-        int max_restart = 30,
-        bool verbose = false,
-        double ilut_drop_tol = 1e-10,
-        int ilut_max_iter = 500,
-        double ilut_fill_limit = 20.0,
-        bool enable_scaling = true)
+    PoissonSolver2ndOrder(World& world,
+                          double tol             = 1e-12,
+                          int gmres_m            = 100,
+                          int max_restart        = 30,
+                          bool verbose           = false,
+                          double ilut_drop_tol   = 1e-10,
+                          int ilut_max_iter      = 500,
+                          double ilut_fill_limit = 20.0)
         : world(world),
           tol(tol),
           gmres_m(gmres_m),
@@ -118,16 +137,27 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
           verbose(verbose),
           ilut_drop_tol(ilut_drop_tol),
           ilut_max_iter(ilut_max_iter),
-          ilut_fill_limit(ilut_fill_limit),
-          enable_scaling(enable_scaling) {
+          ilut_fill_limit(ilut_fill_limit) {
 
-        construct_fields();
-        construct_matrix();
-        construct_preconditioner();
+        // the 7x7 case3 stencil and the i+/-2 shifted-cell interpolations reach
+        // three cells beyond the interior, so at least 3 ghost cells are required
+        if (world.grid.ngc < 3)
+            Kokkos::abort("PoissonSolver2ndOrder requires grid.ngc >= 3");
+
+        // prepare fields (all device-resident)
+        u          = Kokkos::View<double*>("u", nx * ny);
+        rhs        = Kokkos::View<double*>("rhs", nx * ny);
+
+        a_tau      = Kokkos::View<double**>("a_tau", nx, ny);
+
+        rows_coo   = Kokkos::View<int*>("rows_coo", nx * ny * MAXNNZ);
+        cols_coo   = Kokkos::View<int*>("cols_coo", nx * ny * MAXNNZ);
+        vals_coo   = Kokkos::View<double*>("vals_coo", nx * ny * MAXNNZ);
+        D_inv_sqrt = Kokkos::View<double*>("D_inv_sqrt", nx * ny);
 
         // prepare gmres
-        kh.create_gmres_handle(gmres_m, tol, max_restart);
-        auto gmres_handle = kh.get_gmres_handle();
+        kh->create_gmres_handle(gmres_m, tol, max_restart);
+        auto gmres_handle = kh->get_gmres_handle();
         using GMRESHandle = typename std::remove_reference<decltype(*gmres_handle)>::type;
         gmres_handle->set_ortho(GMRESHandle::Ortho::MGS);
         gmres_handle->set_verbose(verbose);
@@ -136,21 +166,31 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     KOKKOS_INLINE_FUNCTION
     int index(int i, int j) const { return i * ny + j; }
 
-    inline bool isclose(double val1, double val2, double rtol = 1e-12, double atol = 1e-12) {
+    // Spatial center of cell (i,j) computed from the grid value-copy so it is
+    // callable on device (mirrors Grid::center without dereferencing `world`).
+    KOKKOS_INLINE_FUNCTION
+    Kokkos::Array<double, 2> center(int i, int j) const { return grid.center(i, j); }
+
+    // Population count over the 4-bit Direction bitmask (std::popcount is host-only).
+    KOKKOS_INLINE_FUNCTION
+    int kk_popcount4(size_t d) const { return (int)((d & 1) + ((d >> 1) & 1) + ((d >> 2) & 1) + ((d >> 3) & 1)); }
+
+    KOKKOS_INLINE_FUNCTION
+    bool isclose(double val1, double val2, double rtol = 1e-12, double atol = 1e-12) const {
         return Kokkos::abs(val1 - val2) <= atol + rtol * Kokkos::abs(val2);
     }
 
-    double compute_theta(size_t direction, int i, int j) {
+    KOKKOS_INLINE_FUNCTION
+    double compute_theta(size_t direction, int i, int j) const {
         using Kokkos::abs;
         using Kokkos::pow;
         using Kokkos::sqrt;
 
-        auto [x, y]    = world.grid.center(i, j);
-        double eta     = world.surface(x, y);
-        double eta_r   = world.surface(x + dx, y);
-        double eta_l   = world.surface(x - dx, y);
-        double eta_t   = world.surface(x, y + dy);
-        double eta_b   = world.surface(x, y - dy);
+        double eta     = eta_field(i, j);
+        double eta_r   = eta_field(i + 1, j);
+        double eta_l   = eta_field(i - 1, j);
+        double eta_t   = eta_field(i, j + 1);
+        double eta_b   = eta_field(i, j - 1);
 
         double dx_eta  = (eta_r - eta_l) / 2;
         double dy_eta  = (eta_t - eta_b) / 2;
@@ -179,7 +219,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         return theta;
     }
 
-    double interp(size_t direction, double theta, int i, int j, Kokkos::View<double**, Kokkos::HostSpace>& field) {
+    KOKKOS_INLINE_FUNCTION
+    double interp(size_t direction, double theta, int i, int j, const auto& field) const {
         using Kokkos::pow;
         Kokkos::Array<double, 4> t_matrix{1, theta, pow(theta, 2), pow(theta, 3)};
         Kokkos::Array<Kokkos::Array<double, 4>, 4> c_matrix{{
@@ -206,6 +247,27 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             }
         }
         return val_I;
+    }
+
+    /**
+     * Map the region permittivities at an interface to the far/near convention
+     * used by the stencil formulas.
+     *
+     * eps_p_I is the permittivity in the eta>0 region and eps_m_I the permittivity
+     * in the eta<0 region (both interpolated to the interface). The formulas expect
+     * eps_p = permittivity on the side opposite the cell center and eps_m =
+     * permittivity on the cell-center side, so the assignment depends on the sign
+     * of eta at the cell center.
+     */
+    KOKKOS_INLINE_FUNCTION
+    void interface_eps(double eta, double eps_p_I, double eps_m_I, double& eps_p, double& eps_m) const {
+        if (eta > 0.0) {
+            eps_p = eps_m_I; // opposite (far) side is in the eta<0 region
+            eps_m = eps_p_I; // cell-center (near) side is in the eta>0 region
+        } else {
+            eps_p = eps_p_I; // opposite (far) side is in the eta>0 region
+            eps_m = eps_m_I; // cell-center (near) side is in the eta<0 region
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -239,6 +301,29 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         a_term      = -s * a_I * eps_p * _phi;
     }
 
+    // The extension point x_ext must be a diagonal neighbor lying in the SAME
+    // region as the cell (paper Sec. 3.2.1: "any of the four points ... belonging
+    // to Omega^-"). The per-case prescribed corner is kept when valid; otherwise
+    // fall back to another same-region diagonal.
+    KOKKOS_INLINE_FUNCTION
+    void pick_ext(int i, int j, int offset_ext[2], double& x_ext, double& y_ext) const {
+        double eta = eta_field(i, j);
+        if (eta_field(i + offset_ext[0], j + offset_ext[1]) * eta <= 0) {
+            const int cand[4][2] = {{-1, -1}, {-1, 1}, {1, -1}, {1, 1}};
+            for (int c = 0; c < 4; ++c) {
+                if (eta_field(i + cand[c][0], j + cand[c][1]) * eta > 0) {
+                    offset_ext[0] = cand[c][0];
+                    offset_ext[1] = cand[c][1];
+                    break;
+                }
+            }
+        }
+        auto [x, y] = center(i, j);
+        x_ext       = x + offset_ext[0] * dx;
+        y_ext       = y + offset_ext[1] * dy;
+    }
+
+    KOKKOS_INLINE_FUNCTION
     void compute_P_inv(double x,
                        double y,
                        double x_r,
@@ -247,7 +332,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                        double y_t,
                        double y_b,
                        double y_ext,
-                       double P_inv[6][6]) {
+                       double P_inv[6][6]) const {
         // Build P matrix (6x6), rows: R, L, T, B, ij, ext
         // clang-format off
         double P_mat[6][6] = {
@@ -275,8 +360,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         }
     }
 
+    KOKKOS_INLINE_FUNCTION
     void compute_grad_coeff(
-        double x_I, double y_I, double n1_I, double n2_I, const double P_inv[6][6], double grad_coeff_out[6]) {
+        double x_I, double y_I, double n1_I, double n2_I, const double P_inv[6][6], double grad_coeff_out[6]) const {
         double grad_tau[6] = {
             -2.0 * x_I * n2_I, x_I * n1_I - y_I * n2_I, 2.0 * y_I * n1_I, -n2_I, n1_I, 0.0,
         };
@@ -303,28 +389,36 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         invM[2][2] = (M[0][0] * M[1][1] - M[0][1] * M[1][0]) / det;
     }
 
-    static inline int offset25(int ox, int oy) { return (ox + 2) * 5 + (oy + 2); }
-    static inline int offset49(int ox, int oy) { return (ox + 3) * 7 + (oy + 3); }
+    static KOKKOS_INLINE_FUNCTION int offset25(int ox, int oy) { return (ox + 2) * 5 + (oy + 2); }
+    static KOKKOS_INLINE_FUNCTION int offset49(int ox, int oy) { return (ox + 3) * 7 + (oy + 3); }
+
+    // Stencil-size-templated offset (replaces a device-unsafe function pointer).
+    template <int stencil_size>
+    static KOKKOS_INLINE_FUNCTION int offset_(int ox, int oy) {
+        if constexpr (stencil_size == 49)
+            return (ox + 3) * 7 + (oy + 3);
+        else
+            return (ox + 2) * 5 + (oy + 2);
+    }
 
     // Unified assembly of M, N, D for n_intf interfaces.
     // When B_diag is true,  B is a scalar per interface (size n_intf).
     // When B_diag is false, B is a full n_intf x n_intf matrix.
     template <int stencil_size>
-    void assemble_MND(int n_intf,
-                      const double* B_diag,
-                      const double B_full[3][3],
-                      const Kokkos::Array<double, 4>* C,
-                      int c_size,
-                      const double* a_term,
-                      const double grad_coeff[3][6],
-                      const double* a_tau_term,
-                      const double* b_term,
-                      const size_t* dirs,
-                      int (*offset_fn)(int, int),
-                      const int offset_ext[2],
-                      double M[3][3],
-                      double N[3][stencil_size],
-                      double D[3]) {
+    KOKKOS_INLINE_FUNCTION void assemble_MND(int n_intf,
+                                             const double* B_diag,
+                                             const double B_full[3][3],
+                                             const Kokkos::Array<double, 4>* C,
+                                             int c_size,
+                                             const double* a_term,
+                                             const double grad_coeff[3][6],
+                                             const double* a_tau_term,
+                                             const double* b_term,
+                                             const size_t* dirs,
+                                             const int offset_ext[2],
+                                             double M[3][3],
+                                             double N[3][stencil_size],
+                                             double D[3]) const {
         int grad_idx[9]        = {};
         grad_idx[Direction::R] = 0;
         grad_idx[Direction::L] = 1;
@@ -363,57 +457,65 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             return false;
         };
         for (int d = 0; d < n_intf; ++d) {
-            N[d][offset_fn(1, 0)]                         = is_cut(Direction::R) ? 0.0 : grad_coeff[d][0];
-            N[d][offset_fn(-1, 0)]                        = is_cut(Direction::L) ? 0.0 : grad_coeff[d][1];
-            N[d][offset_fn(0, 1)]                         = is_cut(Direction::T) ? 0.0 : grad_coeff[d][2];
-            N[d][offset_fn(0, -1)]                        = is_cut(Direction::B) ? 0.0 : grad_coeff[d][3];
-            N[d][offset_fn(0, 0)]                         = grad_coeff[d][4];
-            N[d][offset_fn(offset_ext[0], offset_ext[1])] = grad_coeff[d][5];
+            N[d][offset_<stencil_size>(1, 0)]                         = is_cut(Direction::R) ? 0.0 : grad_coeff[d][0];
+            N[d][offset_<stencil_size>(-1, 0)]                        = is_cut(Direction::L) ? 0.0 : grad_coeff[d][1];
+            N[d][offset_<stencil_size>(0, 1)]                         = is_cut(Direction::T) ? 0.0 : grad_coeff[d][2];
+            N[d][offset_<stencil_size>(0, -1)]                        = is_cut(Direction::B) ? 0.0 : grad_coeff[d][3];
+            N[d][offset_<stencil_size>(0, 0)]                         = grad_coeff[d][4];
+            N[d][offset_<stencil_size>(offset_ext[0], offset_ext[1])] = grad_coeff[d][5];
 
-            int dx                                        = dx_dir[dirs[d]];
-            int dy                                        = dy_dir[dirs[d]];
+            int dx                                                    = dx_dir[dirs[d]];
+            int dy                                                    = dy_dir[dirs[d]];
             for (int k = 0; k < c_size; ++k)
-                N[d][offset_fn((k - 1) * dx, (k - 1) * dy)] -= C[d][k];
+                N[d][offset_<stencil_size>((k - 1) * dx, (k - 1) * dy)] -= C[d][k];
         }
     }
 
     // -----------------------------------------------------------------------
     // Case 0 -- no cut
     // -----------------------------------------------------------------------
-    void coeff_case0(int i, int j) {
-        auto [x, y]  = world.grid.center(i, j);
+    // Emit one COO entry at slot p (returns p+1 so callers can chain).
+    KOKKOS_INLINE_FUNCTION
+    int emit(int p, int row, int col, double val) const {
+        rows_coo(p) = row;
+        cols_coo(p) = col;
+        vals_coo(p) = val;
+        return p + 1;
+    }
+
+    KOKKOS_INLINE_FUNCTION
+    void coeff_case0(int i, int j) const {
         double bot_x = dx * dx;
         double bot_y = dy * dy;
 
-        double eps_l = world.permittivity(x - dx / 2, y);
-        double eps_r = world.permittivity(x + dx / 2, y);
-        double eps_b = world.permittivity(x, y - dy / 2);
-        double eps_t = world.permittivity(x, y + dy / 2);
+        // no interface cuts this cell, so every face lies in the cell's region;
+        // interpolate that region's permittivity to the half-cell faces
+        double eta            = eta_field(i, j);
+        const auto& eps_field = (eta > 0.0) ? eps_p_field : eps_m_field;
+        double eps_l          = interp(Direction::L, 0.5, i, j, eps_field);
+        double eps_r          = interp(Direction::R, 0.5, i, j, eps_field);
+        double eps_b          = interp(Direction::B, 0.5, i, j, eps_field);
+        double eps_t          = interp(Direction::T, 0.5, i, j, eps_field);
 
-        int row_idx  = index(i, j);
-        rows_coo.insert(rows_coo.end(), {row_idx, row_idx, row_idx, row_idx, row_idx});
-        cols_coo.insert(cols_coo.end(), {
-                                            index(i - 1, j),
-                                            index(i + 1, j),
-                                            index(i, j - 1),
-                                            index(i, j + 1),
-                                            index(i, j),
-                                        });
-        vals_coo.insert(vals_coo.end(), {
-                                            eps_l / bot_x,
-                                            eps_r / bot_x,
-                                            eps_b / bot_y,
-                                            eps_t / bot_y,
-                                            (-(eps_l + eps_r) / bot_x - (eps_b + eps_t) / bot_y),
-                                        });
+        int row_idx           = index(i, j);
+        int p                 = row_idx * MAXNNZ;
+        p                     = emit(p, row_idx, index(i - 1, j), eps_l / bot_x);
+        p                     = emit(p, row_idx, index(i + 1, j), eps_r / bot_x);
+        p                     = emit(p, row_idx, index(i, j - 1), eps_b / bot_y);
+        p                     = emit(p, row_idx, index(i, j + 1), eps_t / bot_y);
+        p                     = emit(p, row_idx, index(i, j), -(eps_l + eps_r) / bot_x - (eps_b + eps_t) / bot_y);
     }
 
     // -----------------------------------------------------------------------
     // Case 1 -- one interface cut
     // -----------------------------------------------------------------------
-    InterCaseResult case1(size_t direction, int i, int j) {
-        auto [x, y]    = world.grid.center(i, j);
-        double eta     = world.surface(x, y);
+    KOKKOS_INLINE_FUNCTION
+    InterCaseResult case1(size_t direction, int i, int j) const {
+        auto [x, y] = center(i, j);
+        // 2D component views of the unit normal so interp() can index them as field(i, j)
+        auto n1        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
+        auto n2        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
+        double eta     = eta_field(i, j);
         double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
         double theta   = compute_theta(direction, i, j);
         double a_tau_I = interp(direction, theta, i, j, a_tau);
@@ -429,15 +531,11 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double theta_t = (direction == Direction::T) ? theta : 1.0;
         double theta_b = (direction == Direction::B) ? theta : 1.0;
 
+        double eps_p_I = interp(direction, theta, i, j, eps_p_field);
+        double eps_m_I = interp(direction, theta, i, j, eps_m_field);
         double eps_p, eps_m;
-        if (is_x_dir) {
-            eps_p = world.permittivity(x + s * (theta + 0.01) * dx, y);
-            eps_m = world.permittivity(x + s * (theta - 0.01) * dx, y);
-        } else {
-            eps_p = world.permittivity(x, y + s * (theta + 0.01) * dy);
-            eps_m = world.permittivity(x, y + s * (theta - 0.01) * dy);
-        }
-        double eps_jump = (eta > 0.0) ? (eps_m - eps_p) : (eps_p - eps_m);
+        interface_eps(eta, eps_p_I, eps_m_I, eps_p, eps_m);
+        double eps_jump = eps_p_I - eps_m_I;
 
         // extension point
         double x_ext, y_ext;
@@ -458,6 +556,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             offset_ext[0] = -1;
             offset_ext[1] = 1;
         }
+        pick_ext(i, j, offset_ext, x_ext, y_ext);
 
         double x_r   = x + theta_r * dx;
         double x_l   = x - theta_l * dx;
@@ -465,10 +564,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double y_b   = y - theta_b * dy;
         double bot_x = (theta_r + theta_l) / 2.0 * dx * dx;
         double bot_y = (theta_t + theta_b) / 2.0 * dy * dy;
-        double eps_r = world.permittivity(x + theta_r * dx / 2.0, y);
-        double eps_l = world.permittivity(x - theta_l * dx / 2.0, y);
-        double eps_t = world.permittivity(x, y + theta_t * dy / 2.0);
-        double eps_b = world.permittivity(x, y - theta_b * dy / 2.0);
+        // half-cell faces lie in the cell's region; interpolate that region's
+        // permittivity to the half-cell faces (theta/2 along each direction)
+        const auto& eps_field = (eta > 0.0) ? eps_p_field : eps_m_field;
+        double eps_r          = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l          = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t          = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b          = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         // algebraic part
         double B_val;
@@ -500,8 +602,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double M[3][3], N[3][25], D[3];
         Kokkos::Array<double, 4> C_1[1] = {C_arr};
         size_t dirs[1]                  = {direction};
-        assemble_MND<25>(1, &B_val, nullptr, C_1, 4, &a_term, gc, &a_tau_term, &b_term, dirs, offset25, offset_ext, M,
-                         N, D);
+        assemble_MND<25>(1, &B_val, nullptr, C_1, 4, &a_term, gc, &a_tau_term, &b_term, dirs, offset_ext, M, N, D);
 
         r.M_inv_d[0] = D[0] / M[0][0];
         for (int k = 0; k < 25; ++k)
@@ -521,7 +622,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         return r;
     }
 
-    void coeff_case1(size_t direction, int i, int j) {
+    KOKKOS_INLINE_FUNCTION
+    void coeff_case1(size_t direction, int i, int j) const {
         auto r      = case1(direction, i, j);
         int row_idx = index(i, j);
 
@@ -544,8 +646,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             bot       = r.bot_y;
         }
         double sub_coeff = eps_dir / theta_dir / bot;
-        rhs_h(row_idx) -= r.M_inv_d[0] * sub_coeff;
+        rhs(row_idx) -= r.M_inv_d[0] * sub_coeff;
 
+        int p = row_idx * MAXNNZ;
         for (int ox = -2; ox <= 2; ++ox) {
             for (int oy = -2; oy <= 2; ++oy) {
                 double value = r.M_inv_N[0][offset25(ox, oy)] * sub_coeff;
@@ -561,9 +664,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
                     value += r.eps_b / r.theta_b / r.bot_y;
                 }
-                rows_coo.push_back(row_idx);
-                cols_coo.push_back(index(i + ox, j + oy));
-                vals_coo.push_back(value);
+                p = emit(p, row_idx, index(i + ox, j + oy), value);
             }
         }
     }
@@ -571,9 +672,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // -----------------------------------------------------------------------
     // Case 2 -- two interface cuts
     // -----------------------------------------------------------------------
-    InterCaseResult case2(size_t direction, int i, int j) {
-        auto [x, y]    = world.grid.center(i, j);
-        double eta     = world.surface(x, y);
+    KOKKOS_INLINE_FUNCTION
+    InterCaseResult case2(size_t direction, int i, int j) const {
+        auto [x, y] = center(i, j);
+        // 2D component views of the unit normal so interp() can index them as field(i, j)
+        auto n1        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
+        auto n2        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
+        double eta     = eta_field(i, j);
         double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
 
         double theta_r = compute_theta(Direction::R, i, j);
@@ -587,10 +692,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double y_b     = y - theta_b * dy;
         double bot_x   = (theta_r + theta_l) / 2.0 * dx * dx;
         double bot_y   = (theta_t + theta_b) / 2.0 * dy * dy;
-        double eps_r   = world.permittivity(x + theta_r * dx / 2.0, y);
-        double eps_l   = world.permittivity(x - theta_l * dx / 2.0, y);
-        double eps_t   = world.permittivity(x, y + theta_t * dy / 2.0);
-        double eps_b   = world.permittivity(x, y - theta_b * dy / 2.0);
+        // half-cell faces lie in the cell's region; interpolate that region's
+        // permittivity to the half-cell faces (theta/2 along each direction)
+        const auto& eps_field = (eta > 0.0) ? eps_p_field : eps_m_field;
+        double eps_r          = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l          = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t          = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b          = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         size_t dir[2];
         double theta_arr[2], eps_arr[2];
@@ -659,25 +767,21 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             offset_ext[0] = -1;
             offset_ext[1] = 1;
         }
+        pick_ext(i, j, offset_ext, x_ext, y_ext);
 
         double s[2]  = {dirsign(dir[0]), dirsign(dir[1])};
         bool is_x[2] = {dir[0] == Direction::R || dir[0] == Direction::L,
                         dir[1] == Direction::R || dir[1] == Direction::L};
         double dr[2] = {is_x[0] ? dx : dy, is_x[1] ? dx : dy};
 
+        double eps_jump[2];
         double eps_p[2], eps_m[2];
         for (int d = 0; d < 2; ++d) {
-            if (is_x[d]) {
-                eps_p[d] = world.permittivity(x + s[d] * (theta_arr[d] + 0.01) * dx, y);
-                eps_m[d] = world.permittivity(x + s[d] * (theta_arr[d] - 0.01) * dx, y);
-            } else {
-                eps_p[d] = world.permittivity(x, y + s[d] * (theta_arr[d] + 0.01) * dy);
-                eps_m[d] = world.permittivity(x, y + s[d] * (theta_arr[d] - 0.01) * dy);
-            }
+            double eps_p_I = interp(dir[d], theta_arr[d], i, j, eps_p_field);
+            double eps_m_I = interp(dir[d], theta_arr[d], i, j, eps_m_field);
+            interface_eps(eta, eps_p_I, eps_m_I, eps_p[d], eps_m[d]);
+            eps_jump[d] = eps_p_I - eps_m_I;
         }
-        double eps_jump[2];
-        for (int d = 0; d < 2; ++d)
-            eps_jump[d] = (eta > 0.0) ? (eps_m[d] - eps_p[d]) : (eps_p[d] - eps_m[d]);
 
         double n1_I[2], n2_I[2], a_tau_I[2], a_I[2], b_I[2];
         for (int d = 0; d < 2; ++d) {
@@ -719,8 +823,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         r.n_intf       = 2;
         r.stencil_size = 25;
         double M[3][3], N[3][25], D[3];
-        assemble_MND<25>(2, B, nullptr, C, 4, a_term, grad_coeff, a_tau_term, b_term, dir, offset25, offset_ext, M, N,
-                         D);
+        assemble_MND<25>(2, B, nullptr, C, 4, a_term, grad_coeff, a_tau_term, b_term, dir, offset_ext, M, N, D);
 
         double det    = M[0][0] * M[1][1] - M[0][1] * M[1][0];
         double invM00 = M[1][1] / det, invM01 = -M[0][1] / det;
@@ -746,10 +849,12 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         r.eps[1]   = eps_arr[1];
         r.theta[0] = theta_arr[0];
         r.theta[1] = theta_arr[1];
+
         return r;
     }
 
-    void coeff_case2(size_t direction, int i, int j) {
+    KOKKOS_INLINE_FUNCTION
+    void coeff_case2(size_t direction, int i, int j) const {
         auto r              = case2(direction, i, j);
         int row_idx         = index(i, j);
 
@@ -757,8 +862,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             r.eps[0] / r.theta[0] / r.bot_x,
             r.eps[1] / r.theta[1] / r.bot_y,
         };
-        rhs_h(row_idx) -= r.M_inv_d[0] * sub_coeff[0] + r.M_inv_d[1] * sub_coeff[1];
+        rhs(row_idx) -= r.M_inv_d[0] * sub_coeff[0] + r.M_inv_d[1] * sub_coeff[1];
 
+        int p = row_idx * MAXNNZ;
         for (int ox = -2; ox <= 2; ++ox) {
             for (int oy = -2; oy <= 2; ++oy) {
                 double value =
@@ -775,9 +881,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
                     value += r.eps_b / r.theta_b / r.bot_y;
                 }
-                rows_coo.push_back(row_idx);
-                cols_coo.push_back(index(i + ox, j + oy));
-                vals_coo.push_back(value);
+                p = emit(p, row_idx, index(i + ox, j + oy), value);
             }
         }
     }
@@ -785,23 +889,27 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // -----------------------------------------------------------------------
     // Case 3 -- two cuts + one extra on outer ray
     // -----------------------------------------------------------------------
-    size_t case3_extra_dir(size_t direction, int i, int j) {
-        auto [x, y]  = world.grid.center(i, j);
+    KOKKOS_INLINE_FUNCTION
+    size_t case3_extra_dir(size_t direction, int i, int j) const {
         size_t extra = 0;
-        if ((direction & Direction::R) && (world.surface(x + dx, y) * world.surface(x + 2 * dx, y) < 0))
+        if ((direction & Direction::R) && (eta_field(i + 1, j) * eta_field(i + 2, j) < 0))
             extra |= Direction::R;
-        if ((direction & Direction::T) && (world.surface(x, y + dy) * world.surface(x, y + 2 * dy) < 0))
+        if ((direction & Direction::T) && (eta_field(i, j + 1) * eta_field(i, j + 2) < 0))
             extra |= Direction::T;
-        if ((direction & Direction::L) && (world.surface(x - dx, y) * world.surface(x - 2 * dx, y) < 0))
+        if ((direction & Direction::L) && (eta_field(i - 1, j) * eta_field(i - 2, j) < 0))
             extra |= Direction::L;
-        if ((direction & Direction::B) && (world.surface(x, y - dy) * world.surface(x, y - 2 * dy) < 0))
+        if ((direction & Direction::B) && (eta_field(i, j - 1) * eta_field(i, j - 2) < 0))
             extra |= Direction::B;
         return extra;
     }
 
-    InterCaseResult case3(size_t direction, size_t extra, int i, int j) {
-        auto [x, y]     = world.grid.center(i, j);
-        double eta      = world.surface(x, y);
+    KOKKOS_INLINE_FUNCTION
+    InterCaseResult case3(size_t direction, size_t extra, int i, int j) const {
+        auto [x, y] = center(i, j);
+        // 2D component views of the unit normal so interp() can index them as field(i, j)
+        auto n1         = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
+        auto n2         = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
+        double eta      = eta_field(i, j);
         double s_eta    = (eta > 0.0) ? 1.0 : -1.0;
 
         double theta_r  = compute_theta(Direction::R, i, j);
@@ -811,24 +919,29 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double bot_x    = (theta_r + theta_l) / 2.0 * dx * dx;
         double bot_y    = (theta_t + theta_b) / 2.0 * dy * dy;
 
+        // Paper eq.(31): the extra interface is measured from the far grid point
+        // back toward the cell, e.g. x_r = x_{i+2} - theta_rr*dx for extra == R.
         double theta_rr = 0, theta_tt = 0, theta_ll = 0, theta_bb = 0;
         if (extra & Direction::R)
-            theta_rr = compute_theta(Direction::R, i + 1, j);
+            theta_rr = compute_theta(Direction::L, i + 2, j);
         if (extra & Direction::T)
-            theta_tt = compute_theta(Direction::T, i, j + 1);
+            theta_tt = compute_theta(Direction::B, i, j + 2);
         if (extra & Direction::L)
-            theta_ll = compute_theta(Direction::L, i - 1, j);
+            theta_ll = compute_theta(Direction::R, i - 2, j);
         if (extra & Direction::B)
-            theta_bb = compute_theta(Direction::B, i, j - 1);
+            theta_bb = compute_theta(Direction::T, i, j - 2);
 
-        double x_r   = x + theta_r * dx;
-        double x_l   = x - theta_l * dx;
-        double y_t   = y + theta_t * dy;
-        double y_b   = y - theta_b * dy;
-        double eps_r = world.permittivity(x + theta_r * dx / 2.0, y);
-        double eps_l = world.permittivity(x - theta_l * dx / 2.0, y);
-        double eps_t = world.permittivity(x, y + theta_t * dy / 2.0);
-        double eps_b = world.permittivity(x, y - theta_b * dy / 2.0);
+        double x_r = x + theta_r * dx;
+        double x_l = x - theta_l * dx;
+        double y_t = y + theta_t * dy;
+        double y_b = y - theta_b * dy;
+        // half-cell faces lie in the cell's region; interpolate that region's
+        // permittivity to the half-cell faces (theta/2 along each direction)
+        const auto& eps_field = (eta > 0.0) ? eps_p_field : eps_m_field;
+        double eps_r          = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l          = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t          = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b          = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         size_t dir[3];
         double theta_arr[2], theta_extra[2];
@@ -986,6 +1099,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             Kokkos::printf("case3: invalid direction/extra %d/%d\n", (int)direction, (int)extra);
             Kokkos::abort("case3: invalid sub-case");
         }
+        pick_ext(i, j, offset_ext, x_ext, y_ext);
 
         double s[3] = {dirsign(dir[0]), dirsign(dir[1]), dirsign(dir[2], true)};
 
@@ -996,34 +1110,35 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             dr[d]   = is_x[d] ? dx : dy;
         }
 
-        // eps_p/m for 3 interfaces
+        // eps_p/m for 3 interfaces: interpolate the region permittivity fields to
+        // each interface, then map to the far/near convention via interface_eps
+        double eps_jump[3];
         double eps_p[3], eps_m[3];
         for (int d = 0; d < 2; ++d) {
-            if (is_x[d]) {
-                eps_p[d] = world.permittivity(x + s[d] * (theta_arr[d] + 0.01) * dx, y);
-                eps_m[d] = world.permittivity(x + s[d] * (theta_arr[d] - 0.01) * dx, y);
-            } else {
-                eps_p[d] = world.permittivity(x, y + s[d] * (theta_arr[d] + 0.01) * dy);
-                eps_m[d] = world.permittivity(x, y + s[d] * (theta_arr[d] - 0.01) * dy);
+            double eps_p_I = interp(dir[d], theta_arr[d], i, j, eps_p_field);
+            double eps_m_I = interp(dir[d], theta_arr[d], i, j, eps_m_field);
+            interface_eps(eta, eps_p_I, eps_m_I, eps_p[d], eps_m[d]);
+            eps_jump[d] = eps_p_I - eps_m_I;
+        }
+        // Extra interface: interpolated at the shifted cell (same stencil as n1_I[2])
+        {
+            double eps_p_I, eps_m_I;
+            if (extra == Direction::R) {
+                eps_p_I = interp(Direction::L, theta_extra[1], i + 2, j, eps_p_field);
+                eps_m_I = interp(Direction::L, theta_extra[1], i + 2, j, eps_m_field);
+            } else if (extra == Direction::T) {
+                eps_p_I = interp(Direction::B, theta_extra[1], i, j + 2, eps_p_field);
+                eps_m_I = interp(Direction::B, theta_extra[1], i, j + 2, eps_m_field);
+            } else if (extra == Direction::L) {
+                eps_p_I = interp(Direction::R, theta_extra[1], i - 2, j, eps_p_field);
+                eps_m_I = interp(Direction::R, theta_extra[1], i - 2, j, eps_m_field);
+            } else { // B
+                eps_p_I = interp(Direction::T, theta_extra[1], i, j - 2, eps_p_field);
+                eps_m_I = interp(Direction::T, theta_extra[1], i, j - 2, eps_m_field);
             }
+            interface_eps(eta, eps_p_I, eps_m_I, eps_p[2], eps_m[2]);
+            eps_jump[2] = eps_p_I - eps_m_I;
         }
-        // Extra interface: at the shifted cell center
-        if (extra == Direction::R) {
-            eps_p[2] = world.permittivity(x + 2 * dx + s[2] * (theta_extra[1] + 0.01) * dx, y);
-            eps_m[2] = world.permittivity(x + 2 * dx + s[2] * (theta_extra[1] - 0.01) * dx, y);
-        } else if (extra == Direction::T) {
-            eps_p[2] = world.permittivity(x, y + 2 * dy + s[2] * (theta_extra[1] + 0.01) * dy);
-            eps_m[2] = world.permittivity(x, y + 2 * dy + s[2] * (theta_extra[1] - 0.01) * dy);
-        } else if (extra == Direction::L) {
-            eps_p[2] = world.permittivity(x - 2 * dx + s[2] * (theta_extra[1] + 0.01) * dx, y);
-            eps_m[2] = world.permittivity(x - 2 * dx + s[2] * (theta_extra[1] - 0.01) * dx, y);
-        } else { // B
-            eps_p[2] = world.permittivity(x, y - 2 * dy + s[2] * (theta_extra[1] + 0.01) * dy);
-            eps_m[2] = world.permittivity(x, y - 2 * dy + s[2] * (theta_extra[1] - 0.01) * dy);
-        }
-        double eps_jump[3];
-        for (int d = 0; d < 3; ++d)
-            eps_jump[d] = (eta > 0.0) ? (eps_m[d] - eps_p[d]) : (eps_p[d] - eps_m[d]);
 
         // Interpolate: first two at (i,j), extra at shifted cell
         double n1_I[3], n2_I[3], a_tau_I[3], a_I[3], b_I[3];
@@ -1085,9 +1200,9 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         C5[0][3]        = -s_eta * s[0] * (-eps_p[0] * (1 - t0) / (2 - t0));
         C5[0][4]        = 0.0;
 
-        // Row 1: -s_eta * s[1] * [...], with t0 in denominator for entry [1]
+        // Row 1: -s_eta * s[1] * [...]
         C5[1][0] = -s_eta * s[1] * (-eps_m[1] * t1 / (1 + t1));
-        C5[1][1] = -s_eta * s[1] * (eps_m[1] * (t1 + 1) / (t1 * (t0 + 1)));
+        C5[1][1] = -s_eta * s[1] * (eps_m[1] * (t1 + 1) / t1);
         C5[1][2] = -s_eta * s[1] * (eps_p[1] * (2 - t1 - te1) / ((1 - t1) * (1 - te1)));
         C5[1][3] = 0.0;
         C5[1][4] = 0.0;
@@ -1095,15 +1210,20 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         // Row 2: +s_eta * s[2] * [...] (positive sign, NOT negative!)
         C5[2][0] = 0.0;
         C5[2][1] = 0.0;
-        C5[2][2] = s_eta * s[2] * (-eps_p[2] * (2 - t1 - te1) / ((2 - t1) * (1 - te1)));
+        C5[2][2] = s_eta * s[2] * (-eps_p[2] * (2 - t1 - te1) / ((1 - t1) * (1 - te1)));
         C5[2][3] = s_eta * s[2] * (-eps_m[2] * (te1 + 1) / te1);
         C5[2][4] = s_eta * s[2] * (eps_m[2] * te1 / (te1 + 1));
 
-        // a_term (3)
+        // a_term (3); rows 1 and 2 each carry the jump contributions of BOTH
+        // collinear interfaces since u^+ at both enters each one-sided stencil
         double a_term3[3];
         a_term3[0] = -s[0] * a_I[0] * eps_p[0] * (3 - 2 * t0) / ((1 - t0) * (2 - t0));
-        a_term3[1] = -s[1] * a_I[1] * eps_p[1] * (3 - 2 * t1 - te1) / ((1 - t1) * (2 - t1 - te1));
-        a_term3[2] = -s[2] * a_I[2] * eps_p[1] * (3 - 2 * te1 - t1) / ((1 - te1) * (2 - t1 - te1));
+        a_term3[1] = -s[1] * eps_p[1] *
+                     (a_I[1] * (3 - 2 * t1 - te1) / ((1 - t1) * (2 - t1 - te1)) +
+                      a_I[2] * (1 - t1) / ((2 - t1 - te1) * (1 - te1)));
+        a_term3[2] = -s[2] * eps_p[2] *
+                     (a_I[2] * (3 - 2 * te1 - t1) / ((1 - te1) * (2 - t1 - te1)) +
+                      a_I[1] * (1 - te1) / ((2 - t1 - te1) * (1 - t1)));
 
         // geometric
         double P_inv[6][6];
@@ -1147,9 +1267,12 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double M3[3][3], N3[3][49], D3[3];
         for (int d = 0; d < 3; ++d)
             D3[d] = a_tau_term3[d] + b_term3[d] - a_term3[d];
+        // The P polynomial only interpolates the first two interface values
+        // (x_I[0], x_I[1]); the extra interface value u_r^- (column 2) does not
+        // appear in the geometric gradient, so no grad_coeff is subtracted there.
         for (int d = 0; d < 3; ++d)
             for (int e = 0; e < 3; ++e)
-                M3[d][e] = B3[d][e] - grad_coeff[d][grad_idx[dir[e]]];
+                M3[d][e] = B3[d][e] - ((e == 2) ? 0.0 : grad_coeff[d][grad_idx[dir[e]]]);
         for (int d = 0; d < 3; ++d)
             for (int k = 0; k < 49; ++k)
                 N3[d][k] = 0.0;
@@ -1200,18 +1323,23 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         r.theta[1] = theta_arr[1];
         r.is_x[0]  = is_x[0];
         r.is_x[1]  = is_x[1];
+        r.dir[0]   = dir[0];
+        r.dir[1]   = dir[1];
+
         return r;
     }
 
-    void coeff_case3(size_t direction, size_t extra, int i, int j) {
+    KOKKOS_INLINE_FUNCTION
+    void coeff_case3(size_t direction, size_t extra, int i, int j) const {
         auto r      = case3(direction, extra, i, j);
         int row_idx = index(i, j);
 
         double sub_coeff[2];
         for (int d = 0; d < 2; ++d)
             sub_coeff[d] = r.eps[d] / r.theta[d] / (r.is_x[d] ? r.bot_x : r.bot_y);
-        rhs_h(row_idx) -= r.M_inv_d[0] * sub_coeff[0] + r.M_inv_d[1] * sub_coeff[1];
+        rhs(row_idx) -= r.M_inv_d[0] * sub_coeff[0] + r.M_inv_d[1] * sub_coeff[1];
 
+        int p = row_idx * MAXNNZ;
         for (int ox = -3; ox <= 3; ++ox) {
             for (int oy = -3; oy <= 3; ++oy) {
                 double value =
@@ -1228,9 +1356,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
                     value += r.eps_b / r.theta_b / r.bot_y;
                 }
-                rows_coo.push_back(row_idx);
-                cols_coo.push_back(index(i + ox, j + oy));
-                vals_coo.push_back(value);
+                p = emit(p, row_idx, index(i + ox, j + oy), value);
             }
         }
     }
@@ -1238,9 +1364,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // -----------------------------------------------------------------------
     // Case 4 -- three interface cuts
     // -----------------------------------------------------------------------
-    InterCaseResult case4(size_t direction, int i, int j) {
-        auto [x, y]    = world.grid.center(i, j);
-        double eta     = world.surface(x, y);
+    KOKKOS_INLINE_FUNCTION
+    InterCaseResult case4(size_t direction, int i, int j) const {
+        auto [x, y] = center(i, j);
+        // 2D component views of the unit normal so interp() can index them as field(i, j)
+        auto n1        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0);
+        auto n2        = Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1);
+        double eta     = eta_field(i, j);
         double s_eta   = (eta > 0.0) ? 1.0 : -1.0;
 
         double theta_r = compute_theta(Direction::R, i, j);
@@ -1254,10 +1384,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         double y_b     = y - theta_b * dy;
         double bot_x   = (theta_r + theta_l) / 2.0 * dx * dx;
         double bot_y   = (theta_t + theta_b) / 2.0 * dy * dy;
-        double eps_r   = world.permittivity(x + theta_r * dx / 2.0, y);
-        double eps_l   = world.permittivity(x - theta_l * dx / 2.0, y);
-        double eps_t   = world.permittivity(x, y + theta_t * dy / 2.0);
-        double eps_b   = world.permittivity(x, y - theta_b * dy / 2.0);
+        // half-cell faces lie in the cell's region; interpolate that region's
+        // permittivity to the half-cell faces (theta/2 along each direction)
+        const auto& eps_field = (eta > 0.0) ? eps_p_field : eps_m_field;
+        double eps_r          = interp(Direction::R, theta_r / 2, i, j, eps_field);
+        double eps_l          = interp(Direction::L, theta_l / 2, i, j, eps_field);
+        double eps_t          = interp(Direction::T, theta_t / 2, i, j, eps_field);
+        double eps_b          = interp(Direction::B, theta_b / 2, i, j, eps_field);
 
         size_t dir[3];
         double theta_arr[3], eps_arr[3];
@@ -1347,6 +1480,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             offset_ext[0] = -1;
             offset_ext[1] = 1;
         }
+        pick_ext(i, j, offset_ext, x_ext, y_ext);
         for (int d = 0; d < 3; ++d)
             is_x[d] = (dir[d] == Direction::R || dir[d] == Direction::L);
 
@@ -1358,18 +1492,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             dr[d] = is_x[d] ? dx : dy;
 
         double eps_p[3], eps_m[3];
-        for (int d = 0; d < 3; ++d) {
-            if (is_x[d]) {
-                eps_p[d] = world.permittivity(x + s[d] * (theta_arr[d] + 0.01) * dx, y);
-                eps_m[d] = world.permittivity(x + s[d] * (theta_arr[d] - 0.01) * dx, y);
-            } else {
-                eps_p[d] = world.permittivity(x, y + s[d] * (theta_arr[d] + 0.01) * dy);
-                eps_m[d] = world.permittivity(x, y + s[d] * (theta_arr[d] - 0.01) * dy);
-            }
-        }
         double eps_jump[3];
-        for (int d = 0; d < 3; ++d)
-            eps_jump[d] = (eta > 0.0) ? (eps_m[d] - eps_p[d]) : (eps_p[d] - eps_m[d]);
+        for (int d = 0; d < 3; ++d) {
+            double eps_p_I = interp(dir[d], theta_arr[d], i, j, eps_p_field);
+            double eps_m_I = interp(dir[d], theta_arr[d], i, j, eps_m_field);
+            interface_eps(eta, eps_p_I, eps_m_I, eps_p[d], eps_m[d]);
+            eps_jump[d] = eps_p_I - eps_m_I;
+        }
 
         double n1_I[3], n2_I[3], a_tau_I[3], a_I[3], b_I[3];
         for (int d = 0; d < 3; ++d) {
@@ -1380,12 +1509,34 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             b_I[d]     = interp(dir[d], theta_arr[d], i, j, b);
         }
 
-        // algebraic: diagonal B (no collinear interfaces in case4)
-        double B[3];
+        // algebraic part. Three cuts always contain one collinear (opposite)
+        // pair, e.g. R and L. For such a pair the far point of each one-sided
+        // minus stencil is the OTHER interface value (not a grid point), so the
+        // pair couples through off-diagonal B entries with theta_opp instead of
+        // the theta_opp = 1 grid-point assumption baked into per_iface_algebraic.
+        double B_full[3][3] = {};
         Kokkos::Array<double, 4> C[3];
         double a_term[3];
         for (int d = 0; d < 3; ++d)
-            per_iface_algebraic(s_eta, s[d], eps_p[d], eps_m[d], theta_arr[d], a_I[d], B[d], C[d], a_term[d]);
+            per_iface_algebraic(s_eta, s[d], eps_p[d], eps_m[d], theta_arr[d], a_I[d], B_full[d][d], C[d], a_term[d]);
+        for (int d = 0; d < 3; ++d) {
+            size_t opp = (dir[d] == Direction::R)   ? (size_t)Direction::L
+                         : (dir[d] == Direction::L) ? (size_t)Direction::R
+                         : (dir[d] == Direction::T) ? (size_t)Direction::B
+                                                    : (size_t)Direction::T;
+            for (int q = 0; q < 3; ++q) {
+                if (dir[q] != opp)
+                    continue;
+                double td    = theta_arr[d];
+                double tq    = theta_arr[q];
+                B_full[d][d] = s_eta * s[d] *
+                               (eps_p[d] * (3 - 2 * td) / ((1 - td) * (2 - td)) +
+                                eps_m[d] * (2 * td + tq) / (td * (td + tq)));
+                B_full[d][q] = s_eta * s[d] * eps_m[d] * td / ((td + tq) * tq);
+                C[d][0]      = 0.0; // far grid point lies across the interface
+                C[d][1]      = -s_eta * s[d] * (eps_m[d] * (td + tq) / (td * tq));
+            }
+        }
 
         // geometric
         double P_inv[6][6];
@@ -1411,8 +1562,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         r.n_intf       = 3;
         r.stencil_size = 25;
         double M[3][3], N[3][25], D[3];
-        assemble_MND<25>(3, B, nullptr, C, 4, a_term, grad_coeff, a_tau_term, b_term, dir, offset25, offset_ext, M, N,
-                         D);
+        assemble_MND<25>(3, nullptr, B_full, C, 4, a_term, grad_coeff, a_tau_term, b_term, dir, offset_ext, M, N, D);
 
         double invM[3][3];
         invert3x3(M, invM);
@@ -1438,18 +1588,21 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             r.is_x[d]  = is_x[d];
             r.dir[d]   = dir[d];
         }
+
         return r;
     }
 
-    void coeff_case4(size_t direction, int i, int j) {
+    KOKKOS_INLINE_FUNCTION
+    void coeff_case4(size_t direction, int i, int j) const {
         auto r      = case4(direction, i, j);
         int row_idx = index(i, j);
 
         double sub_coeff[3];
         for (int d = 0; d < 3; ++d)
             sub_coeff[d] = r.eps[d] / r.theta[d] / (r.is_x[d] ? r.bot_x : r.bot_y);
-        rhs_h(row_idx) -= r.M_inv_d[0] * sub_coeff[0] + r.M_inv_d[1] * sub_coeff[1] + r.M_inv_d[2] * sub_coeff[2];
+        rhs(row_idx) -= r.M_inv_d[0] * sub_coeff[0] + r.M_inv_d[1] * sub_coeff[1] + r.M_inv_d[2] * sub_coeff[2];
 
+        int p = row_idx * MAXNNZ;
         for (int ox = -2; ox <= 2; ++ox) {
             for (int oy = -2; oy <= 2; ++oy) {
                 double value = r.M_inv_N[0][offset25(ox, oy)] * sub_coeff[0] +
@@ -1467,9 +1620,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 } else if (ox == 0 && oy == -1 && !(direction & Direction::B)) {
                     value += r.eps_b / r.theta_b / r.bot_y;
                 }
-                rows_coo.push_back(row_idx);
-                cols_coo.push_back(index(i + ox, j + oy));
-                vals_coo.push_back(value);
+                p = emit(p, row_idx, index(i + ox, j + oy), value);
             }
         }
     }
@@ -1477,11 +1628,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     // -----------------------------------------------------------------------
     // Interface value functions (for electric field computation)
     // -----------------------------------------------------------------------
-    InterfaceValue interface_value_case0(int i, int j, const auto& u) {
+    KOKKOS_INLINE_FUNCTION
+    InterfaceValue interface_value_case0(int i, int j, const auto& u) const {
         return {u(i - 1, j), u(i + 1, j), u(i, j - 1), u(i, j + 1), 1.0, 1.0, 1.0, 1.0};
     }
 
-    InterfaceValue interface_value_case1(size_t direction, int i, int j, const auto& u) {
+    KOKKOS_INLINE_FUNCTION
+    InterfaceValue interface_value_case1(size_t direction, int i, int j, const auto& u) const {
         auto r = case1(direction, i, j);
         double u_arr[25];
         for (int ox = -2; ox <= 2; ++ox)
@@ -1502,7 +1655,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         };
     }
 
-    InterfaceValue interface_value_case2(size_t direction, int i, int j, const auto& u) {
+    KOKKOS_INLINE_FUNCTION
+    InterfaceValue interface_value_case2(size_t direction, int i, int j, const auto& u) const {
         auto r = case2(direction, i, j);
         double u_arr[25];
         for (int ox = -2; ox <= 2; ++ox)
@@ -1525,7 +1679,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         };
     }
 
-    InterfaceValue interface_value_case3(size_t direction, size_t extra, int i, int j, const auto& u) {
+    KOKKOS_INLINE_FUNCTION
+    InterfaceValue interface_value_case3(size_t direction, size_t extra, int i, int j, const auto& u) const {
         auto r = case3(direction, extra, i, j);
         double u_arr[49];
         for (int ox = -3; ox <= 3; ++ox)
@@ -1536,11 +1691,24 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             ghosts[0] += r.M_inv_N[0][k] * u_arr[k];
             ghosts[1] += r.M_inv_N[1][k] * u_arr[k];
         }
+        // case3 orders dir[0] = non-extra, dir[1] = extra base direction, so the
+        // ghost-to-face mapping must go through r.dir (not the case2 convention)
+        int idx_l = -1, idx_r = -1, idx_b = -1, idx_t = -1;
+        for (int d = 0; d < 2; ++d) {
+            if (r.dir[d] == Direction::L)
+                idx_l = d;
+            else if (r.dir[d] == Direction::R)
+                idx_r = d;
+            else if (r.dir[d] == Direction::B)
+                idx_b = d;
+            else if (r.dir[d] == Direction::T)
+                idx_t = d;
+        }
         return {
-            (direction & Direction::L) ? ghosts[0] : u(i - 1, j),
-            (direction & Direction::R) ? ghosts[0] : u(i + 1, j),
-            (direction & Direction::B) ? ghosts[1] : u(i, j - 1),
-            (direction & Direction::T) ? ghosts[1] : u(i, j + 1),
+            (direction & Direction::L) ? ghosts[idx_l] : u(i - 1, j),
+            (direction & Direction::R) ? ghosts[idx_r] : u(i + 1, j),
+            (direction & Direction::B) ? ghosts[idx_b] : u(i, j - 1),
+            (direction & Direction::T) ? ghosts[idx_t] : u(i, j + 1),
             r.theta_l,
             r.theta_r,
             r.theta_b,
@@ -1548,7 +1716,8 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         };
     }
 
-    InterfaceValue interface_value_case4(size_t direction, int i, int j, const auto& u) {
+    KOKKOS_INLINE_FUNCTION
+    InterfaceValue interface_value_case4(size_t direction, int i, int j, const auto& u) const {
         auto r = case4(direction, i, j);
         double u_arr[25];
         for (int ox = -2; ox <= 2; ++ox)
@@ -1561,30 +1730,17 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             ghosts[2] += r.M_inv_N[2][k] * u_arr[k];
         }
         // Map ghosts to u_l/r/b/t using dir index
-        int idx_l = [&]() {
-            for (int d = 0; d < 3; ++d)
-                if (r.dir[d] == Direction::L)
-                    return d;
-            return -1;
-        }();
-        int idx_r = [&]() {
-            for (int d = 0; d < 3; ++d)
-                if (r.dir[d] == Direction::R)
-                    return d;
-            return -1;
-        }();
-        int idx_b = [&]() {
-            for (int d = 0; d < 3; ++d)
-                if (r.dir[d] == Direction::B)
-                    return d;
-            return -1;
-        }();
-        int idx_t = [&]() {
-            for (int d = 0; d < 3; ++d)
-                if (r.dir[d] == Direction::T)
-                    return d;
-            return -1;
-        }();
+        int idx_l = -1, idx_r = -1, idx_b = -1, idx_t = -1;
+        for (int d = 0; d < 3; ++d) {
+            if (r.dir[d] == Direction::L)
+                idx_l = d;
+            else if (r.dir[d] == Direction::R)
+                idx_r = d;
+            else if (r.dir[d] == Direction::B)
+                idx_b = d;
+            else if (r.dir[d] == Direction::T)
+                idx_t = d;
+        }
         return {
             (direction & Direction::L) ? ghosts[idx_l] : u(i - 1, j),
             (direction & Direction::R) ? ghosts[idx_r] : u(i + 1, j),
@@ -1598,157 +1754,97 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     // -----------------------------------------------------------------------
-    // COO to CRS conversion
+    // COO to CRS conversion (device): the fixed-stride COO arrays are turned into
+    // a CRS matrix by coo2crs, which sums duplicate (row,col) entries (so the
+    // zero-padding slots fold harmlessly into the diagonal). The result is then
+    // sorted within each row as required by the par-ILUT preconditioner.
     // -----------------------------------------------------------------------
     void coo2crs() {
-        int nrows = nx * ny;
-        int ncols = nx * ny;
-        int nnz   = vals_coo.size();
-
-        std::vector<int> rowmap(nrows + 1, 0);
-        for (size_t k = 0; k < rows_coo.size(); ++k)
-            rowmap[rows_coo[k] + 1] += 1;
-        for (int i = 0; i < nrows; ++i)
-            rowmap[i + 1] += rowmap[i];
-
-        std::vector<int> cur = rowmap;
-        std::vector<int> cols_crs(nnz);
-        std::vector<double> vals_crs(nnz);
-        for (size_t k = 0; k < rows_coo.size(); ++k) {
-            int r          = rows_coo[k];
-            int dest       = cur[r]++;
-            cols_crs[dest] = cols_coo[k];
-            vals_crs[dest] = vals_coo[k];
-        }
-
-        A = CRS("A", nrows, ncols, nnz, vals_crs.data(), rowmap.data(), cols_crs.data());
+        int n = nx * ny;
+        A     = KokkosSparse::coo2crs(n, n, rows_coo, cols_coo, vals_coo);
         KokkosSparse::sort_crs_matrix(A);
     }
 
     void construct_fields() {
-        u           = Kokkos::View<double*>("u", nx * ny);
-        rhs         = Kokkos::View<double*>("rhs", nx * ny);
-        rhs_h       = Kokkos::View<double*, Kokkos::HostSpace>("rhs_h", nx * ny);
+        world.poisson_jump_conditions(); // fills world.jump_a/jump_b (a/b alias them)
+        int ngc = grid.ngc;
 
-        n1          = Kokkos::View<double**, Kokkos::HostSpace>("n1", nx, ny);
-        n2          = Kokkos::View<double**, Kokkos::HostSpace>("n2", nx, ny);
-        a           = Kokkos::View<double**, Kokkos::HostSpace>("a", nx, ny);
-        b           = Kokkos::View<double**, Kokkos::HostSpace>("b", nx, ny);
-        a_tau       = Kokkos::View<double**, Kokkos::HostSpace>("a_tau", nx, ny);
-        Kokkos::deep_copy(a_tau, 0.0);
-        Kokkos::deep_copy(rhs_h, 0.0);
-        Kokkos::deep_copy(n1, 0.0);
-        Kokkos::deep_copy(n2, 0.0);
-        // FIXME: not working, possibly the layout is not right
-        // auto normal = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.normal);
-        // Kokkos::deep_copy(n1, Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 0));
-        // Kokkos::deep_copy(n2, Kokkos::subview(normal, Kokkos::ALL, Kokkos::ALL, 1));
-
-        using Kokkos::pow;
-        using Kokkos::sqrt;
-        int ngc = world.grid.ngc;
-
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
-                auto [x, y] = world.grid.center(i, j);
-                a(i, j)     = world.poisson_jump_condition_a(x, y);
-                b(i, j)     = world.poisson_jump_condition_b(x, y);
-                if (i < ngc || i >= nx - ngc || j < ngc || j >= ny - ngc)
-                    continue;
-                double dx_eta = (-world.surface(x + 2 * dx, y) + 8 * world.surface(x + dx, y) -
-                                 8 * world.surface(x - dx, y) + world.surface(x - 2 * dx, y)) /
-                                (12 * dx);
-                double dy_eta = (-world.surface(x, y + 2 * dy) + 8 * world.surface(x, y + dy) -
-                                 8 * world.surface(x, y - dy) + world.surface(x, y - 2 * dy)) /
-                                (12 * dy);
-                double norm = sqrt(pow(dx_eta, 2) + pow(dy_eta, 2));
-                if (isclose(norm, 0.0)) {
-                    n1(i, j) = 0.0;
-                    n2(i, j) = 0.0;
-                } else {
-                    n1(i, j) = dx_eta / norm;
-                    n2(i, j) = dy_eta / norm;
-                }
-            }
-        }
-        for (int i = ngc; i < nx - ngc; ++i) {
-            for (int j = ngc; j < ny - ngc; ++j) {
+        // tangential derivative of the jump condition a; reads the unit normal from
+        // world.normal (component 0 is n1, component 1 is n2)
+        Kokkos::parallel_for(
+            "poisson2nd_a_tau", Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 double dx_a = (-a(i + 2, j) + 8 * a(i + 1, j) - 8 * a(i - 1, j) + a(i - 2, j)) / (12 * dx);
                 double dy_a = (-a(i, j + 2) + 8 * a(i, j + 1) - 8 * a(i, j - 1) + a(i, j - 2)) / (12 * dy);
-                a_tau(i, j) = -dx_a * n2(i, j) + dy_a * n1(i, j);
-            }
-        }
+                a_tau(i, j) = -dx_a * normal(i, j, 1) + dy_a * normal(i, j, 0);
+            });
     }
 
     void construct_matrix() {
-        int ngc = world.grid.ngc;
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
+        Kokkos::deep_copy(rhs, 0.0);
+        int ngc             = grid.ngc;
+        auto poisson_bc_map = world.poisson_bc_map; // device handle (do not deref world in-kernel)
+
+        // Pre-fill every COO slot with an inert (row=c, col=c, val=0) entry so that
+        // cells which emit fewer than MAXNNZ entries leave well-formed padding.
+        Kokkos::parallel_for(
+            "poisson2nd_coo_pad", Kokkos::RangePolicy<EXSP>(0, nx * ny * MAXNNZ), KOKKOS_CLASS_LAMBDA(const int s) {
+                int c       = s / MAXNNZ;
+                rows_coo(s) = c;
+                cols_coo(s) = c;
+                vals_coo(s) = 0.0;
+            });
+
+        Kokkos::parallel_for(
+            "poisson2nd_assemble", Kokkos::MDRangePolicy({0, 0}, {nx, ny}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 int row_idx          = index(i, j);
-                PoissonBCPair bc_map = world.poisson_bc_map(i, j);
+                int base             = row_idx * MAXNNZ;
+                PoissonBCPair bc_map = poisson_bc_map(i, j);
 
                 if (bc_map.type == PoissonBCType::Dirichlet) {
-                    vals_coo.push_back(1.0);
-                    rows_coo.push_back(row_idx);
-                    cols_coo.push_back(row_idx);
-                    rhs_h(row_idx) = bc_map.val;
+                    emit(base, row_idx, row_idx, 1.0);
+                    rhs(row_idx) = bc_map.val;
                 } else if (bc_map.type == PoissonBCType::Neumann) {
                     if (i < ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i + 1, j)});
-                        rhs_h(row_idx) = bc_map.val;
+                        emit(emit(base, row_idx, row_idx, -1.0), row_idx, index(i + 1, j), 1.0);
+                        rhs(row_idx) = bc_map.val;
                     } else if (i >= nx - ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i - 1, j)});
-                        rhs_h(row_idx) = -bc_map.val;
+                        emit(emit(base, row_idx, row_idx, -1.0), row_idx, index(i - 1, j), 1.0);
+                        rhs(row_idx) = -bc_map.val;
                     } else if (j < ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j + 1)});
-                        rhs_h(row_idx) = bc_map.val;
+                        emit(emit(base, row_idx, row_idx, -1.0), row_idx, index(i, j + 1), 1.0);
+                        rhs(row_idx) = bc_map.val;
                     } else if (j >= ny - ngc) {
-                        vals_coo.insert(vals_coo.end(), {-1.0, 1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j - 1)});
-                        rhs_h(row_idx) = -bc_map.val;
+                        emit(emit(base, row_idx, row_idx, -1.0), row_idx, index(i, j - 1), 1.0);
+                        rhs(row_idx) = -bc_map.val;
                     } else {
                         Kokkos::printf("Neumann BC can only be applied at ghost cells");
                         Kokkos::abort("Terminated");
                     }
                 } else if (bc_map.type == PoissonBCType::Periodic) {
                     if (i < ngc) {
-                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(nx - 2 * ngc + i, j)});
-                        rhs_h(row_idx) = 0.0;
+                        emit(emit(base, row_idx, row_idx, 1.0), row_idx, index(nx - 2 * ngc + i, j), -1.0);
+                        rhs(row_idx) = 0.0;
                     } else if (i >= nx - ngc) {
-                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i - nx + ngc, j)});
-                        rhs_h(row_idx) = 0.0;
+                        emit(emit(base, row_idx, row_idx, 1.0), row_idx, index(i - nx + ngc, j), -1.0);
+                        rhs(row_idx) = 0.0;
                     } else if (j < ngc) {
-                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, ny - 2 * ngc + j)});
-                        rhs_h(row_idx) = 0.0;
+                        emit(emit(base, row_idx, row_idx, 1.0), row_idx, index(i, ny - 2 * ngc + j), -1.0);
+                        rhs(row_idx) = 0.0;
                     } else if (j >= ny - ngc) {
-                        vals_coo.insert(vals_coo.end(), {1.0, -1.0});
-                        rows_coo.insert(rows_coo.end(), {row_idx, row_idx});
-                        cols_coo.insert(cols_coo.end(), {row_idx, index(i, j - nx + ngc)});
-                        rhs_h(row_idx) = 0.0;
+                        emit(emit(base, row_idx, row_idx, 1.0), row_idx, index(i, j - nx + ngc), -1.0);
+                        rhs(row_idx) = 0.0;
                     } else {
                         Kokkos::printf("Periodic BC can only be applied at ghost cells");
                         Kokkos::abort("Terminated");
                     }
                 } else {
-                    auto [x, y]      = world.grid.center(i, j);
-                    double eta       = world.surface(x, y);
-                    double eta_l     = world.surface(x - dx, y);
-                    double eta_r     = world.surface(x + dx, y);
-                    double eta_b     = world.surface(x, y - dy);
-                    double eta_t     = world.surface(x, y + dy);
+                    double eta       = eta_field(i, j);
+                    double eta_l     = eta_field(i - 1, j);
+                    double eta_r     = eta_field(i + 1, j);
+                    double eta_b     = eta_field(i, j - 1);
+                    double eta_t     = eta_field(i, j + 1);
 
                     size_t direction = 0;
                     if (eta * eta_l < 0)
@@ -1760,14 +1856,14 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                     if (eta * eta_t < 0)
                         direction |= Direction::T;
 
-                    int ncuts = std::popcount(direction);
+                    int ncuts = kk_popcount4(direction);
                     if (ncuts == 0) {
                         coeff_case0(i, j);
                     } else if (ncuts == 1) {
                         coeff_case1(direction, i, j);
                     } else if (ncuts == 2) {
                         size_t extra = case3_extra_dir(direction, i, j);
-                        int nextra   = std::popcount(extra);
+                        int nextra   = kk_popcount4(extra);
                         if (nextra == 0) {
                             coeff_case2(direction, i, j);
                         } else if (nextra == 1) {
@@ -1783,8 +1879,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                         Kokkos::abort("Terminated");
                     }
                 }
-            }
-        }
+            });
         coo2crs();
     }
 
@@ -1795,41 +1890,35 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         int nrows    = A.numRows();
 
         // Symmetric diagonal scaling (Jacobi equilibration) for better ILU quality
-        D_inv_sqrt = Kokkos::View<double*>("D_inv_sqrt", nrows);
         auto D_inv_sqrt_h = Kokkos::create_mirror_view(D_inv_sqrt);
-        if (enable_scaling) {
-            auto row_map_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), row_map);
-            auto entries_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), entries);
-            auto values_h  = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), values);
-            for (int i = 0; i < nrows; ++i) {
-                double diag = 0.0;
-                for (int k = row_map_h(i); k < row_map_h(i + 1); ++k) {
-                    if (entries_h(k) == i) {
-                        diag = Kokkos::abs(values_h(k));
-                        break;
-                    }
-                }
-                D_inv_sqrt_h(i) = (diag > 1e-30) ? 1.0 / Kokkos::sqrt(diag) : 1.0;
-            }
-            Kokkos::deep_copy(D_inv_sqrt, D_inv_sqrt_h);
-
-            // Symmetrically scale the CRS matrix in-place on host
-            for (int i = 0; i < nrows; ++i) {
-                double di = D_inv_sqrt_h(i);
-                for (int k = row_map_h(i); k < row_map_h(i + 1); ++k) {
-                    int j    = entries_h(k);
-                    double dj = D_inv_sqrt_h(j);
-                    values_h(k) *= di * dj;
+        auto row_map_h    = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), row_map);
+        auto entries_h    = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), entries);
+        auto values_h     = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), values);
+        for (int i = 0; i < nrows; ++i) {
+            double diag = 0.0;
+            for (int k = row_map_h(i); k < row_map_h(i + 1); ++k) {
+                if (entries_h(k) == i) {
+                    diag = Kokkos::abs(values_h(k));
+                    break;
                 }
             }
-            Kokkos::deep_copy(values, values_h);
-        } else {
-            Kokkos::deep_copy(D_inv_sqrt_h, 1.0);
-            Kokkos::deep_copy(D_inv_sqrt, D_inv_sqrt_h);
+            D_inv_sqrt_h(i) = (diag > 1e-30) ? 1.0 / Kokkos::sqrt(diag) : 1.0;
         }
+        Kokkos::deep_copy(D_inv_sqrt, D_inv_sqrt_h);
 
-        kh.create_par_ilut_handle();
-        auto par_ilut_handle = kh.get_par_ilut_handle();
+        // Symmetrically scale the CRS matrix in-place on host
+        for (int i = 0; i < nrows; ++i) {
+            double di = D_inv_sqrt_h(i);
+            for (int k = row_map_h(i); k < row_map_h(i + 1); ++k) {
+                int j     = entries_h(k);
+                double dj = D_inv_sqrt_h(j);
+                values_h(k) *= di * dj;
+            }
+        }
+        Kokkos::deep_copy(values, values_h);
+
+        kh->create_par_ilut_handle();
+        auto par_ilut_handle = kh->get_par_ilut_handle();
         par_ilut_handle->set_max_iter(ilut_max_iter);
         par_ilut_handle->set_residual_norm_delta_stop(ilut_drop_tol);
         par_ilut_handle->set_fill_in_limit(ilut_fill_limit);
@@ -1837,7 +1926,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
 
         Kokkos::View<int*> L_row_map("L_row_map", nrows + 1);
         Kokkos::View<int*> U_row_map("U_row_map", nrows + 1);
-        KokkosSparse::Experimental::par_ilut_symbolic(&kh, row_map, entries, L_row_map, U_row_map);
+        KokkosSparse::Experimental::par_ilut_symbolic(kh.get(), row_map, entries, L_row_map, U_row_map);
 
         const int nnzL_est = par_ilut_handle->get_nnzL();
         const int nnzU_est = par_ilut_handle->get_nnzU();
@@ -1846,13 +1935,13 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         Kokkos::View<int*> U_entries("U_entries", nnzU_est);
         Kokkos::View<double*> U_values("U_values", nnzU_est);
 
-        KokkosSparse::Experimental::par_ilut_numeric(&kh, row_map, entries, values, L_row_map, L_entries, L_values,
+        KokkosSparse::Experimental::par_ilut_numeric(kh.get(), row_map, entries, values, L_row_map, L_entries, L_values,
                                                      U_row_map, U_entries, U_values);
         const int nnzL      = L_values.extent(0);
         const int nnzU      = U_values.extent(0);
         CRS L               = CRS("L", nrows, A.numCols(), nnzL, L_values, L_row_map, L_entries);
         CRS U               = CRS("U", nrows, A.numCols(), nnzU, U_values, U_row_map, U_entries);
-        prec                = std::make_unique<KokkosSparse::Experimental::LUPrec<CRS, KernelHandle>>(L, U);
+        prec                = std::make_shared<KokkosSparse::Experimental::LUPrec<CRS, KernelHandle>>(L, U);
 
         const auto iters    = par_ilut_handle->get_num_iters();
         const auto residual = par_ilut_handle->get_end_rel_res();
@@ -1860,24 +1949,31 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     void construct_rhs() {
-        auto rho_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.rho);
-        for (int i = 0; i < nx; ++i) {
-            for (int j = 0; j < ny; ++j) {
-                PoissonBCPair bc_map = world.poisson_bc_map(i, j);
+        // Runs after construct_matrix, which already set rhs for BC rows and
+        // subtracted the M_inv_d contribution on cut cells. Here we add the source
+        // term (-rho) on interior rows and (idempotently) re-set the BC rows. rhs
+        // must NOT be re-zeroed.
+        auto rho            = world.rho;
+        auto poisson_bc_map = world.poisson_bc_map;
+        Kokkos::parallel_for(
+            "poisson2nd_rhs", Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                PoissonBCPair bc_map = poisson_bc_map(i, j);
                 if (bc_map.type == PoissonBCType::None)
-                    rhs_h(index(i, j)) -= rho_h(i, j);
+                    rhs(index(i, j)) -= rho(i, j);
                 else
-                    rhs_h(index(i, j)) = bc_map.val;
-            }
-        }
-        Kokkos::deep_copy(rhs, rhs_h);
+                    rhs(index(i, j)) = bc_map.val;
+            });
     }
 
     void solve() {
+        world.potential_boundary_conditions();
+        construct_fields();
+        construct_matrix();
+        construct_preconditioner();
         construct_rhs();
 
         // Apply diagonal scaling to RHS
-        if (enable_scaling) {
+        {
             auto rhs_h = Kokkos::create_mirror_view(rhs);
             Kokkos::deep_copy(rhs_h, rhs);
             auto D_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), D_inv_sqrt);
@@ -1886,10 +1982,10 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
             Kokkos::deep_copy(rhs, rhs_h);
         }
 
-        KokkosSparse::Experimental::gmres(&kh, A, rhs, u, prec.get());
+        KokkosSparse::Experimental::gmres(kh.get(), A, rhs, u, prec.get());
 
         // Undo diagonal scaling on solution
-        if (enable_scaling) {
+        {
             auto u_h = Kokkos::create_mirror_view(u);
             Kokkos::deep_copy(u_h, u);
             auto D_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), D_inv_sqrt);
@@ -1901,7 +1997,7 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
         Kokkos::View<double**, Kokkos::LayoutRight, Kokkos::MemoryTraits<Kokkos::Unmanaged>> u_2d(u.data(), nx, ny);
         Kokkos::deep_copy(world.phi, u_2d);
 
-        auto gmres_handle      = kh.get_gmres_handle();
+        auto gmres_handle      = kh->get_gmres_handle();
         const auto max_restart = gmres_handle->get_max_restart();
         const auto gmres_m     = gmres_handle->get_m();
         const auto iters       = gmres_handle->get_num_iters();
@@ -1915,19 +2011,19 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
     }
 
     void compute_electric_field() {
-        using Kokkos::pow;
-        auto E_h   = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.E);
-        auto phi_h = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), world.phi);
-        int ngc    = world.grid.ngc;
+        auto phi = world.phi;
+        auto E   = world.E;
+        int ngc  = grid.ngc;
 
-        for (int i = ngc; i < nx - ngc; ++i) {
-            for (int j = ngc; j < ny - ngc; ++j) {
-                auto [x, y]      = world.grid.center(i, j);
-                double eta       = world.surface(x, y);
-                double eta_l     = world.surface(x - dx, y);
-                double eta_r     = world.surface(x + dx, y);
-                double eta_b     = world.surface(x, y - dy);
-                double eta_t     = world.surface(x, y + dy);
+        Kokkos::parallel_for(
+            "poisson2nd_efield", Kokkos::MDRangePolicy({ngc, ngc}, {nx - ngc, ny - ngc}),
+            KOKKOS_CLASS_LAMBDA(const int i, const int j) {
+                using Kokkos::pow;
+                double eta       = eta_field(i, j);
+                double eta_l     = eta_field(i - 1, j);
+                double eta_r     = eta_field(i + 1, j);
+                double eta_b     = eta_field(i, j - 1);
+                double eta_t     = eta_field(i, j + 1);
 
                 size_t direction = 0;
                 if (eta * eta_l < 0)
@@ -1939,29 +2035,29 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 if (eta * eta_t < 0)
                     direction |= Direction::T;
 
-                int ncuts = std::popcount(direction);
+                int ncuts = kk_popcount4(direction);
                 InterfaceValue ival;
                 if (ncuts == 0) {
-                    ival = interface_value_case0(i, j, phi_h);
+                    ival = interface_value_case0(i, j, phi);
                 } else if (ncuts == 1) {
-                    ival = interface_value_case1(direction, i, j, phi_h);
+                    ival = interface_value_case1(direction, i, j, phi);
                 } else if (ncuts == 2) {
                     size_t extra = case3_extra_dir(direction, i, j);
-                    int nextra   = std::popcount(extra);
+                    int nextra   = kk_popcount4(extra);
                     if (nextra == 0) {
-                        ival = interface_value_case2(direction, i, j, phi_h);
+                        ival = interface_value_case2(direction, i, j, phi);
                     } else if (nextra == 1) {
-                        ival = interface_value_case3(direction, extra, i, j, phi_h);
+                        ival = interface_value_case3(direction, extra, i, j, phi);
                     } else {
                         Kokkos::abort("compute_electric_field: too many extra cuts");
                     }
                 } else if (ncuts == 3) {
-                    ival = interface_value_case4(direction, i, j, phi_h);
+                    ival = interface_value_case4(direction, i, j, phi);
                 } else {
                     Kokkos::abort("compute_electric_field: all four sides cut");
                 }
 
-                double u_c     = phi_h(i, j);
+                double u_c     = phi(i, j);
                 double u_l     = ival.u_l;
                 double u_r     = ival.u_r;
                 double u_b     = ival.u_b;
@@ -1971,14 +2067,12 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                 double theta_b = ival.theta_b;
                 double theta_t = ival.theta_t;
 
-                E_h(i, j, 0) =
+                E(i, j, 0) =
                     -(-pow(theta_r, 2) * u_l + (pow(theta_r, 2) - pow(theta_l, 2)) * u_c + pow(theta_l, 2) * u_r) /
                     (theta_l * theta_r * (theta_l + theta_r) * dx);
-                E_h(i, j, 1) =
+                E(i, j, 1) =
                     -(-pow(theta_t, 2) * u_b + (pow(theta_t, 2) - pow(theta_b, 2)) * u_c + pow(theta_b, 2) * u_t) /
                     (theta_b * theta_t * (theta_b + theta_t) * dy);
-            }
-        }
-        Kokkos::deep_copy(world.E, E_h);
+            });
     }
 };

@@ -15,7 +15,7 @@ A Vlasov-Poisson simulation of a plasma flowing past a 4-pointed star-shaped die
 ## Build
 
 ```bash
-cmake -B build && cmake --build build
+cmake -B build && cmake --build build --target star
 ```
 
 ## Run

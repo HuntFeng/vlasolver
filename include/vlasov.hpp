@@ -148,6 +148,11 @@ class Vlasolver {
                         Kokkos::Array<Kokkos::Array<double, 3>, 3> A{}; // use list init to initialize elements to 0
                         Kokkos::Array<double, 3> b{};
 
+                        // (x_b, y_b) is the intersection point between the normal line and the boundary.
+                        // Coordinates are measured relative to it, i.e. x = X - x_b, y = Y - y_b.
+                        double x_b = x0 - eta * n1;
+                        double y_b = y0 - eta * n2;
+
                         // We assume f near the boundary can be approximated by a plane: f(x,y) = c0 * x + c1 * y + c2
                         // solve least square problem A @ c = b (where c = [c0, c1, c2])
                         // the normal equation is A^T @ A @ c = A^T @ b
@@ -156,15 +161,17 @@ class Vlasolver {
                         // sum x_i * c0 + sum y_i * c1 + sum 1 * c2 = sum f_i
                         for (int x_offset = -offset_range; x_offset <= offset_range; ++x_offset) {
                             for (int y_offset = -offset_range; y_offset <= offset_range; ++y_offset) {
-                                int I               = i + x_offset;
-                                int J               = j + y_offset;
-                                auto [x, y, vx, vy] = grid.center(I, J, iv, jv, sp);
+                                int I = i + x_offset;
+                                int J = j + y_offset;
                                 // skip ghost cells
                                 if (I < ngc || I > nx - ngc - 1 || J < ngc || J > ny - ngc - 1 || eta_field(I, J) < 0)
                                     continue;
 
                                 // only extrapolate using fluid cells
-                                double z = f(I, J, iv, jv, sp);
+                                auto [X, Y, VX, VY] = grid.center(I, J, iv, jv, sp);
+                                double x            = X - x_b;
+                                double y            = Y - y_b;
+                                double z            = f(I, J, iv, jv, sp);
                                 A[0][0] += x * x;
                                 A[1][1] += y * y;
                                 A[2][2] += 1.0;
@@ -180,26 +187,25 @@ class Vlasolver {
                                 b[2] += z;
                             }
                         }
-                        // For inflow, we force zero-inflow condition. i.e. f(x_b, y_b) = 0,
-                        // where (x_b, y_b) is the intersection point between the normal line and the boundary
-                        // now the last row of normal equation becomes
-                        // sum x_i^2 * c0 + sum x_i*y_i * c1 + 0 = sum x_i*f_i
-                        // sum x_i*y_i * c0 + sum y_i^2 * c1 + 0 = sum y_i*f_i
-                        // b[0] * x_b + b[1] * y_b + b[2] = 0
+                        // For inflow, we force zero-inflow condition, i.e. f(x_b, y_b) = 0.
+                        // In boundary-relative coordinates this is the hard constraint c2 = 0, so the plane
+                        // becomes f(x,y) = c0 * x + c1 * y and the least square problem only has two unknowns.
+                        // Its normal equation is the upper-left 2x2 block of the full system:
+                        // sum x_i^2 * c0 + sum x_i*y_i * c1 = sum x_i*f_i
+                        // sum x_i*y_i * c0 + sum y_i^2 * c1 = sum y_i*f_i
                         if (v_dot_n >= 0.0) {
-                            double x_b = x0 - eta * n1;
-                            double y_b = y0 - eta * n2;
-                            A[0][2]    = 0.0;
-                            A[1][2]    = 0.0;
-                            A[2][0]    = x_b;
-                            A[2][1]    = y_b;
-                            A[2][2]    = 1.0;
-                            b[2]       = 0.0;
+                            Kokkos::Array<Kokkos::Array<double, 2>, 2> A2{{{A[0][0], A[0][1]}, {A[1][0], A[1][1]}}};
+                            Kokkos::Array<double, 2> b2{b[0], b[1]};
+                            solve_linear_system(A2, b2);
+                            b[0] = b2[0];
+                            b[1] = b2[1];
+                            b[2] = 0.0;
+                        } else {
+                            solve_linear_system(A, b);
                         }
-                        solve_linear_system(A, b);
 
-                        // extrapolate using best-fit plane
-                        f(i, j, iv, jv, sp) = b[0] * x0 + b[1] * y0 + b[2];
+                        // extrapolate using best-fit plane, evaluated at (x0, y0) in boundary-relative coordinates
+                        f(i, j, iv, jv, sp) = b[0] * (x0 - x_b) + b[1] * (y0 - y_b) + b[2];
                     }
                 }
             });

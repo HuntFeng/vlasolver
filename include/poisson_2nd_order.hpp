@@ -1822,6 +1822,16 @@ class PoissonSolver2ndOrder : PoissonSolver<PoissonSolver2ndOrder<World>> {
                         Kokkos::printf("Neumann BC can only be applied at ghost cells");
                         Kokkos::abort("Terminated");
                     }
+                } else if (bc_map.type == PoissonBCType::Symmetric) {
+                    // even reflection about the domain edge(s): phi(ghost) - phi(image) = 0
+                    int mi = (i < ngc) ? 2 * ngc - 1 - i : (i >= nx - ngc) ? 2 * (nx - ngc) - 1 - i : i;
+                    int mj = (j < ngc) ? 2 * ngc - 1 - j : (j >= ny - ngc) ? 2 * (ny - ngc) - 1 - j : j;
+                    if (mi == i && mj == j) {
+                        Kokkos::printf("Symmetric BC can only be applied at ghost cells");
+                        Kokkos::abort("Terminated");
+                    }
+                    emit(emit(base, row_idx, row_idx, 1.0), row_idx, index(mi, mj), -1.0);
+                    rhs(row_idx) = 0.0;
                 } else if (bc_map.type == PoissonBCType::Periodic) {
                     if (i < ngc) {
                         emit(emit(base, row_idx, row_idx, 1.0), row_idx, index(nx - 2 * ngc + i, j), -1.0);

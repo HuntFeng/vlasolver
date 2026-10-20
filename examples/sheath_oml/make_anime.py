@@ -26,9 +26,10 @@ frame_interval = 120
 start_step = 0
 
 # Grid parameters
-nx, ny = 128, 128
-Lx, Ly = 40, 40
-x_min, y_min = -20, -20
+# quarter domain [0, 20]^2, cylinder at the origin (see main.cpp)
+nx, ny = 64, 64
+Lx, Ly = 20, 20
+x_min, y_min = 0, 0
 G = 3
 is_include_circle = True
 
@@ -42,13 +43,13 @@ X, Y = np.meshgrid(x, y, indexing="ij")
 
 
 def surface(x, y):
-    return x**2 + y**2 - 0.1**2
+    return x**2 + y**2 - 1.0**2
 
 
 def load_data(step):
     try:
         with h5py.File(
-            f"{file_path}/../../data/sheath_oml/output_{step:05d}.h5", "r"
+            f"{file_path}/../../data/sheath_oml_quarter/output_{step:05d}.h5", "r"
         ) as f:
             ni = f["VTKHDF/CellData/ni"][:].reshape(nx + 2 * G, ny + 2 * G)
             phi = f["VTKHDF/CellData/phi"][:].reshape(nx + 2 * G, ny + 2 * G)
@@ -64,7 +65,7 @@ def draw_circle(ax):
 
 # Potential profile slice indices (matching plottings.py)
 idx_y_neg1 = G  # y ≈ -1 (bottom edge)
-idx_y_0 = (ny + 2 * G) // 2  # y ≈ 0 (mid-plane)
+idx_y_0 = G  # first interior row, y = dy/2 (symmetry plane y = 0)
 
 # Set up figure and subplots
 fig, ax = plt.subplots(1, 3, figsize=(18, 6))

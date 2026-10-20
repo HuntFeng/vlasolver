@@ -54,6 +54,8 @@ class Writer {
         HighFive::File file(folder + "/" + prefix + "_" + oss.str() + ".h5", HighFive::File::Overwrite);
         auto [nx, ny, nvx, nvy] = world.grid.ncells;
 
+        world.compute_diagnostics();
+
         // Per-species distribution ("f"+name) and number density ("n"+name) fields.
         // e.g. species_names = {"e","i"} -> fe/fi, ne/ni; {"i"} -> fi, ni.
         bool need_f = false, need_n = false;
@@ -112,6 +114,16 @@ class Writer {
                 for (int j = 0; j < ny; ++j)
                     Ey[i * ny + j] = E_host(i, j, 1);
             file.createDataSet("VTKHDF/CellData/Ey", Ey);
+        }
+
+        for (const auto& [key, view] : world.extra_fields) {
+            if (!diag_fields.contains(key))
+                continue;
+            auto view_host = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), view);
+            for (int i = 0; i < nx; ++i)
+                for (int j = 0; j < ny; ++j)
+                    n_buf[i * ny + j] = view_host(i, j);
+            file.createDataSet("VTKHDF/CellData/" + key, n_buf);
         }
     }
 };

@@ -3,6 +3,7 @@
 #include "poisson.hpp"
 #include <Kokkos_Core.hpp>
 #include <array>
+#include <map>
 #include <string>
 
 /**
@@ -41,6 +42,10 @@ struct World {
     Kokkos::View<double**> jump_a;  // jump condition [phi]_Gamma, filled by poisson_jump_conditions()
     Kokkos::View<double**> jump_b;  // jump condition [d(phi)/dn]_Gamma, filled by poisson_jump_conditions()
     Kokkos::View<PoissonBCPair**> poisson_bc_map;
+
+    // Extra 2D diagnostic fields (nx, ny) published by the derived World. The Writer calls
+    // compute_diagnostics() before each output and writes every entry listed in its diag_fields.
+    std::map<std::string, Kokkos::View<double**>> extra_fields;
 
     // Per-species physical properties. Default to 1.0 so a single ion species
     // (Boltzmann model, normalized to ion quantities) keeps q/m = 1.
@@ -168,6 +173,12 @@ struct World {
      * This function will be called by the Poisson solver before each solve.
      */
     void poisson_jump_conditions() { static_cast<WorldType*>(this)->poisson_jump_conditions(); }
+
+    /**
+     * Fill the entries of `extra_fields` from the current state. Called by the Writer before each
+     * output. Default: nothing to compute; a derived World shadows this to provide its diagnostics.
+     */
+    void compute_diagnostics() {}
 
     /**
      * Initialize the particle distribution function.

@@ -105,11 +105,18 @@ ax.set_ylabel("$y/\\lambda_D$")
 plt.tight_layout()
 plt.savefig(f"{file_path}/potential.png")
 
+# Radial cut along +x through the row nearest y = 0, interior cells only
+# (ghost cells hold boundary data, e.g. the half-Maxwellian injection).
+jc = phi.shape[1] // 2
+cut = (x > 0) & (x < x_min + Lx)
+r_cut = np.hypot(x[cut], y[jc])
+
 params = OMLParameters(
     a=1.0,
-    rmax=x.max(),
+    rmax=x_min + Lx,  # grounded wall where the cut meets the domain boundary
     Tr=1,
     mr=100,  # mi / me
+    outer_bc="dirichlet",
 )
 sol = solve_oml(params)
 
@@ -120,26 +127,26 @@ xx = np.linspace(
 )
 phi_a = sol.sol(xx)[0]
 plt.figure()
-plt.plot(x, phi[:, phi.shape[1] // 2], "o")
+plt.plot(r_cut, phi[cut, jc], "o", fillstyle="none")
 plt.plot(xx, phi_a, "-", label="theory")
 plt.xlabel("$r/\\lambda_D$")
 plt.ylabel("$e\\phi / k_BT_e$")
 plt.axvline(x=1, color="k", linestyle="--", label="$r/\\lambda_D=1$")
 plt.legend()
-plt.xlim(0, x.max())
+plt.xlim(0, sol.params.rmax)
 plt.tight_layout()
 plt.savefig(f"{file_path}/potential_profiles.png")
 
-# plt.figure()
-# line_i = plt.plot(x, ni[:, ni.shape[1] // 2], "o", label="$n_i$")[0]
-# line_e = plt.plot(x, ne[:, ne.shape[1] // 2], "o", label="$n_e$")[0]
-# plt.plot(xx, sol.density(xx)[0], "-", color=line_i.get_color(), label="$n_{ia}$")
-# plt.plot(xx, sol.density(xx)[1], "-", color=line_e.get_color(), label="$n_{ea}$")
-# plt.xlabel("$r/\\lambda_D$")
-# plt.ylabel("$n_i$")
-# plt.axvline(x=1, color="k", linestyle="--", label="$r=1$")
-# plt.legend()
-# plt.xlim(0, xx.max())
-# plt.savefig(f"{file_path}/density.png")
+plt.figure()
+line_i = plt.plot(r_cut, ni[cut, jc], "o", fillstyle="none", label="$n_i$")[0]
+line_e = plt.plot(r_cut, ne[cut, jc], "o", fillstyle="none", label="$n_e$")[0]
+plt.plot(xx, sol.density(xx)[0], "-", color=line_i.get_color(), label="$n_{ia}$")
+plt.plot(xx, sol.density(xx)[1], "-", color=line_e.get_color(), label="$n_{ea}$")
+plt.xlabel("$r/\\lambda_D$")
+plt.ylabel("$n_i$")
+plt.axvline(x=1, color="k", linestyle="--", label="$r=1$")
+plt.legend()
+plt.xlim(0, sol.params.rmax)
+plt.savefig(f"{file_path}/density_profiles.png")
 
 plt.show()

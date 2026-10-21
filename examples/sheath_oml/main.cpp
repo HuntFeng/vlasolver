@@ -328,7 +328,20 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                         double A     = (sp == 0) ? A_e : A_i;
                         double f_inj = A * exp(-(vx * vx + vy * vy) / (2.0 * v_th * v_th));
                         bool inflow  = right ? vx < 0.0 : vy < 0.0;
-                        f(i, j, iv, jv, sp) = inflow ? f_inj : 0.0;
+                        if (inflow) {
+                            f(i, j, iv, jv, sp) = f_inj;
+                        } else {
+                            // outflow: zero-gradient copy of the nearest interior cell. A
+                            // zero here is a cliff the third-order PFC reconstruction sees,
+                            // which cuts the outgoing flux and leaves an over/undershoot in
+                            // the last interior cells. Corner ghosts that also lie beyond
+                            // a symmetry plane read the mirror image of that cell.
+                            int I  = right ? nx - ngc - 1 : (left ? 2 * ngc - 1 - i : i);
+                            int J  = top ? ny - ngc - 1 : (bottom ? 2 * ngc - 1 - j : j);
+                            int IV = (left && !right) ? nvx - 1 - iv : iv;
+                            int JV = (bottom && !top) ? nvy - 1 - jv : jv;
+                            f(i, j, iv, jv, sp) = f(I, J, IV, JV, sp);
+                        }
                     } else {
                         // symmetry planes x = 0 / y = 0: specular reflection. The image
                         // of ghost index k is 2 ngc - 1 - k in space and the velocity

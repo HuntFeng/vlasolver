@@ -182,7 +182,7 @@ line_e = plt.plot(r_cut, ne[cut, jc], "o", fillstyle="none", label="$n_e$")[0]
 plt.plot(xx, sol.density(xx)[0], "-", color=line_i.get_color(), label="$n_{ia}$")
 plt.plot(xx, sol.density(xx)[1], "-", color=line_e.get_color(), label="$n_{ea}$")
 plt.xlabel("$r/\\lambda_D$")
-plt.ylabel("$n_i$")
+plt.ylabel("$n$")
 plt.axvline(x=1, color="k", linestyle="--", label="$r=1$")
 plt.legend()
 plt.xlim(0, Lx)

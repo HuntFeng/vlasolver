@@ -24,7 +24,7 @@ Lx, Ly = 20, 20
 G = 3
 is_include_circle = True
 
-step = 12000
+step = 1000
 file_path = os.path.dirname(os.path.realpath(__file__))
 with h5py.File(
     f"{file_path}/../../data/sheath_oml_quarter/output_{step:05d}.h5",

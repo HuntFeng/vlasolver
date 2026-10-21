@@ -212,6 +212,20 @@ def solve_oml(params=None):
     return sol
 
 
+def write_profile(sol, path, num=4001):
+    """Write the OML profile used by main.cpp for the [init] model = oml start.
+
+    CSV with header "r,phi,dphi_dr" on a uniform r grid from a to rmax, so the
+    first row holds phi_d and the slope at the dust. main.cpp sets phi = phi_d
+    inside the dust, phi = 0 beyond rmax, and the initial surface charge
+    sigma = -eps_out * dphi_dr(a).
+    """
+    p = sol.params
+    r = np.linspace(p.a, p.rmax, num)
+    phi, dphi = sol.sol(r)
+    np.savetxt(path, np.column_stack((r, phi, dphi)), delimiter=",", header="r,phi,dphi_dr", comments="", fmt="%.17g")
+
+
 def plot_potential(sol, ax=None, show=True, label=None):
     """Plot the normalized potential phi = e*Phi/(k_B*T_e) from solve_oml()."""
     if ax is None:
@@ -245,12 +259,37 @@ def plot_potential(sol, ax=None, show=True, label=None):
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
+    parser.add_argument(
+        "--write-init",
+        metavar="PATH",
+        help="write the profile for main.cpp's [init] model = oml and exit",
+    )
+    args = parser.parse_args()
+
+    # Must match main.cpp / input.ini: R_cyl = 1, mi/me = 100, Ti/Te = 1, and
+    # the grounded wall at 20 lambda_D.
     params = OMLParameters(
         a=1.0,
         rmax=20.0,
         Tr=1.0,
         mr=100.0,
+        outer_bc="dirichlet",
     )
+
+    if args.write_init:
+        # The initial state must cover the whole square, out to the corner at
+        # 20 sqrt(2). Solve to rmax = 40 so the domain sees the quasineutral bulk
+        # rather than the theory's own wall layer (which carries a net negative
+        # charge); the simulation forms its thin layer at the real walls itself.
+        init = solve_oml(
+            OMLParameters(a=params.a, rmax=40.0, Tr=params.Tr, mr=params.mr, outer_bc="dirichlet")
+        )
+        write_profile(init, args.write_init)
+        print(f"Wrote {args.write_init}: phi_d = {init.phi_d:.6f}, dphi/dr(a) = {init.sol(params.a)[1]:.6f}")
+        raise SystemExit
 
     sol = solve_oml(params)
     print(f"Converged: {sol.success}")

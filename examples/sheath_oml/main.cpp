@@ -41,26 +41,6 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
     double A_e = 1.0 / (2.0 * PI * v_th_e * v_th_e);
     double A_i = 1.0 / (2.0 * PI * v_th_i * v_th_i);
 
-    // Planar floating-potential estimate, Gamma_e exp(phi_w / Te) = Gamma_i:
-    // phi_w = -Te * ln(sqrt(mi / (2 pi me))) = -1.38 Te for mi / me = 100.
-    // Used only to build the initial state; the simulation is free to drift away
-    // from it (in cylindrical geometry the orbital-motion-limited ion collection
-    // makes the true floating potential somewhat less negative).
-    double phi_w    = -Te * Kokkos::log(Kokkos::sqrt(mi / (2.0 * PI * me)));
-    double L_sheath = 2.0; // assumed initial sheath thickness, in Debye lengths
-
-    // Initial surface charge. With no charge inside the dielectric and an
-    // axisymmetric surface the interior field vanishes, so Gauss's law gives
-    // sigma = -eps_out * dphi/dn = eps_out * phi_w / L_sheath < 0.
-    double sigma_0 = eps_out * phi_w / L_sheath;
-
-    // Initial state, see the header.
-    enum class InitModel { OML, Boltzmann };
-    InitModel init_model  = InitModel::OML;
-
-    // Boltzmann start only: ions without any bound (E < 0) population.
-    bool trapped_ion_free = true;
-
     // OML profile phi(r) on a uniform grid r = oml_r0 + k * oml_dr, loaded by
     // load_oml_profile(); phi = oml_phi_d for r < oml_r0, 0 beyond the table.
     Kokkos::View<double*> oml_phi;
@@ -87,7 +67,6 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
         je    = Kokkos::View<double*>("je", nbins);
         ji    = Kokkos::View<double*>("ji", nbins);
         cnt   = Kokkos::View<double*>("cnt", nbins);
-        Kokkos::deep_copy(sigma, sigma_0);
 
         auto [nx, ny, nvx, nvy] = grid.ncells;
         ni_bound                = Kokkos::View<double**>("ni_bound", nx, ny);
@@ -172,7 +151,9 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
         return (1.0 - w) * oml_phi(k) + w * oml_phi(k + 1);
     }
 
-    /// OML distribution of species sp at (x, y, vx, vy), see the header.
+    /// OML distribution of species sp at (x, y, vx, vy): A_s exp(-E / T_s) on the
+    /// part of velocity space reachable from the reservoir (E >= 0), outgoing only
+    /// if the particle is turned back before it reaches the cylinder.
     KOKKOS_INLINE_FUNCTION
     double f_oml(int sp, double x, double y, double vx, double vy, double phi_r) const {
         double r   = Kokkos::sqrt(x * x + y * y);
@@ -211,27 +192,20 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
     }
 
     void initialize_distribution() {
-        using Kokkos::exp;
-        using Kokkos::pow;
         using Kokkos::sqrt;
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
 
-        const bool oml = init_model == InitModel::OML;
-        if (oml && oml_phi.extent(0) == 0)
-            Kokkos::abort("[init] model = oml requires load_oml_profile() before the run");
+        if (oml_phi.extent(0) == 0)
+            Kokkos::abort("load_oml_profile() must be called before the run");
 
-        // Initial sheath potential: the OML solution, or a guess consistent with
-        // sigma_0. Only the prefill uses it; the step-0 Poisson solve overwrites phi.
+        // Initial sheath potential from the OML solution. Only the prefill uses it;
+        // the step-0 Poisson solve overwrites phi.
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 auto [x, y] = grid.center(i, j);
-                double r    = sqrt(x * x + y * y);
-                if (oml)
-                    phi(i, j) = phi_oml(r);
-                else
-                    phi(i, j) = (eta(i, j) > 0.0) ? phi_w * exp(-(r - R_cyl) / L_sheath) : phi_w;
+                phi(i, j)   = phi_oml(sqrt(x * x + y * y));
             });
 
         Kokkos::parallel_for(
@@ -243,54 +217,24 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                     f(i, j, iv, jv, 1) = 0.0;
                     return;
                 }
-                if (oml) {
-                    // average over the velocity cell: f_oml has sharp loss-cone
-                    // edges, and sampling only the cell centre leaves a striped
-                    // density error where the cone is narrow (large r)
-                    constexpr int ns = 4;
-                    for (int sp = 0; sp < 2; ++sp) {
-                        auto [x, y, vx, vy]     = grid.center(i, j, iv, jv, sp);
-                        auto [dx, dy, dvx, dvy] = grid.spacing(sp);
-                        double avg              = 0.0;
-                        for (int a = 0; a < ns; ++a)
-                            for (int b = 0; b < ns; ++b)
-                                avg += f_oml(sp, x, y, vx + ((a + 0.5) / ns - 0.5) * dvx,
-                                             vy + ((b + 0.5) / ns - 0.5) * dvy, phi(i, j));
-                        f(i, j, iv, jv, sp) = avg / (ns * ns);
-                    }
-                    return;
-                }
-                // electron: Boltzmann-depleted Maxwellian, n_e = exp(phi / Te).
-                // The absorbing-surface loss cone is deliberately *not* imposed
-                // here: in cylindrical geometry the depleted region of velocity
-                // space shrinks like R/r, and applying the planar (1D) loss cone
-                // everywhere would remove a large part of the far-field
-                // electrons and drive exactly the global oscillation this setup
-                // is trying to avoid. It fills in self-consistently within a few
-                // electron plasma periods.
-                {
-                    auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 0);
-                    f(i, j, iv, jv, 0) =
-                        A_e * exp(phi(i, j) / Te) * exp(-(vx * vx + vy * vy) / (2.0 * v_th_e * v_th_e));
-                }
-                // ion. Default: Maxwellian in total energy restricted to E >= 0,
-                // i.e. the ions that can have come from the reservoir, accelerated
-                // by the initial potential; n_i = 1 and no bound ions. Otherwise an
-                // unperturbed Maxwellian, whose slow ions near the cylinder end up
-                // trapped. The loss cone develops on the ion sheath transit time.
-                {
-                    auto [x, y, vx, vy] = grid.center(i, j, iv, jv, 1);
-                    double E            = 0.5 * mi * (vx * vx + vy * vy) + q[1] * phi(i, j);
-                    if (trapped_ion_free)
-                        f(i, j, iv, jv, 1) = (E >= 0.0) ? A_i * exp(-E / Ti) : 0.0;
-                    else
-                        f(i, j, iv, jv, 1) = A_i * exp(-(vx * vx + vy * vy) / (2.0 * v_th_i * v_th_i));
+                // average over the velocity cell: f_oml has sharp loss-cone
+                // edges, and sampling only the cell centre leaves a striped
+                // density error where the cone is narrow (large r)
+                constexpr int ns = 4;
+                for (int sp = 0; sp < 2; ++sp) {
+                    auto [x, y, vx, vy]     = grid.center(i, j, iv, jv, sp);
+                    auto [dx, dy, dvx, dvy] = grid.spacing(sp);
+                    double avg              = 0.0;
+                    for (int a = 0; a < ns; ++a)
+                        for (int b = 0; b < ns; ++b)
+                            avg += f_oml(sp, x, y, vx + ((a + 0.5) / ns - 0.5) * dvx,
+                                         vy + ((b + 0.5) / ns - 0.5) * dvy, phi(i, j));
+                    f(i, j, iv, jv, sp) = avg / (ns * ns);
                 }
             });
     };
 
     void particle_boundary_conditions() {
-        using Kokkos::exp;
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
@@ -312,7 +256,6 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
 
         // Outer ghost cells. Separate launch: the mirror ghosts read interior cells
         // that the kernel above writes.
-        const bool oml = init_model == InitModel::OML;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
@@ -323,19 +266,13 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, sp);
                     if (right || top) {
-                        // reservoir injected on the inflow half of velocity space. OML
-                        // start: the OML distribution at the ghost cell, consistent with
-                        // the Dirichlet value phi_oml(r) set in potential_boundary_conditions,
-                        // so the initial state is not kicked by the wall. Otherwise an
-                        // unperturbed Maxwellian (phi = 0 there).
-                        double v_th  = (sp == 0) ? v_th_e : v_th_i;
-                        double A     = (sp == 0) ? A_e : A_i;
-                        double f_inj = A * exp(-(vx * vx + vy * vy) / (2.0 * v_th * v_th));
-                        if (oml)
-                            f_inj = f_oml(sp, x, y, vx, vy, phi_oml(Kokkos::sqrt(x * x + y * y)));
-                        bool inflow  = right ? vx < 0.0 : vy < 0.0;
+                        // reservoir injected on the inflow half of velocity space: the
+                        // OML distribution at the ghost cell, consistent with the
+                        // Dirichlet value phi_oml(r) set in potential_boundary_conditions,
+                        // so the initial state is not kicked by the wall
+                        bool inflow = right ? vx < 0.0 : vy < 0.0;
                         if (inflow) {
-                            f(i, j, iv, jv, sp) = f_inj;
+                            f(i, j, iv, jv, sp) = f_oml(sp, x, y, vx, vy, phi_oml(Kokkos::sqrt(x * x + y * y)));
                         } else {
                             // outflow: zero-gradient copy of the nearest interior cell. A
                             // zero here is a cliff the third-order PFC reconstruction sees,
@@ -387,15 +324,13 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
-        const bool oml          = init_model == InitModel::OML;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
                 // Reservoir on the right and top sides (this also takes the two
-                // corners shared with a symmetry plane): the OML potential there for
-                // the OML start, grounded otherwise. Symmetry planes x = 0 and y = 0
-                // on the left and bottom.
-                auto [x, y] = grid.center(i, j);
-                double phi_wall = oml ? phi_oml(Kokkos::sqrt(x * x + y * y)) : 0.0;
+                // corners shared with a symmetry plane), held at the OML potential.
+                // Symmetry planes x = 0 and y = 0 on the left and bottom.
+                auto [x, y]     = grid.center(i, j);
+                double phi_wall = phi_oml(Kokkos::sqrt(x * x + y * y));
                 if (i >= nx - ngc || j >= ny - ngc)
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_wall);
                 else if (i < ngc || j < ngc)
@@ -572,14 +507,8 @@ int main(int argc, char* argv[]) {
     double total_time         = reader.GetReal("world", "total_time", 1.0);
     int total_steps           = reader.GetInteger("world", "total_steps", 1000);
     int diag_steps            = reader.GetInteger("world", "diag_steps", 10);
-    std::string init_model    = reader.Get("init", "model", "oml");
     std::string oml_profile   = reader.Get("init", "oml_profile", "examples/sheath_oml/oml_init.csv");
-    bool trapped_ion_free     = reader.GetBoolean("init", "trapped_ion_free", true);
-    if (init_model != "oml" && init_model != "boltzmann") {
-        std::cout << "[init] model must be oml or boltzmann\n";
-        return 1;
-    }
-    std::string output_folder = reader.Get("output", "folder", "data/sheath_oml_quarter");
+    std::string output_folder = reader.Get("output", "folder", "data/sheath_oml");
     std::string output_prefix = reader.Get("output", "prefix", "output");
 
     Kokkos::printf("Input parameters:\n");
@@ -631,17 +560,7 @@ int main(int argc, char* argv[]) {
     world.q             = Kokkos::Array<double, 2>{-1.0, 1.0}; // charge number of electrons and ions
     world.T             = Kokkos::Array<double, 2>{Te, Ti};    // relative temperature of electrons and ions
     world.species_names = {"e", "i"};                          // electron (sp0), ion (sp1)
-    world.trapped_ion_free = trapped_ion_free;                 // boltzmann start: ions without a bound population
-    if (init_model == "oml") {
-        world.init_model = ImmersedWorld::InitModel::OML;
-        world.load_oml_profile(oml_profile); // also sets the initial surface charge
-    } else {
-        world.init_model = ImmersedWorld::InitModel::Boltzmann;
-    }
-
-    if (init_model == "boltzmann")
-        Kokkos::printf("Derived: phi_w (planar estimate) = %f, initial sigma = %f, trapped_ion_free = %d\n",
-                       world.phi_w, world.sigma_0, (int)world.trapped_ion_free);
+    world.load_oml_profile(oml_profile);                       // also sets the initial surface charge
 
     PoissonSolver2ndOrder poisson_solver(world);
     Writer writer(world, output_folder, output_prefix, {"ni", "ne", "phi", "ni_bound"});

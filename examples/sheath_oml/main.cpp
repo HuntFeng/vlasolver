@@ -312,6 +312,7 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
 
         // Outer ghost cells. Separate launch: the mirror ghosts read interior cells
         // that the kernel above writes.
+        const bool oml = init_model == InitModel::OML;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0, ngc, ngc}, {nx, ny, nvx - ngc, nvy - ngc}),
             KOKKOS_CLASS_LAMBDA(const int i, const int j, const int iv, const int jv) {
@@ -322,11 +323,16 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
                 for (int sp = 0; sp < 2; ++sp) {
                     auto [x, y, vx, vy] = grid.center(i, j, iv, jv, sp);
                     if (right || top) {
-                        // unperturbed Maxwellian reservoir (phi = 0 there), injected
-                        // on the inflow half of velocity space
+                        // reservoir injected on the inflow half of velocity space. OML
+                        // start: the OML distribution at the ghost cell, consistent with
+                        // the Dirichlet value phi_oml(r) set in potential_boundary_conditions,
+                        // so the initial state is not kicked by the wall. Otherwise an
+                        // unperturbed Maxwellian (phi = 0 there).
                         double v_th  = (sp == 0) ? v_th_e : v_th_i;
                         double A     = (sp == 0) ? A_e : A_i;
                         double f_inj = A * exp(-(vx * vx + vy * vy) / (2.0 * v_th * v_th));
+                        if (oml)
+                            f_inj = f_oml(sp, x, y, vx, vy, phi_oml(Kokkos::sqrt(x * x + y * y)));
                         bool inflow  = right ? vx < 0.0 : vy < 0.0;
                         if (inflow) {
                             f(i, j, iv, jv, sp) = f_inj;
@@ -381,13 +387,17 @@ struct ImmersedWorld : World<ImmersedWorld, 2, ElectronModel::Kinetic> {
         auto& grid              = this->grid;
         auto [nx, ny, nvx, nvy] = grid.ncells;
         int ngc                 = grid.ngc;
+        const bool oml          = init_model == InitModel::OML;
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
-                // Grounded reservoir on the right and top sides (this also takes
-                // the two corners shared with a symmetry plane); symmetry planes
-                // x = 0 and y = 0 on the left and bottom.
+                // Reservoir on the right and top sides (this also takes the two
+                // corners shared with a symmetry plane): the OML potential there for
+                // the OML start, grounded otherwise. Symmetry planes x = 0 and y = 0
+                // on the left and bottom.
+                auto [x, y] = grid.center(i, j);
+                double phi_wall = oml ? phi_oml(Kokkos::sqrt(x * x + y * y)) : 0.0;
                 if (i >= nx - ngc || j >= ny - ngc)
-                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, 0.0);
+                    poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Dirichlet, phi_wall);
                 else if (i < ngc || j < ngc)
                     poisson_bc_map(i, j) = PoissonBCPair(PoissonBCType::Symmetric, 0.0);
                 else

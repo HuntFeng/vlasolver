@@ -22,8 +22,8 @@ plt.rcParams.update(
 )
 
 # Animation parameters
-total_steps = 1000
-frame_interval = 10
+total_steps = 2000
+frame_interval = 20
 start_step = 0
 
 # Grid parameters

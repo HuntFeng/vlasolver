@@ -31,7 +31,7 @@ is_include_circle = True
 # All fields below are time averaged to save simulation time
 # (None = last output). Skip the initial transient, and cover several periods.
 data_folder = "sheath_oml"
-avg_start_step = 20
+avg_start_step = 100
 avg_end_step = None
 ringing_period = 2 * np.pi  # ~1 / omega_pe, for reporting the window length only
 
@@ -158,8 +158,8 @@ xx = np.linspace(
 )
 phi_a = sol.sol(xx)[0]
 plt.figure()
-plt.plot(r_cut, phi[cut, jc], "o", fillstyle="none", label="simulation, time avg")
-plt.plot(xx, phi_a, "-", label="theory")
+line, = plt.plot(r_cut, phi[cut, jc], "o", fillstyle="none", label="simulation")
+plt.plot(xx, phi_a, "-", color=line.get_color(), label="theory")
 plt.xlabel("$r/\\lambda_D$")
 plt.ylabel("$e\\phi / k_BT_e$")
 plt.axvline(x=1, color="k", linestyle="--", label="$r/\\lambda_D=1$")
@@ -183,7 +183,7 @@ plt.plot(xx, sol.density(xx)[0], "-", color=line_i.get_color(), label="$n_{ia}$"
 plt.plot(xx, sol.density(xx)[1], "-", color=line_e.get_color(), label="$n_{ea}$")
 plt.xlabel("$r/\\lambda_D$")
 plt.ylabel("$n$")
-plt.axvline(x=1, color="k", linestyle="--", label="$r=1$")
+plt.axvline(x=1, color="k", linestyle="--", label="$r/\\lambda_D=1$")
 plt.legend()
 plt.xlim(0, Lx)
 plt.savefig(f"{file_path}/density_profiles.png")

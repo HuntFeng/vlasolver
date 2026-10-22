@@ -295,7 +295,7 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
         auto poisson_bc_map = world.poisson_bc_map;
         auto& phi           = world.phi;
 
-        // Pass 1: Dirichlet and Neumann. These only write their own cell (Dirichlet) or read
+        // Pass 1: Dirichlet, Neumann and Symmetric. These only write their own cell (Dirichlet) or read
         // untouched interior cells (Neumann), so they are race-free within a single launch.
         Kokkos::parallel_for(
             Kokkos::MDRangePolicy({0, 0}, {nx, ny}), KOKKOS_CLASS_LAMBDA(const int i, const int j) {
@@ -311,6 +311,11 @@ class PoissonSolver1stOrder : PoissonSolver<PoissonSolver1stOrder<World>> {
                         phi(i, j) = phi(i, ngc + 1) - (ngc + 1 - j) * dy * bc_map.val;
                     else if (j >= ny - ngc)
                         phi(i, j) = phi(i, ny - ngc - 2) + (j - (ny - ngc - 2)) * dy * bc_map.val;
+                } else if (bc_map.type == PoissonBCType::Symmetric) {
+                    // even reflection about the domain edge(s); the image is always an interior cell
+                    int mi    = (i < ngc) ? 2 * ngc - 1 - i : (i >= nx - ngc) ? 2 * (nx - ngc) - 1 - i : i;
+                    int mj    = (j < ngc) ? 2 * ngc - 1 - j : (j >= ny - ngc) ? 2 * (ny - ngc) - 1 - j : j;
+                    phi(i, j) = phi(mi, mj);
                 }
             });
 

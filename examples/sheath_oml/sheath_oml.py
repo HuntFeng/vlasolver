@@ -21,17 +21,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from scipy.integrate import solve_bvp
-from scipy.optimize import fsolve
-from scipy.special import roots_legendre, erf, k0, k1
+from scipy.optimize import brentq
+from scipy.special import roots_legendre, erf, erfcx, k0, k1
 
 
 def floating_potential(mr: float, Tr: float):
-    """Normalized floating potential phi_d from ion/electron current balance.
+    """Normalized floating potential phi_d from 2D2V cylindrical OML current balance.
 
-    sqrt(mr/Tr) * exp(phi_d) + phi_d/Tr = 1.
+    Per unit length, with chi = -phi_d/Tr:
+        I_e ~ sqrt(2 pi) a n v_te exp(phi_d)
+        I_i ~ 2 sqrt(2) a n v_ti [sqrt(chi) + sqrt(pi)/2 exp(chi) erfc(sqrt(chi))]
+    so sqrt(mr/Tr) * exp(phi_d) = 2/sqrt(pi) sqrt(chi) + exp(chi) erfc(sqrt(chi)).
+    (The spherical result 1 + chi does not apply in 2D.)
     """
-    solution = fsolve(lambda phi: np.sqrt(mr / Tr) * np.exp(phi) + phi / Tr - 1, -1.0)
-    return solution[0]
+
+    def balance(phi):
+        chi = -phi / Tr
+        return np.sqrt(mr / Tr) * np.exp(phi) - (
+            2.0 / np.sqrt(np.pi) * np.sqrt(chi) + erfcx(np.sqrt(chi))
+        )
+
+    return brentq(balance, -50.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -43,6 +53,10 @@ class OMLParameters:
 
     Tr: float = 1.0
     mr: float = 100.0
+
+    # Outer BC at r = rmax: "robin" models an unbounded plasma via linearized
+    # 2D Debye screening; "dirichlet" pins phi(rmax) = 0 like a grounded wall.
+    outer_bc: str = "robin"
 
 
 def _gauss_legendre_half_line(order, u_max):
@@ -107,8 +121,9 @@ def oml_density(
 def solve_oml(params=None):
     """Solve the normalized cylindrical OML-Poisson BVP.
 
-    BCs: phi(a) = phi_d at the dust surface; linearized 2D Debye screening
-    phi'(R) = -K1(R)/K0(R) * phi(R) at the outer boundary.
+    BCs: phi(a) = phi_d at the dust surface; at the outer boundary either
+    linearized 2D Debye screening phi'(R) = -K1(R)/K0(R) * phi(R)
+    (outer_bc="robin") or phi(R) = 0 (outer_bc="dirichlet").
 
     Returns a BVPResult with sol.params and sol.density(r, phi) attached.
     """
@@ -158,11 +173,15 @@ def solve_oml(params=None):
 
     alpha = k1(R) / k0(R)  # dK0/dx = -K1
 
+    if params.outer_bc not in ("robin", "dirichlet"):
+        raise ValueError(f"Unknown outer_bc: {params.outer_bc!r}")
+
     def bc(ya, yb):
-        return np.array([
-            ya[0] - phi_d,
-            yb[1] + alpha * yb[0],
-        ])
+        if params.outer_bc == "dirichlet":
+            outer = yb[0]
+        else:
+            outer = yb[1] + alpha * yb[0]
+        return np.array([ya[0] - phi_d, outer])
 
     sol = solve_bvp(
         ode,
@@ -180,6 +199,7 @@ def solve_oml(params=None):
         )
 
     sol.params = params
+    sol.phi_d = phi_d
 
     def density_at(r, phi=None):
         r = np.asarray(r, dtype=float)
@@ -192,22 +212,36 @@ def solve_oml(params=None):
     return sol
 
 
+def write_profile(sol, path, num=4001):
+    """Write the OML profile used by main.cpp for the [init] model = oml start.
+
+    CSV with header "r,phi,dphi_dr" on a uniform r grid from a to rmax, so the
+    first row holds phi_d and the slope at the dust. main.cpp sets phi = phi_d
+    inside the dust, phi = 0 beyond rmax, and the initial surface charge
+    sigma = -eps_out * dphi_dr(a).
+    """
+    p = sol.params
+    r = np.linspace(p.a, p.rmax, num)
+    phi, dphi = sol.sol(r)
+    np.savetxt(path, np.column_stack((r, phi, dphi)), delimiter=",", header="r,phi,dphi_dr", comments="", fmt="%.17g")
+
+
 def plot_potential(sol, ax=None, show=True, label=None):
     """Plot the normalized potential phi = e*Phi/(k_B*T_e) from solve_oml()."""
     if ax is None:
         _, ax = plt.subplots()
 
     x = np.linspace(
-        sol.params.a_over_lambda_D,
-        sol.params.rmax_over_lambda_D,
+        sol.params.a,
+        sol.params.rmax,
         600,
     )
     phi = sol.sol(x)[0]
 
     if label is None:
         label = (
-            rf"$\phi_d={sol.params.phi_d:g}$, "
-            rf"$a/\lambda_{{De}}={sol.params.a_over_lambda_D:g}$"
+            rf"$\phi_d={sol.phi_d:.3f}$, "
+            rf"$a/\lambda_{{De}}={sol.params.a:g}$"
         )
 
     ax.plot(x, phi, label=label)
@@ -225,12 +259,37 @@ def plot_potential(sol, ax=None, show=True, label=None):
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
+    parser.add_argument(
+        "--write-init",
+        metavar="PATH",
+        help="write the profile for main.cpp's [init] model = oml and exit",
+    )
+    args = parser.parse_args()
+
+    # Must match main.cpp / input.ini: R_cyl = 1, mi/me = 100, Ti/Te = 1, and
+    # the grounded wall at 20 lambda_D.
     params = OMLParameters(
         a=1.0,
         rmax=20.0,
         Tr=1.0,
         mr=100.0,
+        outer_bc="dirichlet",
     )
+
+    if args.write_init:
+        # The initial state must cover the whole square, out to the corner at
+        # 20 sqrt(2). Solve to rmax = 40 so the domain sees the quasineutral bulk
+        # rather than the theory's own wall layer (which carries a net negative
+        # charge); the simulation forms its thin layer at the real walls itself.
+        init = solve_oml(
+            OMLParameters(a=params.a, rmax=40.0, Tr=params.Tr, mr=params.mr, outer_bc="dirichlet")
+        )
+        write_profile(init, args.write_init)
+        print(f"Wrote {args.write_init}: phi_d = {init.phi_d:.6f}, dphi/dr(a) = {init.sol(params.a)[1]:.6f}")
+        raise SystemExit
 
     sol = solve_oml(params)
     print(f"Converged: {sol.success}")

@@ -5,6 +5,7 @@ enum PoissonBCType {
     Dirichlet,
     Neumann,
     Periodic,
+    Symmetric, // mirror ghost: phi equals its image across every domain edge the ghost cell lies beyond
     None,
 };
 

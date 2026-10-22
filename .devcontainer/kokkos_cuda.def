@@ -69,13 +69,18 @@ From: nvidia/cuda:12.3.0-devel-ubuntu22.04
     # Host Serial: SERIAL
     # Host Parallel: OpenMP
     # Device Parallel: CUDA
+    # -DKokkos_ARCH_TURING75=On      # for Turing GPUs (e.g., RTX 2080)
+    # -DKokkos_ARCH_AMPERE80=On      # for A100 GPUs
+    # -DKokkos_ARCH_HOPPER90=ON      # for H100 GPUs
+    # -DKokkos_ARCH_BLACKWELL120=ON  # for Pro 4000 Blackwell GPUs
     cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CXX_STANDARD=20 \
-    -DKokkos_ARCH_TURING75=On \
+    -DKokkos_ARCH_AMPERE80=On \
     -DKokkos_ENABLE_CUDA=On \
     -DKokkos_ENABLE_OPENMP=On \
     -DKokkos_ENABLE_SERIAL=On \
+    -DKokkos_ENABLE_CUDA_LAMBDA=ON \
     -DKokkos_ENABLE_DEPRECATED_CODE_4=Off
     cmake --build build --parallel 4
     cmake --install build --prefix /usr/local
